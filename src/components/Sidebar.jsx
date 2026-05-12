@@ -10,7 +10,7 @@ import LogoutModal from './LogoutModal';
 import SearchModal from './SearchModal';
 
 const Sidebar = () => {
-  const { isSidebarOpen, setIsSidebarOpen, setMessages, chats, setChats, deleteChat, switchChat, createNewChat, activeChatId, profile, user, setAuthOpen, isAuthLoading, showLoggedIn, archivedChats, archiveChat, unarchiveChat, archivePassword, setArchivePassword, closeArchivedChat } = useAppContext();
+  const { theme, resolvedTheme, isSidebarOpen, setIsSidebarOpen, setMessages, chats, setChats, deleteChat, switchChat, createNewChat, activeChatId, profile, user, setAuthOpen, isAuthLoading, showLoggedIn, archivedChats, archiveChat, unarchiveChat, archivePassword, setArchivePassword, closeArchivedChat, appView, setAppView } = useAppContext();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -93,7 +93,6 @@ const Sidebar = () => {
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleDelete = (chat) => {
-    console.log('handleDelete called:', chat);
     if (!chat) return;
     setOpenMenuIndex(null);
     setDeleteConfirm({ open: true, id: chat.id, name: chat.title });
@@ -128,14 +127,11 @@ const Sidebar = () => {
   const handlePin = (chat) => {
     setChats(prev => {
       const updated = prev.map(c => c.id === chat.id ? { ...c, pinned: !c.pinned } : c);
-      // Move pinned to top
       return [...updated.filter(c => c.pinned), ...updated.filter(c => !c.pinned)];
     });
     setOpenMenuIndex(null);
   };
 
-  // Sorted: pinned first, then rest
-  // Filter out empty chats and then sort: pinned first, then the rest
   const displayChats = chats.filter(c => c.messages.length > 0);
   const sortedChats = [...displayChats.filter(c => c.pinned), ...displayChats.filter(c => !c.pinned)];
 
@@ -147,7 +143,7 @@ const Sidebar = () => {
           width: isSidebarOpen ? '280px' : '68px',
         }}
         transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-        className="relative h-screen bg-sidebar-bg border-r border-white/5 flex flex-col z-40 shadow-2xl"
+        className="relative h-screen bg-sidebar-bg border-r border-divider flex flex-col z-40 shadow-2xl"
       >
         {/* Top Header / Logo Area */}
         <div className={`p-4 flex items-center ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
@@ -161,24 +157,66 @@ const Sidebar = () => {
               {!isSidebarOpen ? (
                 <div className="relative w-10 h-10 flex items-center justify-center">
                   {!isLogoHovered ? (
-                    <Bot size={24} style={{ color: '#fff' }} />
+                    <div style={{ 
+                      width: 32, 
+                      height: 32, 
+                      borderRadius: 10, 
+                      background: isLogoHovered ? 'var(--hover-overlay)' : 'transparent', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      overflow: 'hidden',
+                      transition: 'background 0.2s ease'
+                    }}>
+                      <img 
+                        src="/logo.png" 
+                        alt="Kyra" 
+                        style={{ 
+                          width: '100%', 
+                          height: '100%', 
+                          objectFit: 'cover', 
+                          mixBlendMode: resolvedTheme === 'dark' ? 'screen' : 'multiply',
+                          filter: resolvedTheme === 'dark' ? 'none' : 'invert(1)'
+                        }} 
+                      />
+                    </div>
                   ) : (
-                    <PanelLeftOpen size={24} style={{ color: '#fff' }} />
-                  )}
-                  
-                  {/* Tooltip for Open Sidebar */}
+                    <PanelLeftOpen size={24} style={{ color: 'var(--on-surface)' }} />
+                  )
+                }
                   {isLogoHovered && (
                     <div 
                       style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }}
-                      className="absolute px-2 py-1 bg-black text-white text-[11px] font-bold rounded whitespace-nowrap z-50 border border-white/10 shadow-2xl"
+                      className="tooltip-label absolute z-50"
                     >
                       Open sidebar
                     </div>
                   )}
                 </div>
               ) : (
-                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--hover-overlay-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--on-surface)', flexShrink: 0 }}>
-                  <Bot size={20} />
+                <div style={{ 
+                  width: 32, 
+                  height: 32, 
+                  borderRadius: 10, 
+                  background: isLogoHovered ? 'var(--hover-overlay)' : 'transparent', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  flexShrink: 0, 
+                  overflow: 'hidden',
+                  transition: 'background 0.2s ease'
+                }}>
+                  <img 
+                    src="/logo.png" 
+                    alt="Kyra" 
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover', 
+                      mixBlendMode: resolvedTheme === 'dark' ? 'screen' : 'multiply',
+                      filter: resolvedTheme === 'dark' ? 'none' : 'invert(1)'
+                    }} 
+                  />
                 </div>
               )}
             </button>
@@ -188,7 +226,7 @@ const Sidebar = () => {
             <div className="relative group/tooltip">
               <button 
                 onClick={() => setIsSidebarOpen(false)}
-                style={{ padding: 8, borderRadius: 8, color: '#fff', background: 'transparent', border: 'none', cursor: 'pointer', transition: 'all 0.15s' }}
+                style={{ padding: 8, borderRadius: 8, color: 'var(--on-surface)', background: 'transparent', border: 'none', cursor: 'pointer', transition: 'all 0.15s' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
               >
@@ -196,7 +234,7 @@ const Sidebar = () => {
               </button>
               <div 
                 style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }}
-                className="absolute px-2 py-1 bg-black text-white text-[11px] font-bold rounded opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-white/10 shadow-2xl"
+                className="tooltip-label absolute opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50"
               >
                 Close sidebar
               </div>
@@ -205,10 +243,10 @@ const Sidebar = () => {
         </div>
 
         {/* Action Buttons */}
-        <div className={`px-3 space-y-2 mt-4 ${!isSidebarOpen && 'flex flex-col items-center'}`}>
+        <div className={`px-3 mt-4 ${!isSidebarOpen ? 'flex flex-col items-center gap-1' : 'flex flex-col gap-1'}`}>
           <div className="relative group/tooltip w-full flex justify-center">
             <button 
-              onClick={() => { createNewChat(); closeArchivedChat(); }}
+              onClick={() => { createNewChat(); closeArchivedChat(); setAppView('chat'); }}
               style={{
                 display: 'flex', alignItems: 'center', background: 'transparent', border: 'none',
                 borderRadius: 12, cursor: 'pointer', transition: 'all 0.15s', color: 'var(--on-surface)',
@@ -220,14 +258,14 @@ const Sidebar = () => {
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <SquarePen size={20} style={{ color: '#fff' }} />
+                <SquarePen size={20} style={{ color: 'var(--on-surface)' }} />
                 {isSidebarOpen && <span style={{ fontSize: 14, fontWeight: 500 }}>New chat</span>}
               </div>
             </button>
             {!isSidebarOpen && (
               <div 
                 style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }}
-                className="absolute px-2 py-1 bg-black text-white text-[11px] font-bold rounded opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-white/10 shadow-2xl"
+                className="tooltip-label absolute opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50"
               >
                 New chat
               </div>
@@ -247,13 +285,13 @@ const Sidebar = () => {
               onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
-              <Search size={20} style={{ color: '#fff' }} />
+              <Search size={20} style={{ color: 'var(--on-surface)' }} />
               {isSidebarOpen && <span style={{ fontSize: 14, fontWeight: 500 }}>Search chats</span>}
             </button>
             {!isSidebarOpen && (
               <div 
                 style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }}
-                className="absolute px-2 py-1 bg-black text-white text-[11px] font-bold rounded opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-white/10 shadow-2xl"
+                className="tooltip-label absolute opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50"
               >
                 Search chats
               </div>
@@ -261,28 +299,37 @@ const Sidebar = () => {
           </div>
           
           {/* More Menu */}
-          <div className="relative w-full flex justify-center">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                const rect = e.currentTarget.getBoundingClientRect();
-                setMoreMenuPos({ top: rect.top, left: rect.right + 12 });
-                setIsMoreMenuOpen(!isMoreMenuOpen);
-              }}
-              style={{
-                display: 'flex', alignItems: 'center', background: 'transparent', border: 'none',
-                borderRadius: 12, cursor: 'pointer', transition: 'all 0.15s', color: 'var(--on-surface)',
-                width: isSidebarOpen ? '100%' : 'auto',
-                padding: '10px 12px', gap: 12,
-                justifyContent: isSidebarOpen ? 'flex-start' : 'center',
-                backgroundColor: isMoreMenuOpen ? 'var(--hover-overlay)' : 'transparent',
-              }}
-              onMouseEnter={e => { if(!isMoreMenuOpen) e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-              onMouseLeave={e => { if(!isMoreMenuOpen) e.currentTarget.style.background = 'transparent'; }}
-            >
-              <MoreHorizontal size={20} style={{ color: '#fff' }} />
-              {isSidebarOpen && <span style={{ fontSize: 14, fontWeight: 500 }}>More</span>}
-            </button>
+            <div className="relative group/tooltip w-full flex justify-center">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setMoreMenuPos({ top: rect.top, left: rect.right + 12 });
+                  setIsMoreMenuOpen(!isMoreMenuOpen);
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', background: 'transparent', border: 'none',
+                  borderRadius: 12, cursor: 'pointer', transition: 'all 0.15s', color: 'var(--on-surface)',
+                  width: isSidebarOpen ? '100%' : 'auto',
+                  padding: '10px 12px', gap: 12,
+                  justifyContent: isSidebarOpen ? 'flex-start' : 'center',
+                  backgroundColor: isMoreMenuOpen ? 'var(--hover-overlay)' : 'transparent',
+                }}
+                onMouseEnter={e => { if(!isMoreMenuOpen) e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                onMouseLeave={e => { if(!isMoreMenuOpen) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <MoreHorizontal size={20} style={{ color: 'var(--on-surface)' }} />
+                {isSidebarOpen && <span style={{ fontSize: 14, fontWeight: 500 }}>More</span>}
+              </button>
+              {!isSidebarOpen && (
+                <div 
+                  style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }}
+                  className="tooltip-label absolute opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50"
+                >
+                  More
+                </div>
+              )}
+            </div>
             
             {/* Hover Menu Card - Fixed outside sidebar */}
             <AnimatePresence>
@@ -293,49 +340,76 @@ const Sidebar = () => {
                   animate={{ opacity: 1, x: 0, scale: 1 }}
                   exit={{ opacity: 0, x: -10, scale: 0.95 }}
                   transition={{ duration: 0.2 }}
-                  className="fixed z-[9999]"
+                  className="fixed z-[9999] shadow-2xl"
                   style={{
                     top: moreMenuPos.top,
                     left: moreMenuPos.left,
+                    boxShadow: '0 20px 50px rgba(0,0,0,0.25)',
+                    background: 'var(--surface-1)',
+                    border: '1px solid var(--divider)',
+                    borderRadius: 20,
+                    minWidth: 220,
+                    padding: '6px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
                   }}
                   onClick={e => e.stopPropagation()}
                 >
-                  <div 
-                    className="border border-white/10 shadow-2xl backdrop-blur-xl"
-                    style={{ 
-                      boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
-                      background: 'var(--bg-secondary)',
-                      border: '1px solid var(--divider)',
-                      borderRadius: 18,
-                      width: 220,
-                      padding: 10,
+                  <button 
+                    onClick={() => { setAppView('images'); setIsMoreMenuOpen(false); }}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                      border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                      fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                      fontFamily: 'inherit', transition: 'background 0.15s'
                     }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                     <button className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 text-white text-[14.5px] font-medium transition-all text-left">
-                        <Image size={20} className="shrink-0" />
-                        <span>Images</span>
-                     </button>
-                     <button className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 text-white text-[14.5px] font-medium transition-all text-left">
-                        <Telescope size={20} className="shrink-0" />
-                        <span>Deep research</span>
-                     </button>
-                     <button className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 text-white text-[14.5px] font-medium transition-all text-left">
-                        <LayoutGrid size={20} className="shrink-0" />
-                        <span>Apps</span>
-                     </button>
-                  </div>
+                     <Image size={16} style={{ color: 'var(--on-surface-muted)' }} strokeWidth={1.5} />
+                     <span>Images</span>
+                  </button>
+                  <button 
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                      border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                      fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                      fontFamily: 'inherit', transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                     <Telescope size={16} style={{ color: 'var(--on-surface-muted)' }} strokeWidth={1.5} />
+                     <span>Deep research</span>
+                  </button>
+                  <button 
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                      border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                      fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                      fontFamily: 'inherit', transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                     <LayoutGrid size={16} style={{ color: 'var(--on-surface-muted)' }} strokeWidth={1.5} />
+                     <span>Apps</span>
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
-
+          
           {!isSidebarOpen && (
             <div className="relative group/tooltip w-full flex justify-center" ref={recentsButtonRef}>
               <button 
                 onClick={() => setIsRecentsCardOpen(!isRecentsCardOpen)}
                 style={{
                   padding: 10, borderRadius: 12, background: isRecentsCardOpen ? 'var(--hover-overlay)' : 'transparent',
-                  border: 'none', cursor: 'pointer', transition: 'all 0.15s', color: '#fff'
+                  border: 'none', cursor: 'pointer', transition: 'all 0.15s', color: 'var(--on-surface)'
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; }}
                 onMouseLeave={e => { if(!isRecentsCardOpen) { e.currentTarget.style.background = 'transparent'; } }}
@@ -345,7 +419,7 @@ const Sidebar = () => {
               {!isRecentsCardOpen && (
                 <div 
                   style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }}
-                  className="absolute px-2 py-1 bg-black text-white text-[11px] font-bold rounded opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-white/10 shadow-2xl"
+                  className="tooltip-label absolute opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50"
                 >
                   Recents
                 </div>
@@ -365,13 +439,13 @@ const Sidebar = () => {
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; setIsRecentHeaderHovered(true); }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; setIsRecentHeaderHovered(false); }}
               >
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#fff', textTransform: 'none', letterSpacing: '0.04em' }}>Recents</span>
-                <ChevronDown size={15} className="transition-all duration-200" style={{ color: '#fff', opacity: isRecentHeaderHovered ? 1 : 0, transform: isRecentOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--on-surface)', textTransform: 'none', letterSpacing: '0.04em' }}>Recents</span>
+                <ChevronDown size={15} className="transition-all duration-200" style={{ color: 'var(--on-surface)', opacity: isRecentHeaderHovered ? 1 : 0, transform: isRecentOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }} />
               </button>
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar py-1 px-3">
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-2">
             <AnimatePresence initial={false}>
               {isRecentOpen && isSidebarOpen && (
                 <motion.div
@@ -390,13 +464,13 @@ const Sidebar = () => {
                       onMouseLeave={() => setHoveredChat(null)}
                     >
                       <div
-                        className="w-full flex items-center justify-between rounded-lg text-left transition-all duration-150"
+                        className="w-full flex items-center justify-between rounded-xl text-left transition-all duration-150"
                         style={{
-                          paddingTop: '10px',
-                          paddingBottom: '10px',
-                          paddingLeft: '12px',
+                          paddingTop: '11px',
+                          paddingBottom: '11px',
+                          paddingLeft: '14px',
                           paddingRight: '12px',
-                          marginBottom: '2px',
+                          marginBottom: '3px',
                           backgroundColor: hoveredChat === i || openMenuIndex === i || activeChatId === chat.id ? 'var(--chat-item-active)' : 'transparent',
                         }}
                         onClick={() => { switchChat(chat.id); closeArchivedChat(); }}
@@ -438,11 +512,18 @@ const Sidebar = () => {
                           onClick={(e) => {
                             e.stopPropagation();
                             const rect = e.currentTarget.getBoundingClientRect();
-                            setMenuPos({ top: rect.top, left: rect.right + 8 });
+                            const spaceBelow = window.innerHeight - rect.bottom;
+                            const menuHeight = 220; // Approx height of the menu
+                            
+                            if (spaceBelow < menuHeight) {
+                              setMenuPos({ bottom: window.innerHeight - rect.bottom, left: rect.right + 8, isBottom: true });
+                            } else {
+                              setMenuPos({ top: rect.top, left: rect.right + 8, isBottom: false });
+                            }
                             setOpenMenuIndex(openMenuIndex === i ? null : i);
                           }}
                         >
-                          <MoreHorizontal size={15} style={{ color: '#fff' }} />
+                          <MoreHorizontal size={15} style={{ color: 'var(--on-surface)' }} />
                         </span>
                       </div>
 
@@ -451,58 +532,66 @@ const Sidebar = () => {
                         {openMenuIndex === i && (
                           <motion.div
                             ref={menuRef}
-                            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                            initial={{ opacity: 0, scale: 0.95, y: menuPos.isBottom ? 4 : -4 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                            exit={{ opacity: 0, scale: 0.95, y: menuPos.isBottom ? 4 : -4 }}
                             transition={{ duration: 0.12 }}
-                            className="fixed z-[9999] w-56 rounded-2xl overflow-hidden"
+                            className="fixed z-[9999] shadow-2xl"
                             style={{
                               background: 'var(--surface-1)',
                               border: '1px solid var(--divider)',
-                              boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-                              top: menuPos.top,
+                              borderRadius: '20px',
+                              padding: '6px',
+                              minWidth: '220px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 2,
+                              boxShadow: '0 20px 50px rgba(0,0,0,0.25)',
+                              top: menuPos.isBottom ? 'auto' : menuPos.top,
+                              bottom: menuPos.isBottom ? menuPos.bottom : 'auto',
                               left: menuPos.left,
                             }}
                           >
                             {[
-                              { icon: <Share2 size={15} />, label: 'Share', action: () => setOpenMenuIndex(null) },
-                              { icon: <Users size={15} />, label: 'Start a group chat', action: () => setOpenMenuIndex(null) },
-                              { icon: <Pencil size={15} />, label: 'Rename', action: () => handleRename(i) },
-                              { icon: <Pin size={15} />, label: chat.pinned ? 'Unpin chat' : 'Pin chat', action: () => handlePin(chat) },
-                              { icon: <Archive size={15} />, label: 'Archive', action: () => { archiveChat(chat.id); setOpenMenuIndex(null); } },
+                              { icon: <Share2 size={16} />, label: 'Share', action: () => setOpenMenuIndex(null) },
+                              { icon: <Users size={16} />, label: 'Start a group chat', action: () => setOpenMenuIndex(null) },
+                              { icon: <Pencil size={16} />, label: 'Rename', action: () => handleRename(i) },
+                              { icon: <Pin size={16} />, label: chat.pinned ? 'Unpin chat' : 'Pin chat', action: () => handlePin(chat) },
+                              { icon: <Archive size={16} />, label: 'Archive', action: () => { archiveChat(chat.id); setOpenMenuIndex(null); } },
                             ].map((item, j) => (
                               <button
                                 key={j}
                                 onClick={item.action}
-                                className="w-full flex items-center gap-3 px-4 text-sm transition-all text-left"
                                 style={{
-                                  paddingTop: '9px',
-                                  paddingBottom: '9px',
-                                  color: 'var(--on-surface)',
-                                  borderBottom: j === 2 ? '1px solid var(--divider)' : 'none',
+                                  width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                                  padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                                  border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                                  fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                                  fontFamily: 'inherit', transition: 'background 0.15s'
                                 }}
                                 onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                               >
-                                <span style={{ color: 'var(--on-surface-subtle)' }}>{item.icon}</span>
+                                <span style={{ color: 'var(--on-surface-muted)', display: 'flex', alignItems: 'center' }}>{item.icon}</span>
                                 {item.label}
                               </button>
                             ))}
-                            <button
-                              onClick={() => handleDelete(chat)}
-                              className="w-full flex items-center gap-3 px-4 text-sm transition-all text-left"
-                              style={{
-                              color: '#ef4444',
-                                paddingTop: '9px',
-                                paddingBottom: '9px',
-                                borderTop: '1px solid var(--divider)',
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                            >
-                              <Trash2 size={15} style={{ color: '#ef4444' }} />
-                              Delete
-                            </button>
+                            <div style={{ height: 1, background: 'var(--divider)', margin: '2px 4px' }} />
+                             <button
+                                onClick={() => handleDelete(chat)}
+                                style={{
+                                  width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                                  padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                                  border: 'none', color: '#ef4444', fontSize: 13.5,
+                                  fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                                  fontFamily: 'inherit', transition: 'background 0.15s'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                              >
+                                <Trash2 size={16} style={{ color: '#ef4444' }} />
+                                Delete
+                              </button>
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -518,11 +607,11 @@ const Sidebar = () => {
         </div>
 
         {/* Bottom Profile Area */}
-        <div className="p-3 mt-auto" ref={profileRef}>
+        <div className="p-3.5 mt-auto" ref={profileRef}>
           {mounted && showLoggedIn ? (
             <div
-              style={{ display: 'flex', alignItems: 'center', borderRadius: 16, transition: 'background 0.15s', cursor: 'pointer' }}
-              className={isSidebarOpen ? 'justify-between p-3' : 'justify-center p-2'}
+              style={{ display: 'flex', alignItems: 'center', borderRadius: 20, transition: 'background 0.15s', cursor: 'pointer' }}
+              className={isSidebarOpen ? 'justify-between p-3.5' : 'justify-center p-2.5'}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               onClick={(e) => {
@@ -541,7 +630,13 @@ const Sidebar = () => {
                 {isSidebarOpen && (
                   <div className="flex flex-col">
                     <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)', maxWidth: 100 }} className="truncate">{profile.displayName.slice(0,14)}{profile.displayName.length>14?'...':''}</span>
-                    <span style={{ fontSize: 10, color: 'var(--on-surface-muted)' }}>Free</span>
+                    <div style={{ 
+                      padding: '2px 8px', fontSize: 9, fontWeight: 800,
+                      color: 'var(--bg-primary)', background: 'var(--on-surface)',
+                      borderRadius: 3, textTransform: 'uppercase',
+                      letterSpacing: '0.06em', width: 'fit-content',
+                      marginTop: 2
+                    }}>Free</div>
                   </div>
                 )}
               </div>
@@ -578,7 +673,7 @@ const Sidebar = () => {
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  <span style={{ color: 'var(--on-surface-subtle)' }}>{item.icon}</span>
+                  <span style={{ color: 'var(--on-surface-muted)' }}>{item.icon}</span>
                   {item.label}
                 </button>
               ))}
@@ -596,19 +691,18 @@ const Sidebar = () => {
                   onClick={() => setAuthOpen(true)}
                   style={{
                     width: '100%', padding: '12px', borderRadius: 999,
-                    background: 'white', color: 'black', border: '1px solid #ddd',
-                    fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                    background: 'var(--on-surface)', color: 'var(--bg-primary)', border: '1px solid var(--divider)',
+                    fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                     transition: 'all 0.2s'
                   }}
                   onMouseEnter={e => {
-                    e.currentTarget.style.background = '#f5f5f5';
+                    e.currentTarget.style.opacity = '0.9';
                     e.currentTarget.style.transform = 'translateY(-1px)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
                   }}
                   onMouseLeave={e => {
-                    e.currentTarget.style.background = 'white';
+                    e.currentTarget.style.opacity = '1';
                     e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = 'none';
                   }}
                 >
                   Log in
@@ -619,7 +713,7 @@ const Sidebar = () => {
              <div className="flex flex-col items-center gap-4">
                 <button 
                   onClick={() => setAuthOpen(true)}
-                  className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-black shadow-lg"
+                  className="w-10 h-10 rounded-xl bg-hover-overlay flex items-center justify-center text-on-surface shadow-sm"
                 >
                   <User size={20} />
                 </button>
@@ -683,18 +777,18 @@ const Sidebar = () => {
                 width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                 padding: '11px 16px', background: 'transparent', border: 'none',
                 color: 'var(--on-surface)', fontSize: 13.5, cursor: 'pointer',
-                textAlign: 'left', fontFamily: 'inherit',
+                textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.15s'
               }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
-              <span style={{ color: 'var(--on-surface-subtle)' }}>{item.icon}</span>
+              <span style={{ color: 'var(--on-surface-subtle)', display: 'flex', alignItems: 'center' }}>{item.icon}</span>
               {item.label}
             </button>
           ))}
 
           {/* Divider */}
-          <div style={{ height: 1, background: 'var(--divider)', margin: '2px 0' }} />
+          <div style={{ height: 1, background: 'var(--divider)', margin: '4px 0' }} />
 
           {/* Help */}
           <button
@@ -702,6 +796,7 @@ const Sidebar = () => {
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '11px 16px', background: 'transparent', border: 'none',
               color: 'var(--on-surface)', fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit',
+              transition: 'background 0.15s'
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -720,7 +815,7 @@ const Sidebar = () => {
               width: '100%', display: 'flex', alignItems: 'center', gap: 12,
               padding: '11px 16px', background: 'transparent', border: 'none',
               color: 'var(--on-surface)', fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit',
-              marginBottom: 4,
+              marginBottom: 4, transition: 'background 0.15s'
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -737,27 +832,28 @@ const Sidebar = () => {
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 999999,
+            zIndex: 99999999,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'rgba(0,0,0,0.55)',
+            background: 'rgba(0,0,0,0.4)',
           }}
           onClick={() => setDeleteConfirm({ open: false, id: null, name: '' })}
         >
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#2a2a2a',
-              borderRadius: '18px',
+              background: 'var(--surface-1)',
+              borderRadius: '24px',
+              border: '1px solid var(--divider)',
               padding: '28px 28px 22px 28px',
               width: '420px',
-              boxShadow: '0 30px 60px rgba(0,0,0,0.7)',
             }}
+            className="shadow-modal"
           >
             {/* Title */}
             <h3 style={{
-              color: '#fff',
+              color: 'var(--on-surface)',
               fontSize: '18px',
               fontWeight: 600,
               marginBottom: '14px',
@@ -768,17 +864,16 @@ const Sidebar = () => {
 
             {/* Body text */}
             <p style={{
-              color: 'rgba(255,255,255,0.85)',
+              color: 'var(--on-surface-muted)',
               fontSize: '14.5px',
               lineHeight: 1.55,
               marginBottom: '6px',
             }}>
-              This will delete <strong style={{ color: '#fff', fontWeight: 700 }}>{deleteConfirm.name}</strong>.
+              This will delete <strong style={{ color: 'var(--on-surface)', fontWeight: 700 }}>{deleteConfirm.name}</strong>.
             </p>
 
-            {/* Subtitle */}
             <p style={{
-              color: 'rgba(255,255,255,0.45)',
+              color: 'var(--on-surface-subtle)',
               fontSize: '13.5px',
               lineHeight: 1.5,
               marginBottom: '24px',
@@ -793,17 +888,17 @@ const Sidebar = () => {
                 style={{
                   padding: '9px 22px',
                   borderRadius: '999px',
-                  background: 'rgba(255,255,255,0.13)',
-                  color: 'rgba(255,255,255,0.90)',
+                  background: 'var(--hover-overlay-2)',
+                  color: 'var(--on-surface-muted)',
                   fontSize: '14px',
                   fontWeight: 600,
                   cursor: 'pointer',
-                  border: 'none',
+                  border: '1px solid var(--divider)',
                   fontFamily: 'inherit',
                   transition: 'background 0.15s',
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.20)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.13)'}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'var(--hover-overlay-2)'}
               >
                 Cancel
               </button>
@@ -847,19 +942,26 @@ const Sidebar = () => {
             maxHeight: '70vh',
             background: 'var(--bg-secondary)',
             border: '1px solid var(--divider)',
-            borderRadius: 16,
-            boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+            borderRadius: 20,
+            boxShadow: 'none',
             zIndex: 2000,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            padding: '6px',
           }}
+          className="shadow-premium"
           onMouseLeave={() => setIsRecentsCardOpen(false)}
         >
-          <div style={{ padding: '16px 16px 10px', fontSize: 13, fontWeight: 700, color: 'var(--on-surface)', borderBottom: '1px solid var(--divider)' }}>
-            Recents
+          <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--divider)' }}>
+            <div style={{ 
+              padding: '4px 10px', fontSize: 10, fontWeight: 800,
+              color: 'var(--bg-primary)', background: 'var(--on-surface)',
+              borderRadius: 4, textTransform: 'uppercase',
+              letterSpacing: '0.08em', width: 'fit-content'
+            }}>Recents</div>
           </div>
-          <div style={{ overflowY: 'auto', padding: 8 }} className="custom-scrollbar">
+          <div style={{ overflowY: 'auto', padding: '4px' }} className="custom-scrollbar">
             {sortedChats.length === 0 ? (
               <div style={{ padding: 20, textAlign: 'center', fontSize: 12, color: 'var(--on-surface-subtle)' }}>No recent chats</div>
             ) : (
@@ -869,11 +971,12 @@ const Sidebar = () => {
                   onClick={() => {
                     switchChat(chat.id);
                     setIsRecentsCardOpen(false);
+                    setAppView('chat');
                   }}
                   style={{
-                    width: '100%', padding: '10px 12px', textAlign: 'left', borderRadius: 8,
+                    width: '100%', padding: '10px 14px', textAlign: 'left', borderRadius: 12,
                     background: activeChatId === chat.id ? 'var(--hover-overlay)' : 'transparent',
-                    border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+                    border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12,
                     transition: '0.15s'
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}

@@ -19,9 +19,9 @@ export default function ChatPage() {
   useEffect(() => {
     const activeChat = chats.find(c => c.id === id);
     if (activeChat) {
-      document.title = `${activeChat.title} | Aura AI`;
+      document.title = `${activeChat.title} | Aether`;
     } else {
-      document.title = 'New Chat | Aura AI';
+      document.title = 'New Chat | Aether';
     }
   }, [id, chats]);
 

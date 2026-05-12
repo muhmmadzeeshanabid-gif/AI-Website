@@ -29,7 +29,7 @@ export default function AuthModal({ onClose }) {
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 99999999,
-        background: 'rgba(0,0,0,0.65)',
+        background: 'rgba(0,0,0,0.4)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         backdropFilter: 'blur(8px)',
       }}
@@ -42,12 +42,13 @@ export default function AuthModal({ onClose }) {
           background: 'var(--surface-1)',
           borderRadius: 28,
           padding: '48px 40px 40px',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.4)',
+          boxShadow: 'none',
           border: `1px solid ${border}`,
           position: 'relative',
           textAlign: 'center',
           transition: 'all 0.3s ease',
         }}
+        className="shadow-modal"
       >
         {/* Close Button */}
         <button

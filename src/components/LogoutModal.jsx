@@ -24,7 +24,7 @@ export default function LogoutModal({ onClose }) {
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 99999999,
-        background: 'rgba(0,0,0,0.5)',
+        background: 'rgba(0,0,0,0.4)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         backdropFilter: 'blur(4px)',
       }}
@@ -37,13 +37,14 @@ export default function LogoutModal({ onClose }) {
           background: 'var(--surface-1)',
           borderRadius: 24,
           padding: '40px 32px 32px',
-          boxShadow: '0 24px 60px rgba(0,0,0,0.3)',
+          boxShadow: 'none',
           border: `1px solid ${border}`,
           textAlign: 'center',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
         }}
+        className="shadow-modal"
       >
         {/* Title */}
         <h2 style={{ 
@@ -65,7 +66,7 @@ export default function LogoutModal({ onClose }) {
           lineHeight: 1.5,
           maxWidth: '85%'
         }}>
-          Log out of Aura AI as <span style={{ color: text }}>{profile.email}</span>?
+          Log out of Kyra as <span style={{ color: text }}>{profile.email}</span>?
         </p>
 
         {/* Buttons */}

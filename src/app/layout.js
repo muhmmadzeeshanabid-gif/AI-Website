@@ -14,8 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Aura AI - Next Gen Chat",
-  description: "Advanced AI Chat Experience powered by Google Gemini",
+  title: "Kyra - Next Gen Intelligence",
+  description: "Advanced AI Experience powered by Kyra Engine",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({ children }) {

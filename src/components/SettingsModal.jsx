@@ -8,8 +8,16 @@ import {
   Users, User, ChevronDown, Lock, Check, LogOut, Sparkles, Plus,
   HelpCircle, Info, ChevronRight, Smartphone, Key, History, Type,
   Maximize, Image as ImageIcon, Trash2, Moon, Sun, Monitor, Bot, 
-  Search as SearchIcon, AlertTriangle, Archive, Eye, EyeOff, MessageSquare, ChevronUp
+  Search as SearchIcon, AlertTriangle, Archive, Eye, EyeOff, MessageSquare, ChevronUp, Play, Pause
 } from 'lucide-react';
+
+const VOICES = [
+  { id: 'Kyra', name: 'Kyra', desc: 'Premium, smooth female voice', gender: 'female' },
+  { id: 'Echo', name: 'Echo', desc: 'Mature, professional male voice', gender: 'male' },
+  { id: 'Alloy', name: 'Alloy', desc: 'Neutral, robotic balance', gender: 'neutral' },
+  { id: 'Shimmer', name: 'Shimmer', desc: 'Bright, energetic female voice', gender: 'female' },
+  { id: 'Onyx', name: 'Onyx', desc: 'Deep, resonant male voice', gender: 'male' },
+];
 
 const ACCENT_COLORS = [
   { label: 'Default', color: '#6366f1' },
@@ -59,7 +67,7 @@ const LANGUAGES = [
 
 export default function SettingsModal({ onClose, initialTab = 'general' }) {
   const { 
-    theme, setAppTheme, accentColor, setAccentColor, user, 
+    theme, resolvedTheme, setAppTheme, accentColor, setAccentColor, user, 
     language, setLanguage, logout, fontSize, setFontSize, 
     chatWidth, setChatWidth, lineHeight, setLineHeight,
     chats, deleteAccount, personalization, setPersonalization,
@@ -88,24 +96,41 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
   const [showNewPwdConfirm, setShowNewPwdConfirm] = React.useState(false);
   // Expanded chat reader
   const [expandedChatId, setExpandedChatId] = React.useState(null);
+  const [voiceOpen, setVoiceOpen] = React.useState(false);
+  const [isPreviewPlaying, setIsPreviewPlaying] = React.useState(false);
+  const voiceRef = React.useRef(null);
   // ─────────────────────
 
   if (typeof document === 'undefined') return null;
 
-  const isDark = theme === 'dark'; 
-  const modalBg = isDark ? 'var(--bg-primary)' : '#ffffff';
-  const sidebarBg = isDark ? 'var(--bg-secondary)' : '#f9f9f9';
-  const textColor = isDark ? 'var(--on-surface)' : '#111111';
-  const mutedColor = isDark ? 'var(--on-surface-muted)' : '#666666';
-  const subtleColor = isDark ? 'var(--on-surface-subtle)' : '#999999';
-  const borderColor = isDark ? 'var(--divider)' : '#f0f0f0';
-  const itemActiveBg = isDark ? 'var(--surface-3)' : '#f0f0f0';
-  const hoverOverlay = isDark ? 'var(--hover-overlay)' : 'rgba(0,0,0,0.05)';
+  const isDark = resolvedTheme === 'dark'; 
+  const modalBg = 'var(--bg-primary)';
+  const sidebarBg = 'var(--bg-secondary)';
+  const textColor = 'var(--on-surface)';
+  const mutedColor = 'var(--on-surface-muted)';
+  const subtleColor = 'var(--on-surface-subtle)';
+  const borderColor = 'var(--divider)';
+  const itemActiveBg = 'var(--surface-3)';
+  const hoverOverlay = 'var(--hover-overlay)';
 
   const currentLanguageLabel = LANGUAGES.find(l => l.value === language)?.label || language;
 
   const navItems = user ? [
-    { id: 'general',         icon: <Settings size={16} />,  label: 'General' },
+    { id: 'general',         icon: (
+      <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <img 
+          src="/logo.png" 
+          alt="Kyra" 
+          style={{ 
+            width: '100%', 
+            height: '100%', 
+            objectFit: 'cover', 
+            mixBlendMode: isDark ? 'screen' : 'multiply',
+            filter: isDark ? 'none' : 'invert(1)'
+          }} 
+        />
+      </div>
+    ),  label: 'General' },
     { id: 'notifications',   icon: <Bell size={16} />,       label: 'Notifications' },
     { id: 'personalization', icon: <Palette size={16} />,    label: 'Personalization' },
     { id: 'apps',            icon: <Grid size={16} />,       label: 'Apps' },
@@ -114,7 +139,21 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
     { id: 'parental',        icon: <Users size={16} />,      label: 'Parental controls' },
     { id: 'account',         icon: <User size={16} />,       label: 'Account' },
   ] : [
-    { id: 'general',         icon: <Settings size={16} />,  label: 'General' },
+    { id: 'general',         icon: (
+      <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <img 
+          src="/logo.png" 
+          alt="Kyra" 
+          style={{ 
+            width: '100%', 
+            height: '100%', 
+            objectFit: 'cover', 
+            mixBlendMode: isDark ? 'screen' : 'multiply',
+            filter: isDark ? 'none' : 'invert(1)'
+          }} 
+        />
+      </div>
+    ),  label: 'General' },
     { id: 'data',            icon: <Database size={16} />,   label: 'Data controls' },
   ];
 
@@ -139,6 +178,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
           boxShadow: 'none',
           border: `1px solid ${borderColor}`,
         }}
+        className="shadow-modal"
       >
         <div style={{
           width: 240, flexShrink: 0,
@@ -196,7 +236,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ color: textColor, fontSize: 15, fontWeight: 600 }}>Theme</div>
-                  <div style={{ color: subtleColor, fontSize: 13, marginTop: 2 }}>Choose how Aura AI looks to you.</div>
+                  <div style={{ color: subtleColor, fontSize: 13, marginTop: 2 }}>Choose how Kyra looks to you.</div>
                 </div>
                 <div style={{ display: 'flex', gap: 4, background: isDark ? 'rgba(255,255,255,0.05)' : '#eee', padding: 4, borderRadius: 12 }}>
                   {[
@@ -209,7 +249,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
                       onClick={() => setAppTheme(t.id)}
                       style={{
                         padding: '6px 16px', borderRadius: 10, border: 'none',
-                        background: theme === t.id ? (isDark ? 'rgba(255,255,255,0.1)' : '#fff') : 'transparent',
+                        background: theme === t.id ? 'var(--surface-3)' : 'transparent',
                         color: textColor, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: '0.2s',
                         display: 'flex', alignItems: 'center', gap: 8
                       }}
@@ -282,6 +322,108 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
                   </div>
                 )}
               </div>
+
+              {/* AI Voice Selection - Redesigned to Row with Dropdown */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderRadius: 16, border: `1px solid ${borderColor}`, background: 'var(--surface-1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 12, background: isDark ? 'rgba(255,255,255,0.05)' : '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    <img 
+                      src="/logo.png" 
+                      alt="Kyra" 
+                      style={{ 
+                        width: '24px', 
+                        height: '24px', 
+                        objectFit: 'cover', 
+                        mixBlendMode: isDark ? 'screen' : 'multiply',
+                        filter: isDark ? 'none' : 'invert(1)'
+                      }} 
+                    />
+                  </div>
+                  <div>
+                    <div style={{ color: textColor, fontSize: 14, fontWeight: 600 }}>AI Voice</div>
+                    <div style={{ color: subtleColor, fontSize: 12 }}>Choose your assistant's voice personality.</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button 
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && window.speechSynthesis) {
+                        if (isPreviewPlaying) {
+                          window.speechSynthesis.cancel();
+                          setIsPreviewPlaying(false);
+                          return;
+                        }
+                        
+                        window.speechSynthesis.cancel();
+                        const v = VOICES.find(x => x.id === (personalization.voice || 'Kyra'));
+                        const utterance = new SpeechSynthesisUtterance(`Hello, I am ${v.name}. How can I help you?`);
+                        utterance.pitch = v.gender === 'male' ? 0.9 : 1.1;
+                        utterance.onstart = () => setIsPreviewPlaying(true);
+                        utterance.onend = () => setIsPreviewPlaying(false);
+                        utterance.onerror = () => setIsPreviewPlaying(false);
+                        window.speechSynthesis.speak(utterance);
+                      }
+                    }}
+                    style={{ 
+                      width: 36, height: 36, borderRadius: '50%', background: isPreviewPlaying ? `${accentColor}20` : 'var(--surface-3)', border: 'none',
+                      color: isPreviewPlaying ? accentColor : textColor, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                      transition: 'all 0.2s', border: isPreviewPlaying ? `1px solid ${accentColor}40` : 'none'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = isPreviewPlaying ? `${accentColor}30` : hoverOverlay}
+                    onMouseLeave={e => e.currentTarget.style.background = isPreviewPlaying ? `${accentColor}20` : 'var(--surface-3)'}
+                  >
+                    {isPreviewPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+                  </button>
+
+                  <div style={{ position: 'relative' }} ref={voiceRef}>
+                    <button
+                      onClick={() => setVoiceOpen(!voiceOpen)}
+                      style={{
+                        padding: '8px 16px', borderRadius: 10, border: `1px solid ${borderColor}`,
+                        background: 'transparent', color: textColor,
+                        fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                        minWidth: 120, justifyContent: 'space-between'
+                      }}
+                    >
+                      {personalization.voice || 'Kyra'}
+                      <ChevronDown size={14} style={{ opacity: 0.6, transform: voiceOpen ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
+                    </button>
+
+                    <AnimatePresence>
+                      {voiceOpen && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                          style={{
+                            position: 'absolute', right: 0, bottom: '100%', marginBottom: 12,
+                            width: 180, background: modalBg, borderRadius: 16, border: `1px solid ${borderColor}`,
+                            boxShadow: '0 15px 40px rgba(0,0,0,0.3)', zIndex: 100, overflow: 'hidden', padding: 4
+                          }}
+                        >
+                          {VOICES.map(v => (
+                            <button
+                              key={v.id}
+                              onClick={() => { setPersonalization({ voice: v.id }); setVoiceOpen(false); }}
+                              style={{
+                                width: '100%', padding: '10px 14px', textAlign: 'left', background: personalization.voice === v.id ? hoverOverlay : 'transparent',
+                                border: 'none', color: textColor, fontSize: 13, cursor: 'pointer', borderRadius: 10,
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = hoverOverlay}
+                              onMouseLeave={e => e.currentTarget.style.background = personalization.voice === v.id ? hoverOverlay : 'transparent'}
+                            >
+                              <span>{v.name}</span>
+                              {personalization.voice === v.id && <Check size={14} style={{ color: accentColor }} />}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -295,7 +437,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
                 <div key={item.id} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '16px 20px', borderRadius: 16, border: `1px solid ${borderColor}`,
-                  background: notifications[item.id] ? (isDark ? 'rgba(255,255,255,0.02)' : '#fff') : 'transparent'
+                  background: notifications[item.id] ? 'var(--surface-1)' : 'transparent'
                 }}>
                   <div style={{ flex: 1, paddingRight: 20 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: textColor }}>{item.title}</div>
@@ -324,7 +466,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: textColor }}>Base style and tone</div>
-                  <p style={{ fontSize: 12, color: subtleColor, marginTop: 4, maxWidth: '80%' }}>Set the style and tone of how Aura responds to you.</p>
+                  <p style={{ fontSize: 12, color: subtleColor, marginTop: 4, maxWidth: '80%' }}>Set the style and tone of how Kyra responds to you.</p>
                 </div>
                 <select 
                   value={personalization.baseStyle}
@@ -339,8 +481,13 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
               </div>
 
               {/* ── Archived Chats Box ── */}
-              <div style={{ fontSize: 12, fontWeight: 700, color: subtleColor, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Archived Chats</div>
-              <div style={{ borderRadius: 18, border: `1px solid ${borderColor}`, background: isDark ? 'rgba(255,255,255,0.02)' : '#f9f9f9', overflow: 'hidden' }}>
+              <div style={{ 
+                padding: '4px 10px', fontSize: 10, fontWeight: 800,
+                color: 'var(--bg-primary)', background: 'var(--on-surface)',
+                borderRadius: 4, textTransform: 'uppercase',
+                letterSpacing: '0.08em', width: 'fit-content'
+              }}>Archived Chats</div>
+              <div style={{ borderRadius: 18, border: `1px solid ${borderColor}`, background: 'var(--surface-2)', overflow: 'hidden' }}>
 
                 {/* Header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${borderColor}` }}>
@@ -430,11 +577,11 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 14, borderRadius: 12, background: isDark ? 'rgba(255,255,255,0.04)' : '#f0f0f0', border: `1px solid ${borderColor}` }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: textColor }}>Change archive password</div>
                           <div style={{ position: 'relative' }}>
-                            <input type={showNewPwdInput ? 'text' : 'password'} value={newPwd} onChange={e => { setNewPwd(e.target.value); setPwdSetError(''); }} placeholder="New password" style={{ width: '100%', padding: '9px 42px 9px 14px', borderRadius: 10, border: `1px solid ${borderColor}`, background: isDark ? '#2c2c2e' : '#fff', color: textColor, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                            <input type={showNewPwdInput ? 'text' : 'password'} value={newPwd} onChange={e => { setNewPwd(e.target.value); setPwdSetError(''); }} placeholder="New password" style={{ width: '100%', padding: '9px 42px 9px 14px', borderRadius: 10, border: `1px solid ${borderColor}`, background: 'var(--surface-3)', color: textColor, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
                             <button onClick={() => setShowNewPwdInput(v => !v)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: subtleColor, display: 'flex' }}>{showNewPwdInput ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                           </div>
                           <div style={{ position: 'relative' }}>
-                            <input type={showNewPwdConfirm ? 'text' : 'password'} value={newPwdConfirm} onChange={e => { setNewPwdConfirm(e.target.value); setPwdSetError(''); }} placeholder="Confirm password" style={{ width: '100%', padding: '9px 42px 9px 14px', borderRadius: 10, border: `1px solid ${borderColor}`, background: isDark ? '#2c2c2e' : '#fff', color: textColor, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                            <input type={showNewPwdConfirm ? 'text' : 'password'} value={newPwdConfirm} onChange={e => { setNewPwdConfirm(e.target.value); setPwdSetError(''); }} placeholder="Confirm password" style={{ width: '100%', padding: '9px 42px 9px 14px', borderRadius: 10, border: `1px solid ${borderColor}`, background: 'var(--surface-3)', color: textColor, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
                             <button onClick={() => setShowNewPwdConfirm(v => !v)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: subtleColor, display: 'flex' }}>{showNewPwdConfirm ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                           </div>
                           {pwdSetError && <span style={{ fontSize: 12, color: '#ef4444' }}>{pwdSetError}</span>}
@@ -449,7 +596,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
                       {archivedChats.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }} className="custom-scrollbar">
                           {archivedChats.map(chat => (
-                            <div key={chat.id} style={{ borderRadius: 12, border: `1px solid ${borderColor}`, background: isDark ? 'rgba(255,255,255,0.02)' : '#fff', overflow: 'hidden' }}>
+                            <div key={chat.id} style={{ borderRadius: 12, border: `1px solid ${borderColor}`, background: 'var(--surface-1)', overflow: 'hidden' }}>
                               {/* Chat header row - click to open */}
                               <div style={{ display: 'flex', alignItems: 'center', padding: '11px 14px', cursor: 'pointer' }} onClick={() => { openArchivedChat(chat); onClose(); }}>
                                 <Archive size={13} style={{ color: subtleColor, flexShrink: 0, marginRight: 10 }} />
@@ -466,7 +613,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
                                     <div style={{ fontSize: 12, color: subtleColor, textAlign: 'center', padding: '12px 0' }}>No messages in this chat.</div>
                                   ) : (chat.messages || []).map((msg, i) => (
                                     <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                                      <span style={{ fontSize: 10, fontWeight: 700, color: subtleColor, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{msg.role === 'user' ? 'You' : 'Aura'}</span>
+                                      <span style={{ fontSize: 10, fontWeight: 700, color: subtleColor, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{msg.role === 'user' ? 'You' : 'Kyra'}</span>
                                       <div style={{ maxWidth: '85%', padding: '9px 13px', borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background: msg.role === 'user' ? accentColor : (isDark ? 'rgba(255,255,255,0.06)' : '#efefef'), color: msg.role === 'user' ? '#fff' : textColor, fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content || msg.text || ''}</div>
                                     </div>
                                   ))}
@@ -487,7 +634,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingTop: 8 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: textColor }}>Fast answers</div>
-                  <p style={{ fontSize: 12, color: subtleColor, marginTop: 4, maxWidth: '85%' }}>Aura can sometimes use its general knowledge to give fast, in-depth answers.</p>
+                  <p style={{ fontSize: 12, color: subtleColor, marginTop: 4, maxWidth: '85%' }}>Kyra can sometimes use its general knowledge to give fast, in-depth answers.</p>
                 </div>
                 <div
                   onClick={() => setPersonalization({ fastAnswers: !personalization.fastAnswers })}
@@ -506,7 +653,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
               {/* Custom Instructions */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: textColor }}>Custom instructions</div>
-                <p style={{ fontSize: 12, color: subtleColor, marginTop: -8 }}>How would you like Aura to respond?</p>
+                <p style={{ fontSize: 12, color: subtleColor, marginTop: -8 }}>How would you like Kyra to respond?</p>
                 <textarea 
                   value={personalization.customInstructions}
                   onChange={(e) => setPersonalization({ customInstructions: e.target.value })}
@@ -521,7 +668,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
               {/* About You */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: textColor }}>About you</div>
-                <p style={{ fontSize: 12, color: subtleColor, marginTop: -8 }}>What would you like Aura to know about you to provide better responses?</p>
+                <p style={{ fontSize: 12, color: subtleColor, marginTop: -8 }}>What would you like Kyra to know about you to provide better responses?</p>
                 <textarea 
                   value={personalization.aboutYou || ''}
                   onChange={(e) => setPersonalization({ aboutYou: e.target.value })}
@@ -533,40 +680,20 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
                 />
               </div>
 
-              {/* Chat View Settings (Previous ones added) */}
-              <div style={{ fontSize: 12, fontWeight: 700, color: subtleColor, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 12 }}>Chat Display</div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 14, fontWeight: 500, color: textColor }}>Font Size</div>
-                <div style={{ display: 'flex', gap: 4, background: isDark ? 'rgba(0,0,0,0.2)' : '#eee', padding: 3, borderRadius: 8 }}>
-                  {['Small', 'Medium', 'Large'].map(s => (
-                    <button key={s} onClick={() => setFontSize(s)} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', background: fontSize === s ? (isDark ? 'rgba(255,255,255,0.1)' : '#fff') : 'transparent', color: textColor, fontSize: 11, fontWeight: 600 }}>{s}</button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 14, fontWeight: 500, color: textColor }}>Chat Width</div>
-                <div style={{ display: 'flex', gap: 4, background: isDark ? 'rgba(0,0,0,0.2)' : '#eee', padding: 3, borderRadius: 8 }}>
-                  {['Standard', 'Wide', 'Full'].map(w => (
-                    <button key={w} onClick={() => setChatWidth(w)} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', background: chatWidth === w ? (isDark ? 'rgba(255,255,255,0.1)' : '#fff') : 'transparent', color: textColor, fontSize: 11, fontWeight: 600 }}>{w}</button>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 
           {activeTab === 'apps' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {[
-                { name: 'Google Search', icon: <SearchIcon size={20} />, status: 'Connected', desc: 'Allow Aura to search the web for latest info.' },
+                { name: 'Google Search', icon: <SearchIcon size={20} />, status: 'Connected', desc: 'Allow Kyra to search the web for latest info.' },
                 { name: 'GitHub', icon: <Bot size={20} />, status: 'Not Connected', desc: 'Search and read code from your repositories.' },
                 { name: 'Spotify', icon: <Bot size={20} />, status: 'Not Connected', desc: 'Control playback and search for music.' },
                 { name: 'Google Drive', icon: <Database size={20} />, status: 'Not Connected', desc: 'Read and analyze your documents.' },
               ].map(app => (
                 <div key={app.name} style={{
                   display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', borderRadius: 20,
-                  border: `1px solid ${borderColor}`, background: isDark ? 'rgba(255,255,255,0.02)' : '#fff'
+                  border: `1px solid ${borderColor}`, background: 'var(--surface-1)'
                 }}>
                   <div style={{ width: 44, height: 44, borderRadius: 12, background: isDark ? 'rgba(255,255,255,0.05)' : '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: accentColor }}>
                     {app.icon}
@@ -655,10 +782,20 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
                 <div style={{ fontSize: 14, fontWeight: 600, color: textColor, marginBottom: 12 }}>Notification Preview</div>
                 <div style={{ padding: '12px 16px', background: isDark ? '#111' : '#fff', borderRadius: 12, border: `1px solid ${borderColor}`, display: 'flex', gap: 12, alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
                    <div style={{ width: 32, height: 32, borderRadius: 8, background: accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Bot size={18} color="#fff" />
+                    <img 
+                      src="/logo.png" 
+                      alt="Kyra" 
+                      style={{ 
+                        width: 18, 
+                        height: 18, 
+                        objectFit: 'cover', 
+                        mixBlendMode: isDark ? 'screen' : 'multiply',
+                        filter: isDark ? 'none' : 'invert(1)'
+                      }} 
+                    />
                    </div>
                    <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: textColor }}>Aura AI</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: textColor }}>Kyra</div>
                     <div style={{ fontSize: 12, color: subtleColor }}>I've completed the analysis of your file.</div>
                    </div>
                    <div style={{ fontSize: 10, color: subtleColor }}>Just now</div>

@@ -67,14 +67,15 @@ const SearchModal = ({ onClose }) => {
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ type: 'spring', stiffness: 350, damping: 30 }}
         onClick={e => e.stopPropagation()}
+        className="shadow-modal"
         style={{
           position: 'relative', // Ensures it stays above absolute backdrop
           width: 640, maxWidth: '95vw',
-          background: '#1a1a1a', // Using solid color instead of variable to be safe
+          background: 'var(--surface-1)',
           borderRadius: 24,
           overflow: 'hidden',
-          boxShadow: 'none', // Removed shadow
-          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: 'none',
+          border: '1px solid var(--divider)',
           display: 'flex', flexDirection: 'column',
           maxHeight: '80vh',
           zIndex: 10,
@@ -111,70 +112,75 @@ const SearchModal = ({ onClose }) => {
           </button>
         </div>
 
-        {/* Content */}
+        {/* Content Container */}
         <div 
           className="custom-scrollbar"
-          style={{ flex: 1, overflowY: 'auto', padding: '12px 0' }}
+          style={{ flex: 1, overflowY: 'auto' }}
         >
-          {/* New Chat Option */}
-          {!query && (
-            <button
-              onClick={() => { setMessages([]); onClose(); }}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 16,
-                padding: '14px 24px', background: 'transparent', border: 'none',
-                color: 'var(--on-surface)', cursor: 'pointer', transition: 'all 0.15s',
-                textAlign: 'left',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              <SquarePen size={18} style={{ color: 'var(--on-surface-muted)' }} />
-              <span style={{ fontSize: 15, fontWeight: 500 }}>New chat</span>
-            </button>
-          )}
+          {/* Internal Padding Wrapper to keep scrollbar at edges */}
+          <div style={{ padding: '12px 0' }}>
+            {/* New Chat Option */}
+            {!query && (
+              <button
+                onClick={() => { setMessages([]); onClose(); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 16,
+                  padding: '14px 24px', background: 'transparent', border: 'none',
+                  color: 'var(--on-surface)', cursor: 'pointer', transition: 'all 0.15s',
+                  textAlign: 'left',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <SquarePen size={18} style={{ color: 'var(--on-surface-muted)' }} />
+                <span style={{ fontSize: 15, fontWeight: 500 }}>New chat</span>
+              </button>
+            )}
 
-          {/* Grouped Results */}
-          <div style={{ marginTop: query ? 0 : 8 }}>
-            {[
-              { label: 'Today', items: groups.today },
-              { label: 'Yesterday', items: groups.yesterday },
-              { label: 'Earlier', items: groups.earlier },
-            ].map(group => group.items.length > 0 && (
-              <div key={group.label} style={{ marginBottom: 12 }}>
-                <div style={{
-                  padding: '12px 24px 8px', fontSize: 12, fontWeight: 700,
-                  color: 'var(--on-surface-subtle)', textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}>
-                  {group.label}
+            {/* Grouped Results */}
+            <div style={{ marginTop: query ? 0 : 8 }}>
+              {[
+                { label: 'Today', items: groups.today },
+                { label: 'Yesterday', items: groups.yesterday },
+                { label: 'Earlier', items: groups.earlier },
+              ].map(group => group.items.length > 0 && (
+                <div key={group.label} style={{ marginBottom: 12 }}>
+                  <div style={{
+                    padding: '4px 10px', fontSize: 10, fontWeight: 800,
+                    color: 'var(--bg-primary)', background: 'var(--on-surface)',
+                    borderRadius: 4, textTransform: 'uppercase',
+                    letterSpacing: '0.08em', width: 'fit-content',
+                    margin: '16px 24px 8px',
+                  }}>
+                    {group.label}
+                  </div>
+                  {group.items.map(chat => (
+                    <button
+                      key={chat.id}
+                      onClick={() => { switchChat(chat.id); onClose(); }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 16,
+                        padding: '12px 24px', background: 'transparent', border: 'none',
+                        color: 'var(--on-surface)', cursor: 'pointer', transition: 'all 0.15s',
+                        textAlign: 'left',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <MessageSquare size={18} style={{ color: 'var(--on-surface-muted)' }} />
+                      <span className="truncate" style={{ fontSize: 15 }}>{chat.title}</span>
+                    </button>
+                  ))}
                 </div>
-                {group.items.map(chat => (
-                  <button
-                    key={chat.id}
-                    onClick={() => { switchChat(chat.id); onClose(); }}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 16,
-                      padding: '12px 24px', background: 'transparent', border: 'none',
-                      color: 'var(--on-surface)', cursor: 'pointer', transition: 'all 0.15s',
-                      textAlign: 'left',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <MessageSquare size={18} style={{ color: 'var(--on-surface-muted)' }} />
-                    <span className="truncate" style={{ fontSize: 15 }}>{chat.title}</span>
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          {filteredChats.length === 0 && query && (
-            <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--on-surface-muted)' }}>
-              No chats found for "{query}"
+              ))}
             </div>
-          )}
+
+            {filteredChats.length === 0 && query && (
+              <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--on-surface-muted)' }}>
+                No chats found for "{query}"
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
     </div>,

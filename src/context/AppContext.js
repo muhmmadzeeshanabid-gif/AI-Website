@@ -23,7 +23,9 @@ export const AppProvider = ({ children }) => {
     return localStorage.getItem('aura-accent') || '#6366f1';
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
+  const [appView, setAppView] = useState('chat');
+  const [resolvedTheme, setResolvedTheme] = useState('dark');
+
   const [chats, setChats] = useState(() => {
     if (typeof window === 'undefined') return [];
     try { return JSON.parse(localStorage.getItem('aura-chats') || '[]'); }
@@ -138,12 +140,16 @@ export const AppProvider = ({ children }) => {
     if (typeof window === 'undefined') return 'Normal';
     return localStorage.getItem('aura-line-height') || 'Normal';
   });
+  const [aiModel, setAiModelState] = useState(() => {
+    if (typeof window === 'undefined') return 'Gemini';
+    return localStorage.getItem('aura-ai-model') || 'Gemini';
+  });
 
   const [personalization, setPersonalizationState] = useState(() => {
     const defaults = {
       baseStyle: 'Default', warm: 'Default', enthusiastic: 'Default',
       headers: 'Default', emoji: 'Default', fastAnswers: true,
-      customInstructions: '', aboutYou: '',
+      customInstructions: '', aboutYou: '', voice: 'Kyra',
     };
     if (typeof window === 'undefined') return defaults;
     try {
@@ -206,6 +212,16 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
+    let resolved = theme;
+    if (theme === 'system') {
+      resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    setResolvedTheme(resolved);
+    document.documentElement.setAttribute('data-theme', resolved);
+  }, [theme]);
+
+
+  useEffect(() => {
     if (!isInitializing) localStorage.setItem('aura-chats', JSON.stringify(chats));
   }, [chats, isInitializing]);
 
@@ -236,6 +252,7 @@ export const AppProvider = ({ children }) => {
   const setFontSize = (size) => { setFontSizeState(size); localStorage.setItem('aura-font-size', size); };
   const setChatWidth = (width) => { setChatWidthState(width); localStorage.setItem('aura-chat-width', width); };
   const setLineHeight = (lh) => { setLineHeightState(lh); localStorage.setItem('aura-line-height', lh); };
+  const setAiModel = (model) => { setAiModelState(model); localStorage.setItem('aura-ai-model', model); };
   const setPersonalization = (data) => {
     const updated = { ...personalization, ...data };
     setPersonalizationState(updated);
@@ -322,10 +339,11 @@ export const AppProvider = ({ children }) => {
 
   return (
     <AppContext.Provider value={{
-      theme, toggleTheme, setAppTheme,
+      theme, resolvedTheme, toggleTheme, setAppTheme,
       accentColor, setAccentColor,
       chatTheme, updateChatTheme,
       isSidebarOpen, setIsSidebarOpen,
+      appView, setAppView,
       messages, setMessages,
       chats, setChats,
       activeChatId, setActiveChatId,
@@ -340,6 +358,7 @@ export const AppProvider = ({ children }) => {
       fontSize, setFontSize,
       chatWidth, setChatWidth,
       lineHeight, setLineHeight,
+      aiModel, setAiModel,
       personalization, setPersonalization,
       deleteAccount,
       isInitializing,

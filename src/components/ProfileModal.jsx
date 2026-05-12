@@ -53,7 +53,7 @@ export default function ProfileModal({ onClose }) {
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 99999999,
-        background: 'rgba(0,0,0,0.5)',
+        background: 'rgba(0,0,0,0.4)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
       onClick={onClose}
@@ -65,10 +65,11 @@ export default function ProfileModal({ onClose }) {
           background: bg,
           borderRadius: 20,
           padding: '28px 32px 24px',
-          boxShadow: '0 24px 60px rgba(0,0,0,0.3)',
+          boxShadow: 'none',
           border: `1px solid ${border}`,
           position: 'relative',
         }}
+        className="shadow-modal"
       >
         {/* Close */}
         <button
