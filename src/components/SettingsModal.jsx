@@ -75,6 +75,10 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
     openArchivedChat
   } = useAppContext();
   const [activeTab, setActiveTab] = React.useState(initialTab);
+  
+  React.useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [languageOpen, setLanguageOpen] = React.useState(false);
   const [mfaEnabled, setMfaEnabled] = React.useState(false);
@@ -116,21 +120,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
   const currentLanguageLabel = LANGUAGES.find(l => l.value === language)?.label || language;
 
   const navItems = user ? [
-    { id: 'general',         icon: (
-      <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        <img 
-          src="/logo.png" 
-          alt="Kyra" 
-          style={{ 
-            width: '100%', 
-            height: '100%', 
-            objectFit: 'cover', 
-            mixBlendMode: isDark ? 'screen' : 'multiply',
-            filter: isDark ? 'none' : 'invert(1)'
-          }} 
-        />
-      </div>
-    ),  label: 'General' },
+    { id: 'general',         icon: <Settings size={16} />,  label: 'General' },
     { id: 'notifications',   icon: <Bell size={16} />,       label: 'Notifications' },
     { id: 'personalization', icon: <Palette size={16} />,    label: 'Personalization' },
     { id: 'apps',            icon: <Grid size={16} />,       label: 'Apps' },
@@ -139,21 +129,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
     { id: 'parental',        icon: <Users size={16} />,      label: 'Parental controls' },
     { id: 'account',         icon: <User size={16} />,       label: 'Account' },
   ] : [
-    { id: 'general',         icon: (
-      <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        <img 
-          src="/logo.png" 
-          alt="Kyra" 
-          style={{ 
-            width: '100%', 
-            height: '100%', 
-            objectFit: 'cover', 
-            mixBlendMode: isDark ? 'screen' : 'multiply',
-            filter: isDark ? 'none' : 'invert(1)'
-          }} 
-        />
-      </div>
-    ),  label: 'General' },
+    { id: 'general',         icon: <Settings size={16} />,  label: 'General' },
     { id: 'data',            icon: <Database size={16} />,   label: 'Data controls' },
   ];
 
@@ -901,7 +877,7 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '24px', background: isDark ? 'rgba(255,255,255,0.03)' : '#f9f9f9', borderRadius: 24, border: `1px solid ${borderColor}` }}>
                 <div style={{ width: 80, height: 80, borderRadius: '50%', background: accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 28, fontWeight: 700, overflow: 'hidden', boxShadow: '0 8px 20px rgba(0,0,0,0.15)' }}>
-                  {user?.photoURL ? <img src={user.photoURL} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (user?.displayName?.[0].toUpperCase() || 'U')}
+                  {user?.photoURL ? <img src={user.photoURL} alt="Avatar" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (user?.displayName?.[0].toUpperCase() || 'U')}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 20, fontWeight: 700, color: textColor }}>{user?.displayName || 'User Name'}</div>

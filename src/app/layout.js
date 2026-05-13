@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/context/AppContext";
+import MainLayout from "@/components/MainLayout";
 import Script from "next/script";
 
 const geistSans = Geist({
@@ -29,7 +30,9 @@ export default function RootLayout({ children }) {
       </head>
       <body suppressHydrationWarning>
         <AppProvider>
-          {children}
+          <MainLayout>
+            {children}
+          </MainLayout>
         </AppProvider>
       </body>
     </html>

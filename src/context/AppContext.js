@@ -144,6 +144,20 @@ export const AppProvider = ({ children }) => {
     if (typeof window === 'undefined') return 'Gemini';
     return localStorage.getItem('aura-ai-model') || 'Gemini';
   });
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareChatId, setShareChatId] = useState(null);
+  const [isGroupLinkModalOpen, setIsGroupLinkModalOpen] = useState(false);
+  const [groupLinkChatId, setGroupLinkChatId] = useState(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isGroupChatModalOpen, setIsGroupChatModalOpen] = useState(false);
+
+  const convertToGroupChat = useCallback((id) => {
+    setChats(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, isGroup: true } : c);
+      localStorage.setItem('aura-chats', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
   const [personalization, setPersonalizationState] = useState(() => {
     const defaults = {
@@ -184,16 +198,21 @@ export const AppProvider = ({ children }) => {
       if (firebaseUser) {
         setUser(firebaseUser);
         const savedProfile = localStorage.getItem('aura-profile');
-        if (!savedProfile) {
-          const newProfile = {
-            displayName: firebaseUser.displayName || 'User',
-            username: firebaseUser.email?.split('@')[0] || 'user',
-            email: firebaseUser.email || '',
-            avatar: firebaseUser.photoURL || null,
-          };
-          setProfileState(newProfile);
-          localStorage.setItem('aura-profile', JSON.stringify(newProfile));
-        }
+        let currentProfile = savedProfile ? JSON.parse(savedProfile) : null;
+        
+        // Always try to get the best avatar available
+        const photoURL = firebaseUser.photoURL || firebaseUser.providerData?.[0]?.photoURL;
+        const avatarUrl = photoURL || currentProfile?.avatar || null;
+        
+        const updatedProfile = {
+          displayName: currentProfile?.displayName || firebaseUser.displayName || 'User',
+          username: currentProfile?.username || firebaseUser.email?.split('@')[0] || 'user',
+          email: firebaseUser.email || currentProfile?.email || '',
+          avatar: avatarUrl,
+        };
+        
+        setProfileState(updatedProfile);
+        localStorage.setItem('aura-profile', JSON.stringify(updatedProfile));
         setIsAuthLoading(false);
       } else {
         const hasLocalProfile = !!localStorage.getItem('aura-profile');
@@ -337,6 +356,14 @@ export const AppProvider = ({ children }) => {
     });
   }, [setActiveChatId, setMessages]);
 
+  const renameChat = useCallback((id, newTitle) => {
+    setChats(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, title: newTitle } : c);
+      localStorage.setItem('aura-chats', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   return (
     <AppContext.Provider value={{
       theme, resolvedTheme, toggleTheme, setAppTheme,
@@ -347,7 +374,7 @@ export const AppProvider = ({ children }) => {
       messages, setMessages,
       chats, setChats,
       activeChatId, setActiveChatId,
-      createNewChat, deleteChat, switchChat,
+      createNewChat, deleteChat, switchChat, renameChat,
       archivedChats, archiveChat, unarchiveChat,
       archivePassword, setArchivePassword,
       viewingArchivedChat, openArchivedChat, closeArchivedChat,
@@ -363,6 +390,13 @@ export const AppProvider = ({ children }) => {
       deleteAccount,
       isInitializing,
       isAuthLoading,
+      isShareModalOpen, setIsShareModalOpen,
+      shareChatId, setShareChatId,
+      isGroupLinkModalOpen, setIsGroupLinkModalOpen,
+      groupLinkChatId, setGroupLinkChatId,
+      isReportModalOpen, setIsReportModalOpen,
+      isGroupChatModalOpen, setIsGroupChatModalOpen,
+      convertToGroupChat,
       showLoggedIn: user || (isAuthLoading && typeof window !== 'undefined' && localStorage.getItem('aura-profile')),
     }}>
       {children}

@@ -2,15 +2,26 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { useAppContext } from '@/context/AppContext';
-import { MessageSquare, Plus, Settings, LogOut, User, Menu, X, ChevronDown, ChevronUp, Search, Bot, PanelLeftClose, PanelLeftOpen, Edit, SquarePen, MoreHorizontal, Share2, Users, Pencil, Pin, Archive, Trash2, Sparkles, Palette, UserCircle, HelpCircle, ChevronRight, Lock, Image, Telescope, LayoutGrid } from 'lucide-react';
+import { MessageSquare, Plus, Settings, LogOut, User, Menu, X, ChevronDown, ChevronUp, Search, Bot, PanelLeftClose, PanelLeftOpen, Edit, SquarePen, MoreHorizontal, Share2, Users, Pencil, Pin, Archive, Trash2, Sparkles, Palette, UserCircle, HelpCircle, ChevronRight, Lock, Image, Telescope, LayoutGrid, Link } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SettingsModal from './SettingsModal';
 import ProfileModal from './ProfileModal';
 import LogoutModal from './LogoutModal';
 import SearchModal from './SearchModal';
 
+import { useRouter } from 'next/navigation';
+
 const Sidebar = () => {
-  const { theme, resolvedTheme, isSidebarOpen, setIsSidebarOpen, setMessages, chats, setChats, deleteChat, switchChat, createNewChat, activeChatId, profile, user, setAuthOpen, isAuthLoading, showLoggedIn, archivedChats, archiveChat, unarchiveChat, archivePassword, setArchivePassword, closeArchivedChat, appView, setAppView } = useAppContext();
+  const router = useRouter();
+  const { 
+    theme, resolvedTheme, isSidebarOpen, setIsSidebarOpen, setMessages, chats, setChats, 
+    deleteChat, switchChat, createNewChat, activeChatId, setActiveChatId, profile, user, 
+    setAuthOpen, isAuthLoading, showLoggedIn, archivedChats, archiveChat, unarchiveChat, 
+    archivePassword, setArchivePassword, closeArchivedChat, appView, setAppView, 
+    isShareModalOpen, setIsShareModalOpen, shareChatId, setShareChatId,
+    isGroupChatModalOpen, setIsGroupChatModalOpen,
+    isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId
+  } = useAppContext();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -39,10 +50,7 @@ const Sidebar = () => {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isMoreMenuOpen]);
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = React.useState('general');
-  const [profileOpen, setProfileOpen] = React.useState(false);
-  const [logoutOpen, setLogoutOpen] = React.useState(false);
   const profileRef = React.useRef(null);
   const menuRef = React.useRef(null);
   const [isMobile, setIsMobile] = React.useState(false);
@@ -103,7 +111,6 @@ const Sidebar = () => {
     setDeleteConfirm({ open: false, id: null, name: '' });
   };
 
-  const [searchModalOpen, setSearchModalOpen] = React.useState(false);
 
   const handleRename = (i) => {
     setRenameValue(chats[i].title);
@@ -132,27 +139,55 @@ const Sidebar = () => {
     setOpenMenuIndex(null);
   };
 
-  const displayChats = chats.filter(c => c.messages.length > 0);
+  const displayChats = (chats || []).filter(c => c && c.messages && Array.isArray(c.messages) && c.messages.length > 0);
   const sortedChats = [...displayChats.filter(c => c.pinned), ...displayChats.filter(c => !c.pinned)];
 
   return (
     <>
+      <AnimatePresence>
+        {isMobile && isSidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90]"
+          />
+        )}
+      </AnimatePresence>
+
       <motion.div
         initial={false}
         animate={{ 
-          width: isSidebarOpen ? '280px' : '68px',
+          width: isMobile ? (isSidebarOpen ? 'min(80vw, 300px)' : '0px') : (isSidebarOpen ? '280px' : '68px'),
+          x: isMobile && !isSidebarOpen ? '-100%' : 0,
         }}
         transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-        className="relative h-screen bg-sidebar-bg border-r border-divider flex flex-col z-40 shadow-2xl"
+        className={`relative h-screen bg-sidebar-bg border-r border-divider flex flex-col z-40 shadow-2xl ${isMobile ? 'fixed left-0 top-0 h-full z-[100] border-none' : ''}`}
+        style={{
+          boxShadow: isMobile && isSidebarOpen ? '0 0 50px rgba(0,0,0,0.5)' : 'none',
+          pointerEvents: isMobile && !isSidebarOpen ? 'none' : 'auto',
+          overflow: 'visible'
+        }}
       >
         {/* Top Header / Logo Area */}
-        <div className={`p-4 flex items-center ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
-          <div className="relative group/logo">
+        <div className={`px-3 py-4 flex items-center ${isSidebarOpen ? 'justify-between' : 'justify-center'}`} style={{ minHeight: 56 }}>
+          <div className="flex items-center gap-3">
+            {isMobile && isSidebarOpen && (
+              <button 
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-2 hover:bg-white/10 rounded-lg text-on-surface mr-1"
+              >
+                <X size={20} />
+              </button>
+            )}
+            <div className="relative group/logo" onClick={() => { setActiveChatId(null); setMessages([]); router.push('/'); }}>
             <button 
               onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
               onMouseEnter={() => setIsLogoHovered(true)}
               onMouseLeave={() => setIsLogoHovered(false)}
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${!isSidebarOpen ? 'hover:bg-white/10 cursor-pointer' : ''}`}
+              className={`h-10 rounded-xl flex items-center ${isSidebarOpen ? 'justify-start w-auto' : 'justify-center w-10'} transition-all duration-200 ${!isSidebarOpen ? 'hover:bg-white/10 cursor-pointer' : ''}`}
+              style={{ paddingLeft: isSidebarOpen ? '12px' : '0px' }}
             >
               {!isSidebarOpen ? (
                 <div className="relative w-10 h-10 flex items-center justify-center">
@@ -221,6 +256,7 @@ const Sidebar = () => {
               )}
             </button>
           </div>
+        </div>
           
           {isSidebarOpen && (
             <div className="relative group/tooltip">
@@ -246,7 +282,13 @@ const Sidebar = () => {
         <div className={`px-3 mt-4 ${!isSidebarOpen ? 'flex flex-col items-center gap-1' : 'flex flex-col gap-1'}`}>
           <div className="relative group/tooltip w-full flex justify-center">
             <button 
-              onClick={() => { createNewChat(); closeArchivedChat(); setAppView('chat'); }}
+              onClick={() => { 
+                setActiveChatId(null); 
+                setMessages([]); 
+                closeArchivedChat(); 
+                setAppView('chat'); 
+                router.push('/'); 
+              }}
               style={{
                 display: 'flex', alignItems: 'center', background: 'transparent', border: 'none',
                 borderRadius: 12, cursor: 'pointer', transition: 'all 0.15s', color: 'var(--on-surface)',
@@ -274,7 +316,7 @@ const Sidebar = () => {
           
           <div className="relative group/tooltip w-full flex justify-center">
             <button
-              onClick={() => setSearchModalOpen(true)}
+              onClick={() => { router.push('/search'); }}
               style={{
                 display: 'flex', alignItems: 'center', background: 'transparent', border: 'none',
                 borderRadius: 12, cursor: 'pointer', transition: 'all 0.15s', color: 'var(--on-surface)',
@@ -498,22 +540,30 @@ const Sidebar = () => {
                             }}
                           />
                         ) : (
-                          <span
-                            className="truncate text-[14.5px] block text-left leading-snug flex-1 cursor-pointer"
-                            style={{ color: 'var(--on-surface)', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '5px' }}
+                          <div 
+                            className="flex-1 flex items-center gap-3 overflow-hidden"
+                            onClick={() => { router.push(`/c/${chat.id}`); closeArchivedChat(); }}
                           >
-                            {chat.pinned && <Pin size={11} style={{ color: 'var(--on-surface-subtle)', flexShrink: 0 }} />}
-                            <span className="truncate">{chat.title}</span>
-                          </span>
+                            <span
+                              className="truncate text-[14.5px] block text-left leading-snug flex-1 cursor-pointer"
+                              style={{ color: 'var(--on-surface)', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '5px' }}
+                            >
+                              {chat.pinned && <Pin size={11} style={{ color: 'var(--on-surface-subtle)', flexShrink: 0 }} />}
+                              <span className="truncate">{chat.title}</span>
+                            </span>
+                          </div>
                         )}
                         <span
-                          className="transition-opacity ml-2 shrink-0 cursor-pointer"
-                          style={{ opacity: hoveredChat === i || openMenuIndex === i ? 1 : 0 }}
+                          className="transition-all ml-2 shrink-0 cursor-pointer flex items-center justify-center"
+                          style={{ 
+                            width: '28px', height: '28px',
+                            opacity: (chat.isGroup || hoveredChat === i || openMenuIndex === i) ? 1 : 0 
+                          }}
                           onClick={(e) => {
                             e.stopPropagation();
                             const rect = e.currentTarget.getBoundingClientRect();
                             const spaceBelow = window.innerHeight - rect.bottom;
-                            const menuHeight = 220; // Approx height of the menu
+                            const menuHeight = 220;
                             
                             if (spaceBelow < menuHeight) {
                               setMenuPos({ bottom: window.innerHeight - rect.bottom, left: rect.right + 8, isBottom: true });
@@ -523,7 +573,22 @@ const Sidebar = () => {
                             setOpenMenuIndex(openMenuIndex === i ? null : i);
                           }}
                         >
-                          <MoreHorizontal size={15} style={{ color: 'var(--on-surface)' }} />
+                          {chat.isGroup && hoveredChat !== i && openMenuIndex !== i ? (
+                            <div style={{ 
+                              width: '24px', height: '24px', borderRadius: '50%', 
+                              background: 'var(--hover-overlay-2)', overflow: 'hidden',
+                              border: '1px solid var(--divider)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            }}>
+                              {profile?.avatar ? (
+                                <img src={profile.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <User size={12} style={{ color: 'var(--on-surface-subtle)' }} />
+                              )}
+                            </div>
+                          ) : (
+                            <MoreHorizontal size={15} style={{ color: 'var(--on-surface)' }} />
+                          )}
                         </span>
                       </div>
 
@@ -552,13 +617,17 @@ const Sidebar = () => {
                               left: menuPos.left,
                             }}
                           >
-                            {[
-                              { icon: <Share2 size={16} />, label: 'Share', action: () => setOpenMenuIndex(null) },
-                              { icon: <Users size={16} />, label: 'Start a group chat', action: () => setOpenMenuIndex(null) },
+                            {(chat.isGroup ? [
+                              { icon: <Pencil size={16} />, label: 'Rename', action: () => handleRename(i) },
+                              { icon: <Pin size={16} />, label: chat.pinned ? 'Unpin chat' : 'Pin chat', action: () => handlePin(chat) },
+                              { icon: <Link size={16} />, label: 'Add people via group link', action: () => { setGroupLinkChatId(chat.id); setIsGroupLinkModalOpen(true); setOpenMenuIndex(null); } },
+                            ] : [
+                              { icon: <Share2 size={16} />, label: 'Share', action: () => { setShareChatId(chat.id); setIsShareModalOpen(true); setOpenMenuIndex(null); } },
+                              { icon: <Users size={16} />, label: 'Start a group chat', action: () => { setShareChatId(chat.id); setIsGroupChatModalOpen(true); setOpenMenuIndex(null); } },
                               { icon: <Pencil size={16} />, label: 'Rename', action: () => handleRename(i) },
                               { icon: <Pin size={16} />, label: chat.pinned ? 'Unpin chat' : 'Pin chat', action: () => handlePin(chat) },
                               { icon: <Archive size={16} />, label: 'Archive', action: () => { archiveChat(chat.id); setOpenMenuIndex(null); } },
-                            ].map((item, j) => (
+                            ]).map((item, j) => (
                               <button
                                 key={j}
                                 onClick={item.action}
@@ -607,11 +676,11 @@ const Sidebar = () => {
         </div>
 
         {/* Bottom Profile Area */}
-        <div className="p-3.5 mt-auto" ref={profileRef}>
+        <div className="px-3 mt-auto mb-2" ref={profileRef}>
           {mounted && showLoggedIn ? (
             <div
               style={{ display: 'flex', alignItems: 'center', borderRadius: 20, transition: 'background 0.15s', cursor: 'pointer' }}
-              className={isSidebarOpen ? 'justify-between p-3.5' : 'justify-center p-2.5'}
+              className={isSidebarOpen ? 'justify-between p-3' : 'relative group/tooltip justify-center p-2.5'}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               onClick={(e) => {
@@ -623,13 +692,13 @@ const Sidebar = () => {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg shrink-0" style={{ overflow: 'hidden' }}>
                   {profile.avatar
-                    ? <img src={profile.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img src={profile.avatar} alt="avatar" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : (profile.displayName || 'U').trim().split(' ').filter(Boolean).slice(0,2).map(w => w[0].toUpperCase()).join('')
                   }
                 </div>
                 {isSidebarOpen && (
                   <div className="flex flex-col">
-                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)', maxWidth: 100 }} className="truncate">{profile.displayName.slice(0,14)}{profile.displayName.length>14?'...':''}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)', maxWidth: 100 }} className="truncate">{(profile?.displayName || 'User').slice(0,14)}{(profile?.displayName || 'User').length>14?'...':''}</span>
                     <div style={{ 
                       padding: '2px 8px', fontSize: 9, fontWeight: 800,
                       color: 'var(--bg-primary)', background: 'var(--on-surface)',
@@ -652,12 +721,20 @@ const Sidebar = () => {
                   Upgrade
                 </button>
               )}
+              {!isSidebarOpen && (
+                <div 
+                  style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }}
+                  className="tooltip-label absolute opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50"
+                >
+                  {profile?.displayName || 'Profile'}
+                </div>
+              )}
             </div>
           ) : isSidebarOpen ? (
             <div className="flex flex-col gap-1">
               {[
                 { icon: <Sparkles size={18} />, label: 'See plans and pricing' },
-                { icon: <Settings size={18} />, label: 'Settings', action: () => setSettingsOpen(true) },
+                { icon: <Settings size={18} />, label: 'Settings', action: () => router.push('/settings') },
                 { icon: <HelpCircle size={18} />, label: 'Help' },
               ].map((item, i) => (
                 <button
@@ -681,7 +758,7 @@ const Sidebar = () => {
               <div style={{ height: 1, background: 'var(--divider)', margin: '12px 0' }}></div>
               
               <div style={{
-                padding: '0 8px', marginTop: 8
+                padding: '0 12px', marginTop: 8
               }}>
                 <h4 style={{ fontSize: 14, fontWeight: 700, color: 'var(--on-surface)', marginBottom: 8 }}>Get responses tailored to you</h4>
                 <p style={{ fontSize: 13, color: 'var(--on-surface-muted)', lineHeight: 1.5, marginBottom: 20 }}>
@@ -710,14 +787,20 @@ const Sidebar = () => {
               </div>
             </div>
           ) : (
-             <div className="flex flex-col items-center gap-4">
-                <button 
-                  onClick={() => setAuthOpen(true)}
-                  className="w-10 h-10 rounded-xl bg-hover-overlay flex items-center justify-center text-on-surface shadow-sm"
-                >
-                  <User size={20} />
-                </button>
-             </div>
+                 <div className="relative group/tooltip flex flex-col items-center gap-4">
+                    <button 
+                      onClick={() => setAuthOpen(true)}
+                      className="w-10 h-10 rounded-xl bg-hover-overlay flex items-center justify-center text-on-surface shadow-sm"
+                    >
+                      <User size={20} />
+                    </button>
+                    <div 
+                      style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }}
+                      className="tooltip-label absolute opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50"
+                    >
+                      Log in
+                    </div>
+                 </div>
           )}
         </div>
       </motion.div>
@@ -734,8 +817,10 @@ const Sidebar = () => {
             background: 'var(--surface-1)',
             borderRadius: '16px',
             boxShadow: '0 -8px 40px rgba(0,0,0,0.4)',
-            overflow: 'hidden',
+            overflowY: 'auto',
+            maxHeight: 'calc(100vh - 60px)',
             border: '1px solid var(--divider)',
+            boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
           }}
           ref={profileRef}
         >
@@ -751,7 +836,7 @@ const Sidebar = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 12, flexShrink: 0, overflow: 'hidden' }}>
                 {profile.avatar
-                  ? <img src={profile.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ? <img src={profile.avatar} alt="avatar" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : (profile.displayName || 'U').trim().split(' ').filter(Boolean).slice(0,2).map(w => w[0].toUpperCase()).join('')
                 }
               </div>
@@ -766,9 +851,9 @@ const Sidebar = () => {
           {/* Menu Items Group 1 */}
           {[
             { icon: <Sparkles size={15} />, label: 'Upgrade plan' },
-            { icon: <Palette size={15} />, label: 'Personalization', action: () => { setProfileMenuOpen(false); setSettingsInitialTab('personalization'); setSettingsOpen(true); } },
-            { icon: <UserCircle size={15} />, label: 'Profile', action: () => { setProfileMenuOpen(false); setProfileOpen(true); } },
-            { icon: <Settings size={15} />, label: 'Settings', action: () => { setProfileMenuOpen(false); setSettingsInitialTab('general'); setSettingsOpen(true); } },
+            { icon: <Palette size={15} />, label: 'Personalization', action: () => { setProfileMenuOpen(false); router.push('/settings?tab=personalization'); } },
+            { icon: <UserCircle size={15} />, label: 'Profile', action: () => { setProfileMenuOpen(false); router.push('/profile'); } },
+            { icon: <Settings size={15} />, label: 'Settings', action: () => { setProfileMenuOpen(false); router.push('/settings?tab=general'); } },
           ].map((item, j) => (
             <button
               key={j}
@@ -810,7 +895,7 @@ const Sidebar = () => {
 
           {/* Log out */}
           <button
-            onClick={() => { setProfileMenuOpen(false); setLogoutOpen(true); }}
+            onClick={() => { setProfileMenuOpen(false); router.push('/logout'); }}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 12,
               padding: '11px 16px', background: 'transparent', border: 'none',
@@ -926,10 +1011,6 @@ const Sidebar = () => {
         </div>,
         document.body
       )}
-      {searchModalOpen && <SearchModal onClose={() => setSearchModalOpen(false)} />}
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} initialTab={settingsInitialTab} />}
-      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
-      {logoutOpen && <LogoutModal onClose={() => setLogoutOpen(false)} />}
 
       {/* Floating Recents Card */}
       {isRecentsCardOpen && !isSidebarOpen && (

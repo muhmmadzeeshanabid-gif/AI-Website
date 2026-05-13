@@ -36,11 +36,11 @@ export const getGeminiResponse = async (prompt, history = [], personalization = 
       if (model.type === "openrouter" && OPENROUTER_API_KEY) {
         result = await tryOpenRouter(model.id, prompt, history, signal, onUpdate);
       } else if (model.type === "gemini" && GEMINI_API_KEY) {
-        result = await tryGeminiSDK(prompt, history, onUpdate);
+        result = await tryGeminiSDK(prompt, history, signal, onUpdate);
       } else if (model.type === "ollama") {
-        result = await tryOllama(model.id, prompt, history, onUpdate);
+        result = await tryOllama(model.id, prompt, history, signal, onUpdate);
       } else if (model.type === "pollinations") {
-        result = await tryPollinations(prompt, history, onUpdate);
+        result = await tryPollinations(prompt, history, signal, onUpdate);
       }
 
       if (result) return result;
@@ -88,12 +88,17 @@ async function tryOpenRouter(modelId, prompt, history, signal, onUpdate) {
   let fullText = "";
 
   while (true) {
+    if (signal?.aborted) {
+      reader.cancel();
+      break;
+    }
     const { done, value } = await reader.read();
     if (done) break;
     const chunk = decoder.decode(value, { stream: true });
     const lines = chunk.split("\n").filter(l => l.trim() !== "");
     
     for (const line of lines) {
+      if (signal?.aborted) break;
       if (line.startsWith("data: ") && !line.includes("[DONE]")) {
         try {
           const data = JSON.parse(line.slice(6));
@@ -108,7 +113,7 @@ async function tryOpenRouter(modelId, prompt, history, signal, onUpdate) {
   return fullText || null;
 }
 
-async function tryGeminiSDK(prompt, history, onUpdate) {
+async function tryGeminiSDK(prompt, history, signal, onUpdate) {
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
@@ -122,6 +127,7 @@ async function tryGeminiSDK(prompt, history, onUpdate) {
   const result = await chat.sendMessageStream(prompt);
   let fullText = "";
   for await (const chunk of result.stream) {
+    if (signal?.aborted) break;
     const chunkText = chunk.text();
     fullText += chunkText;
     if (onUpdate) onUpdate(fullText);
@@ -129,10 +135,11 @@ async function tryGeminiSDK(prompt, history, onUpdate) {
   return fullText || null;
 }
 
-async function tryOllama(modelId, prompt, history, onUpdate) {
+async function tryOllama(modelId, prompt, history, signal, onUpdate) {
   try {
     const response = await fetch("http://localhost:11434/api/chat", {
       method: "POST",
+      signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: modelId,
@@ -154,6 +161,10 @@ async function tryOllama(modelId, prompt, history, onUpdate) {
     let fullText = "";
 
     while (true) {
+      if (signal?.aborted) {
+        reader.cancel();
+        break;
+      }
       const { done, value } = await reader.read();
       if (done) break;
       const chunk = decoder.decode(value, { stream: true });
@@ -169,9 +180,10 @@ async function tryOllama(modelId, prompt, history, onUpdate) {
   } catch (e) { return null; }
 }
 
-async function tryPollinations(prompt, history, onUpdate) {
+async function tryPollinations(prompt, history, signal, onUpdate) {
   const response = await fetch("https://text.pollinations.ai/openai", {
     method: "POST",
+    signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       messages: [
@@ -191,6 +203,7 @@ async function tryPollinations(prompt, history, onUpdate) {
     let current = "";
     const chars = text.split('');
     for (let i = 0; i < chars.length; i += 5) {
+      if (signal?.aborted) break;
       current += chars.slice(i, i + 5).join('');
       onUpdate(current);
       await new Promise(r => setTimeout(r, 10));

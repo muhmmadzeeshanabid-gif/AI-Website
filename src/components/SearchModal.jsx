@@ -4,8 +4,10 @@ import ReactDOM from 'react-dom';
 import { useAppContext } from '@/context/AppContext';
 import { Search, X, MessageSquare, SquarePen, Clock, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 
 const SearchModal = ({ onClose }) => {
+  const router = useRouter();
   const { chats, switchChat, setMessages, user } = useAppContext();
   const [query, setQuery] = useState('');
   const inputRef = useRef(null);
@@ -122,7 +124,7 @@ const SearchModal = ({ onClose }) => {
             {/* New Chat Option */}
             {!query && (
               <button
-                onClick={() => { setMessages([]); onClose(); }}
+                onClick={() => { router.push('/'); }}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 16,
                   padding: '14px 24px', background: 'transparent', border: 'none',
@@ -157,7 +159,10 @@ const SearchModal = ({ onClose }) => {
                   {group.items.map(chat => (
                     <button
                       key={chat.id}
-                      onClick={() => { switchChat(chat.id); onClose(); }}
+                      onClick={() => { 
+                        switchChat(chat.id);
+                        router.push(`/c/${chat.id}`); 
+                      }}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 16,
                         padding: '12px 24px', background: 'transparent', border: 'none',

@@ -28,7 +28,7 @@
   --on-surface: #111111;
   --on-surface-muted: rgba(0,0,0,0.55);
   --on-surface-subtle: rgba(0,0,0,0.35);
-  --divider: rgba(0,0,0,0.09);
+  --divider: rgba(0,0,0,0.015);
   --hover-overlay: rgba(0,0,0,0.08);
   --hover-overlay-2: rgba(0,0,0,0.10);
   --chat-item-active: rgba(0,0,0,0.08);
@@ -55,7 +55,7 @@
   --on-surface: #ffffff;
   --on-surface-muted: rgba(255,255,255,0.60);
   --on-surface-subtle: rgba(255,255,255,0.35);
-  --divider: rgba(255,255,255,0.07);
+  --divider: rgba(255,255,255,0.015);
   --hover-overlay: rgba(255,255,255,0.06);
   --hover-overlay-2: rgba(255,255,255,0.10);
   --chat-item-active: rgba(255,255,255,0.07);
@@ -213,10 +213,13 @@ h1, h2, h3, h4, .logo-text {
 .p-2 { padding: 0.5rem; }
 .p-2\.5 { padding: 0.625rem; }
 .p-3 { padding: 0.75rem; }
+.p-3\.5 { padding: 0.875rem; }
 .p-4 { padding: 1rem; }
 .p-5 { padding: 1.25rem; }
 .p-6 { padding: 1.5rem; }
 .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.px-3\.5 { padding-left: 0.875rem; padding-right: 0.875rem; }
 .px-4 { padding-left: 1rem; padding-right: 1rem; }
 .px-5 { padding-left: 1.25rem; padding-right: 1.25rem; }
 .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
@@ -395,4 +398,81 @@ textarea { font-family: inherit; }
 .animate-audio-wave {
   animation: audio-wave 1s ease-in-out infinite;
   transform-origin: center;
+}
+
+.tooltip-label {
+  background: #111111;
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.1);
+  z-index: 100000;
+  pointer-events: none;
+}
+
+/* Markdown Specific Styles */
+.markdown-content {
+  line-height: 1.6;
+  font-size: 14.5px;
+}
+
+.markdown-content p {
+  margin-bottom: 1rem;
+}
+
+.markdown-content ul {
+  list-style-type: disc !important;
+  padding-left: 1.5rem !important;
+  margin-bottom: 1.25rem;
+}
+
+.markdown-content ol {
+  list-style-type: decimal !important;
+  padding-left: 1.5rem !important;
+  margin-bottom: 1.25rem;
+}
+
+.markdown-content li {
+  margin-bottom: 0.5rem;
+  padding-left: 0.25rem;
+  display: list-item !important;
+}
+
+.markdown-content li::marker {
+  color: var(--on-surface);
+  font-weight: 500;
+}
+
+.markdown-content blockquote {
+  border-left: 4px solid var(--accent-color, #a855f7);
+  background: rgba(168, 85, 247, 0.05);
+  padding: 0.75rem 1rem;
+  margin: 1.5rem 0;
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.markdown-content th, 
+.markdown-content td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.markdown-content th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+  text-align: left;
 }
