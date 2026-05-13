@@ -9,7 +9,9 @@ import ProfileModal from './ProfileModal';
 import LogoutModal from './LogoutModal';
 import SearchModal from './SearchModal';
 
+
 import { useRouter } from 'next/navigation';
+import NextLink from 'next/link';
 
 const Sidebar = () => {
   const router = useRouter();
@@ -20,6 +22,7 @@ const Sidebar = () => {
     archivePassword, setArchivePassword, closeArchivedChat, appView, setAppView, 
     isShareModalOpen, setIsShareModalOpen, shareChatId, setShareChatId,
     isGroupChatModalOpen, setIsGroupChatModalOpen,
+    isUpgradeModalOpen, setIsUpgradeModalOpen,
     isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId
   } = useAppContext();
   const [mounted, setMounted] = React.useState(false);
@@ -163,7 +166,7 @@ const Sidebar = () => {
           x: isMobile && !isSidebarOpen ? '-100%' : 0,
         }}
         transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-        className={`relative h-screen bg-sidebar-bg border-r border-divider flex flex-col z-40 shadow-2xl ${isMobile ? 'fixed left-0 top-0 h-full z-[100] border-none' : ''}`}
+        className={`sidebar-root ${isSidebarOpen ? 'is-open' : ''} relative h-screen bg-sidebar-bg border-r border-divider flex flex-col z-40 shadow-2xl ${isMobile ? 'fixed left-0 top-0 h-full z-[100] border-none' : ''}`}
         style={{
           boxShadow: isMobile && isSidebarOpen ? '0 0 50px rgba(0,0,0,0.5)' : 'none',
           pointerEvents: isMobile && !isSidebarOpen ? 'none' : 'auto',
@@ -172,18 +175,11 @@ const Sidebar = () => {
       >
         {/* Top Header / Logo Area */}
         <div className={`px-3 py-4 flex items-center ${isSidebarOpen ? 'justify-between' : 'justify-center'}`} style={{ minHeight: 56 }}>
-          <div className="flex items-center gap-3">
-            {isMobile && isSidebarOpen && (
-              <button 
-                onClick={() => setIsSidebarOpen(false)}
-                className="p-2 hover:bg-white/10 rounded-lg text-on-surface mr-1"
-              >
-                <X size={20} />
-              </button>
-            )}
-            <div className="relative group/logo" onClick={() => { setActiveChatId(null); setMessages([]); router.push('/'); }}>
+          <div className="flex items-center gap-3 w-full justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative group/logo">
             <button 
-              onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               onMouseEnter={() => setIsLogoHovered(true)}
               onMouseLeave={() => setIsLogoHovered(false)}
               className={`h-10 rounded-xl flex items-center ${isSidebarOpen ? 'justify-start w-auto' : 'justify-center w-10'} transition-all duration-200 ${!isSidebarOpen ? 'hover:bg-white/10 cursor-pointer' : ''}`}
@@ -256,9 +252,17 @@ const Sidebar = () => {
               )}
             </button>
           </div>
-        </div>
-          
-          {isSidebarOpen && (
+          </div>
+          {isSidebarOpen && isMobile && (
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="p-2 hover:bg-white/10 rounded-lg text-on-surface"
+            >
+              <X size={20} />
+            </button>
+          )}
+
+          {isSidebarOpen && !isMobile && (
             <div className="relative group/tooltip">
               <button 
                 onClick={() => setIsSidebarOpen(false)}
@@ -276,6 +280,7 @@ const Sidebar = () => {
               </div>
             </div>
           )}
+        </div>
         </div>
 
         {/* Action Buttons */}
@@ -565,10 +570,22 @@ const Sidebar = () => {
                             const spaceBelow = window.innerHeight - rect.bottom;
                             const menuHeight = 220;
                             
-                            if (spaceBelow < menuHeight) {
-                              setMenuPos({ bottom: window.innerHeight - rect.bottom, left: rect.right + 8, isBottom: true });
+                            if (isMobile) {
+                              const leftPos = isSidebarOpen ? 16 : 60;
+                              const width = isSidebarOpen ? window.innerWidth - 32 : 220;
+                              setMenuPos({ 
+                                top: spaceBelow < menuHeight ? 'auto' : rect.top,
+                                bottom: spaceBelow < menuHeight ? window.innerHeight - rect.bottom : 'auto',
+                                left: leftPos,
+                                width: width,
+                                isBottom: spaceBelow < menuHeight 
+                              });
                             } else {
-                              setMenuPos({ top: rect.top, left: rect.right + 8, isBottom: false });
+                              if (spaceBelow < menuHeight) {
+                                setMenuPos({ bottom: window.innerHeight - rect.bottom, left: rect.right + 8, isBottom: true });
+                              } else {
+                                setMenuPos({ top: rect.top, left: rect.right + 8, isBottom: false });
+                              }
                             }
                             setOpenMenuIndex(openMenuIndex === i ? null : i);
                           }}
@@ -591,8 +608,7 @@ const Sidebar = () => {
                           )}
                         </span>
                       </div>
-
-                      {/* Context Menu Dropdown - Fixed outside sidebar */}
+                      
                       <AnimatePresence>
                         {openMenuIndex === i && (
                           <motion.div
@@ -601,10 +617,10 @@ const Sidebar = () => {
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: menuPos.isBottom ? 4 : -4 }}
                             transition={{ duration: 0.12 }}
-                            className="fixed z-[9999] shadow-2xl"
+                            className="fixed z-[999999] shadow-2xl"
                             style={{
-                              background: 'var(--surface-1)',
-                              border: '1px solid var(--divider)',
+                              background: resolvedTheme === 'dark' ? '#1c1c1e' : '#ffffff',
+                              border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
                               borderRadius: '20px',
                               padding: '6px',
                               minWidth: '220px',
@@ -615,12 +631,13 @@ const Sidebar = () => {
                               top: menuPos.isBottom ? 'auto' : menuPos.top,
                               bottom: menuPos.isBottom ? menuPos.bottom : 'auto',
                               left: menuPos.left,
+                              width: isMobile && isSidebarOpen ? 'calc(100vw - 32px)' : 'auto'
                             }}
                           >
                             {(chat.isGroup ? [
                               { icon: <Pencil size={16} />, label: 'Rename', action: () => handleRename(i) },
                               { icon: <Pin size={16} />, label: chat.pinned ? 'Unpin chat' : 'Pin chat', action: () => handlePin(chat) },
-                              { icon: <Link size={16} />, label: 'Add people via group link', action: () => { setGroupLinkChatId(chat.id); setIsGroupLinkModalOpen(true); setOpenMenuIndex(null); } },
+                              { icon: <Link size={16} />, label: isMobile ? 'Group link' : 'Add people via link', action: () => { setGroupLinkChatId(chat.id); setIsGroupLinkModalOpen(true); setOpenMenuIndex(null); } },
                             ] : [
                               { icon: <Share2 size={16} />, label: 'Share', action: () => { setShareChatId(chat.id); setIsShareModalOpen(true); setOpenMenuIndex(null); } },
                               { icon: <Users size={16} />, label: 'Start a group chat', action: () => { setShareChatId(chat.id); setIsGroupChatModalOpen(true); setOpenMenuIndex(null); } },
@@ -630,7 +647,7 @@ const Sidebar = () => {
                             ]).map((item, j) => (
                               <button
                                 key={j}
-                                onClick={item.action}
+                                onClick={(e) => { e.stopPropagation(); item.action(); }}
                                 style={{
                                   width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                                   padding: '10px 14px', borderRadius: 12, background: 'transparent',
@@ -647,7 +664,7 @@ const Sidebar = () => {
                             ))}
                             <div style={{ height: 1, background: 'var(--divider)', margin: '2px 4px' }} />
                              <button
-                                onClick={() => handleDelete(chat)}
+                                onClick={(e) => { e.stopPropagation(); handleDelete(chat); }}
                                 style={{
                                   width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                                   padding: '10px 14px', borderRadius: 12, background: 'transparent',
@@ -664,6 +681,7 @@ const Sidebar = () => {
                           </motion.div>
                         )}
                       </AnimatePresence>
+
                     </div>
                   ))}
                 </motion.div>
@@ -709,18 +727,20 @@ const Sidebar = () => {
                   </div>
                 )}
               </div>
-              {isSidebarOpen && (
-                <button style={{
-                  padding: '5px 14px', borderRadius: 999,
-                  background: 'var(--hover-overlay-2)', border: '1px solid var(--divider)',
-                  color: 'var(--on-surface)', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'var(--hover-overlay-2)'}
-                >
-                  Upgrade
-                </button>
-              )}
+                {isSidebarOpen && (
+                  <button 
+                    onClick={() => { router.push('/upgrade'); }}
+                    style={{
+                      padding: '5px 14px', borderRadius: 999,
+                      background: 'var(--hover-overlay-2)', border: '1px solid var(--divider)',
+                      color: 'var(--on-surface)', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'var(--hover-overlay-2)'}
+                  >
+                    Upgrade
+                  </button>
+                )}
               {!isSidebarOpen && (
                 <div 
                   style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }}
@@ -733,9 +753,9 @@ const Sidebar = () => {
           ) : isSidebarOpen ? (
             <div className="flex flex-col gap-1">
               {[
-                { icon: <Sparkles size={18} />, label: 'See plans and pricing' },
+                { icon: <Sparkles size={18} />, label: 'See plans and pricing', action: () => { router.push('/upgrade'); } },
                 { icon: <Settings size={18} />, label: 'Settings', action: () => router.push('/settings') },
-                { icon: <HelpCircle size={18} />, label: 'Help' },
+                { icon: <HelpCircle size={18} />, label: 'Help', action: () => router.push('/help') },
               ].map((item, i) => (
                 <button
                   key={i}
@@ -755,11 +775,7 @@ const Sidebar = () => {
                 </button>
               ))}
               
-              <div style={{ height: 1, background: 'var(--divider)', margin: '12px 0' }}></div>
-              
-              <div style={{
-                padding: '0 12px', marginTop: 8
-              }}>
+              <div style={{ padding: '8px 12px 16px' }}>
                 <h4 style={{ fontSize: 14, fontWeight: 700, color: 'var(--on-surface)', marginBottom: 8 }}>Get responses tailored to you</h4>
                 <p style={{ fontSize: 13, color: 'var(--on-surface-muted)', lineHeight: 1.5, marginBottom: 20 }}>
                   Log in to get answers based on saved chats, plus create images and upload files.
@@ -850,7 +866,7 @@ const Sidebar = () => {
 
           {/* Menu Items Group 1 */}
           {[
-            { icon: <Sparkles size={15} />, label: 'Upgrade plan' },
+            { icon: <Sparkles size={15} />, label: 'Upgrade plan', action: () => { setProfileMenuOpen(false); router.push('/upgrade'); } },
             { icon: <Palette size={15} />, label: 'Personalization', action: () => { setProfileMenuOpen(false); router.push('/settings?tab=personalization'); } },
             { icon: <UserCircle size={15} />, label: 'Profile', action: () => { setProfileMenuOpen(false); router.push('/profile'); } },
             { icon: <Settings size={15} />, label: 'Settings', action: () => { setProfileMenuOpen(false); router.push('/settings?tab=general'); } },
@@ -876,12 +892,15 @@ const Sidebar = () => {
           <div style={{ height: 1, background: 'var(--divider)', margin: '4px 0' }} />
 
           {/* Help */}
-          <button
+          <NextLink
+            href="/help"
+            onClick={() => setProfileMenuOpen(false)}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '11px 16px', background: 'transparent', border: 'none',
               color: 'var(--on-surface)', fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit',
-              transition: 'background 0.15s'
+              transition: 'background 0.15s',
+              textDecoration: 'none'
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -891,7 +910,7 @@ const Sidebar = () => {
               Help
             </div>
             <ChevronRight size={14} style={{ color: 'var(--on-surface-subtle)' }} />
-          </button>
+          </NextLink>
 
           {/* Log out */}
           <button
@@ -1073,6 +1092,7 @@ const Sidebar = () => {
           </div>
         </div>
       )}
+
     </>
   );
 };

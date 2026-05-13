@@ -7,7 +7,7 @@ import {
   Check, Copy, ThumbsUp, ThumbsDown, Share, Share2, RefreshCcw, MoreHorizontal, 
   AlertTriangle, ChevronDown, Mic, Square, ArrowUp, Plus, AudioLines, X, Menu,
   ChevronRight, Paperclip, Image, Lightbulb, Monitor, BookOpen, PenTool, Telescope, Cpu, Zap, Brain,
-  ArrowDown, MessageSquareDashed, PenLine, Globe, RotateCw, UserPlus, Pin, Archive, Trash2, Volume2, VolumeX, GitBranch, Settings, SmilePlus, Reply, Flag
+  ArrowDown, MessageSquareDashed, PenLine, Globe, RotateCw, UserPlus, Pin, Archive, Trash2, Volume2, VolumeX, GitBranch, Settings, SmilePlus, Reply, Flag, ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getGeminiResponse } from '@/utils/gemini';
@@ -323,7 +323,8 @@ const ChatWindow = () => {
     profile, showLoggedIn, personalization, accentColor,
     deleteChat, archiveChat, aiModel, setAiModel, renameChat,
     isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId,
-    isReportModalOpen, setIsReportModalOpen
+    isReportModalOpen, setIsReportModalOpen,
+    isUpgradeModalOpen, setIsUpgradeModalOpen
   } = useAppContext();
 
   const [mounted, setMounted] = useState(false);
@@ -332,6 +333,7 @@ const ChatWindow = () => {
   const [greeting, setGreeting] = useState("What's on your mind?");
   const [hoveredChip, setHoveredChip] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [generatingId, setGeneratingId] = useState(null);
   const [isTemporary, setIsTemporary] = useState(false);
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -389,6 +391,7 @@ const ChatWindow = () => {
     }
   }, [msgReactions, mounted]);
   const [isMobile, setIsMobile] = useState(false);
+  const [isSmallMobile, setIsSmallMobile] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [showAttachmentMenuLanding, setShowAttachmentMenuLanding] = useState(false);
   const [showModelSwitcher, setShowModelSwitcher] = useState(false);
@@ -447,9 +450,11 @@ const ChatWindow = () => {
 
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
+  const preventScrollRef = useRef(false);
   const animationFrameRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const audioBarsRef = useRef([]);
+  const isAtBottomRef = useRef(true);
 
   const stopAudioVisualizer = () => {
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
@@ -602,14 +607,20 @@ const ChatWindow = () => {
   const handleScroll = () => {
     if (scrollContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      // Show button if we are not at the bottom (more than 100px away)
-      setShowScrollButton(scrollTop < scrollHeight - clientHeight - 100);
+      // Lower threshold (30px) makes it much easier to scroll up and read history
+      const isNearBottom = scrollTop >= scrollHeight - clientHeight - 30;
+      isAtBottomRef.current = isNearBottom;
+      setShowScrollButton(!isNearBottom);
     }
   };
 
   useEffect(() => {
     setMounted(true);
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    const checkMobile = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setIsSmallMobile(width < 400);
+    };
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
@@ -638,10 +649,26 @@ const ChatWindow = () => {
     setIsRenameModalOpen(false);
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (force = false) => {
+    if (preventScrollRef.current && !force) return;
+    if (!scrollContainerRef.current) return;
+    
+    const container = scrollContainerRef.current;
+    
+    if (isAtBottomRef.current || force) {
+      if (force) {
+        // Use smooth scroll only for manual button clicks or new messages
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+        isAtBottomRef.current = true;
+        setShowScrollButton(false);
+      } else {
+        // Use instant scroll for high-frequency streaming updates
+        // This prevents the "shaking/shrinking" effect by not triggering complex animations
+        container.scrollTop = container.scrollHeight;
+      }
+    }
   };
-  useEffect(scrollToBottom, [messages]);
+  useEffect(() => scrollToBottom(), [messages]);
 
   useEffect(() => {
     if (activeChatId && messages.length > 0 && !isTemporary) {
@@ -750,6 +777,8 @@ const ChatWindow = () => {
     }
 
     setMessages(prev => [...prev, userMessage]);
+    isAtBottomRef.current = true; // Force scroll focus on new message
+    scrollToBottom(true);
     const currentInput = textToSend;
     if (!overrideInput) setInput('');
     setIsLoading(true);
@@ -800,6 +829,7 @@ const ChatWindow = () => {
       }
 
       const aiMessageId = Date.now() + 1;
+      setGeneratingId(aiMessageId);
       setMessages(prev => [...prev, { role: 'ai', content: '', id: aiMessageId }]);
       
       const onUpdate = (text) => {
@@ -817,15 +847,160 @@ const ChatWindow = () => {
       }
     } finally {
       setIsLoading(false);
+      setGeneratingId(null);
       abortControllerRef.current = null;
     }
   };
 
-  const handleSaveEdit = (id) => {
-    if (!editValue.trim()) return;
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, content: editValue } : m));
+  const handleSaveEdit = async (id) => {
+    if (!editValue.trim() || isLoading) return;
+    
+    preventScrollRef.current = true;
+    let userMsgIdx = -1;
+    let currentMsgs = [];
+
+    setMessages(prev => {
+      userMsgIdx = prev.findIndex(m => m.id === id);
+      if (userMsgIdx === -1) return prev;
+      
+      const newMsgs = [...prev];
+      const m = newMsgs[userMsgIdx];
+      if (m.content === editValue) return prev;
+
+      // 1. Archive User Content
+      const oldUserContent = m.content;
+      const userVersions = m.versions || [oldUserContent];
+      const newUserVersions = [...userVersions, editValue];
+      const newVerIdx = newUserVersions.length - 1;
+      
+      newMsgs[userMsgIdx] = { 
+        ...m, 
+        content: editValue, 
+        versions: newUserVersions, 
+        currentVersionIndex: newVerIdx 
+      };
+
+      // 2. Archive AI Content (if it exists)
+      const nextIdx = userMsgIdx + 1;
+      if (newMsgs[nextIdx] && newMsgs[nextIdx].role === 'ai') {
+        const aiMsg = newMsgs[nextIdx];
+        const oldAiContent = aiMsg.content;
+        const aiVersions = aiMsg.versions || [oldAiContent];
+        
+        const newAiVersions = [...aiVersions];
+        // We'll fill newAiVersions[newVerIdx] after generation, but we must keep old ones intact
+        
+        newMsgs[nextIdx] = {
+          ...aiMsg,
+          content: '', // Clear for new streaming
+          versions: newAiVersions,
+          currentVersionIndex: newVerIdx
+        };
+      }
+      
+      currentMsgs = newMsgs;
+      return newMsgs;
+    });
+
     setEditingId(null);
     setEditValue('');
+    setIsLoading(true);
+    isAtBottomRef.current = true; // Focus on the regenerated response
+    scrollToBottom(true);
+    abortControllerRef.current = new AbortController();
+
+    try {
+      const history = currentMsgs.slice(0, userMsgIdx + 1);
+      const aiMessageId = Date.now() + 1;
+      setGeneratingId(aiMessageId);
+      
+      const nextMsg = currentMsgs[userMsgIdx + 1];
+      const isNextAI = nextMsg && nextMsg.role === 'ai';
+
+      if (!isNextAI) {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated.splice(userMsgIdx + 1, 0, { role: 'ai', content: '', id: aiMessageId });
+          return updated;
+        });
+      }
+
+      const onUpdate = (text) => {
+        setMessages(prev => {
+          const updated = [...prev];
+          const targetIdx = userMsgIdx + 1;
+          if (updated[targetIdx] && updated[targetIdx].role === 'ai') {
+            updated[targetIdx] = { ...updated[targetIdx], content: text };
+          }
+          return updated;
+        });
+      };
+
+      const aiResponse = await getGeminiResponse(editValue, history, personalization, abortControllerRef.current.signal, onUpdate, aiModel);
+      
+      setMessages(prev => {
+        const updated = [...prev];
+        const targetIdx = userMsgIdx + 1;
+        if (updated[targetIdx] && updated[targetIdx].role === 'ai') {
+          const aiMsg = updated[targetIdx];
+          const userMsg = updated[userMsgIdx];
+          const targetVerIdx = userMsg.currentVersionIndex;
+          
+          const newAiVersions = [...(aiMsg.versions || [])];
+          newAiVersions[targetVerIdx] = aiResponse;
+
+          updated[targetIdx] = { 
+            ...aiMsg, 
+            content: aiResponse, 
+            versions: newAiVersions, 
+            currentVersionIndex: targetVerIdx 
+          };
+        }
+        return updated;
+      });
+
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log("AI generation for edit was stopped by user.");
+      } else {
+        console.error("Failed to generate AI response for edit:", error);
+      }
+    } finally {
+      setIsLoading(false);
+      setGeneratingId(null);
+      setTimeout(() => { preventScrollRef.current = false; }, 500);
+    }
+  };
+
+  const handleVersionChange = (msgId, delta) => {
+    setMessages(prev => {
+      const idx = prev.findIndex(m => m.id === msgId);
+      if (idx === -1) return prev;
+      
+      const m = prev[idx];
+      const newIndex = Math.max(0, Math.min(m.versions.length - 1, m.currentVersionIndex + delta));
+      if (newIndex === m.currentVersionIndex) return prev;
+
+      preventScrollRef.current = true;
+      const updated = [...prev];
+      updated[idx] = { ...m, currentVersionIndex: newIndex, content: m.versions[newIndex] };
+      
+      // Synchronize AI response version
+      const nextIdx = idx + 1;
+      if (updated[nextIdx] && updated[nextIdx].role === 'ai' && updated[nextIdx].versions) {
+        const aiMsg = updated[nextIdx];
+        if (aiMsg.versions[newIndex] !== undefined) {
+          updated[nextIdx] = { 
+            ...aiMsg, 
+            currentVersionIndex: newIndex, 
+            content: aiMsg.versions[newIndex] 
+          };
+        }
+      }
+      
+      setTimeout(() => { preventScrollRef.current = false; }, 500);
+      return updated;
+    });
   };
 
   if (!mounted) return null;
@@ -870,11 +1045,12 @@ const ChatWindow = () => {
         background: 'var(--bg-primary)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--divider)',
       }}>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-          {isMobile && (
             <button 
-              onClick={() => setIsSidebarOpen(true)}
+              className="hamburger-button"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                display: 'none', // CSS will show this on mobile/narrow screens
+                alignItems: 'center', justifyContent: 'center',
                 background: 'transparent', border: 'none', cursor: 'pointer',
                 padding: '8px', borderRadius: 10, color: 'var(--on-surface)',
                 transition: 'background 0.15s',
@@ -883,9 +1059,8 @@ const ChatWindow = () => {
               onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
-              <Menu size={22} strokeWidth={2} />
+              {isSidebarOpen ? <X size={22} strokeWidth={2} /> : <Menu size={22} strokeWidth={2} />}
             </button>
-          )}
           <div className="relative" ref={groupChatMenuRef}>
             <button 
               onClick={() => setIsGroupChatMenuOpen(!isGroupChatMenuOpen)}
@@ -1007,7 +1182,7 @@ const ChatWindow = () => {
                 onMouseLeave={e => { if(!isTemporary) e.currentTarget.style.background = 'transparent'; }}
               >
                 <MessageSquareDashed size={18} />
-                <span>Temporary chat</span>
+                {!isMobile && <span>Temporary chat</span>}
                 {isTemporary && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--bg-primary)', marginLeft: 2 }} />}
               </button>
             ) : (
@@ -1065,7 +1240,14 @@ const ChatWindow = () => {
                         <span style={{ whiteSpace: 'nowrap' }}>Share chat</span>
                       </button>
                       <button 
-                        onClick={() => { setIsGroupChatModalOpen(true); setIsHeaderMoreOpen(false); }}
+                        onClick={() => { 
+                          if (!showLoggedIn) {
+                            setAuthOpen(true);
+                          } else {
+                            setIsGroupChatModalOpen(true); 
+                          }
+                          setIsHeaderMoreOpen(false); 
+                        }}
                         style={{
                           width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                           padding: '10px 14px', borderRadius: 12, background: 'transparent',
@@ -1161,8 +1343,8 @@ const ChatWindow = () => {
         >
           {/* Landing Page - Empty Chat (Only for non-group chats) */}
           {messages.length === 0 && !chats.find(c => c.id === activeChatId)?.isGroup && (
-            <div className={`flex-1 mx-auto w-full flex flex-col ${isMobile ? 'justify-end pb-12' : 'items-center justify-center py-20'} px-4`} style={{ maxWidth: chatWidth === 'Wide' ? 'min(1000px, 100%)' : chatWidth === 'Full' ? '100%' : 'min(768px, 100%)' }}>
-              <div className={`w-full flex flex-col ${isMobile ? 'items-start text-left' : 'items-center justify-center text-center'} animate-fade-in px-4`}>
+            <div className={`flex-1 mx-auto w-full flex flex-col ${isMobile ? 'justify-between py-6' : 'items-center justify-center py-20'} px-4`} style={{ maxWidth: chatWidth === 'Wide' ? 'min(1000px, 100%)' : chatWidth === 'Full' ? '100%' : 'min(768px, 100%)' }}>
+              <div className={`w-full flex flex-col ${isMobile ? 'items-start text-left flex-1' : 'items-center justify-center text-center'} animate-fade-in px-4`}>
                 {isTemporary ? (
                   <div className={`flex flex-col ${isMobile ? 'items-start text-left' : 'items-center text-center'} space-y-3`} style={{ marginBottom: isMobile ? '32px' : '60px' }}>
                     <h1 className="text-[32px] md:text-[52px] font-bold tracking-tight leading-tight" style={{ color: 'var(--on-surface)' }}>Temporary Chat</h1>
@@ -1238,7 +1420,8 @@ const ChatWindow = () => {
                   </div>
                 )}
 
-                <div className={`w-full ${isMobile ? '' : 'max-w-[840px] relative group'} px-0`}>
+                {isMobile && <div className="flex-1" />}
+                <div className={`w-full ${isMobile ? 'mt-auto' : 'max-w-[840px] relative group'} px-0`}>
                   <div className="w-full relative flex items-center p-2 border border-divider shadow-2xl transition-all duration-300" 
                     style={{ 
                       background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
@@ -1342,7 +1525,7 @@ const ChatWindow = () => {
                                 {aiModel === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
                                 {aiModel === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
                                 {aiModel === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                                <span className="text-[13px] font-semibold">{aiModel}</span>
+                                {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
                                 <ChevronDown size={14} className={showModelSwitcherLanding ? 'rotate-180 transition-transform' : 'transition-transform'} />
                               </button>
                             </div>
@@ -1538,9 +1721,26 @@ const ChatWindow = () => {
                       return d.toLocaleString('en-US', { weekday: 'long', hour: 'numeric', minute: '2-digit', hour12: true }).replace('at ', '');
                     })()}
                   </div>
-                  <p style={{ fontSize: '13.5px', color: 'var(--on-surface)', margin: 0, opacity: 0.9 }}>
-                    <span style={{ fontWeight: 600 }}>{profile?.displayName?.split(' ')[0]?.toLowerCase() || 'zeeshan'}</span> created the group chat.
-                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                    {(() => {
+                      const chat = chats.find(c => c.id === activeChatId);
+                      const creator = chat?.creator;
+                      return (
+                        <>
+                          {creator?.avatar && (
+                            <img 
+                              src={creator.avatar} 
+                              alt="" 
+                              style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--divider)' }} 
+                            />
+                          )}
+                          <p style={{ fontSize: '13.5px', color: 'var(--on-surface)', margin: 0, opacity: 0.9 }}>
+                            <span style={{ fontWeight: 600 }}>{creator?.displayName || profile?.displayName || 'User'}</span> created the group chat.
+                          </p>
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               )}
             {messages.map((msg, index) => (
@@ -1561,37 +1761,39 @@ const ChatWindow = () => {
                     </div>
                   </div>
                 ) : editingId === msg.id ? (
-                  <div className="w-full max-w-[90%] ml-auto flex flex-col p-4 rounded-[28px] animate-fade-in shadow-2xl shadow-none dark:shadow-2xl relative" 
-                    style={{ background: 'var(--surface-2)', border: '1px solid var(--divider)' }}>
+                  <div className="w-full max-w-full flex flex-col p-5 animate-fade-in relative transition-all duration-300" 
+                    style={{ background: '#2f2f2f', borderRadius: '26px', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 50px rgba(0,0,0,0.4)', margin: '20px 0' }}>
                     <textarea
                       autoFocus
                       value={editValue}
                       onChange={(e) => setEditValue(e.target.value)}
-                      className="w-full bg-transparent border-none outline-none text-[15px] leading-relaxed resize-none min-h-[90px] px-2 py-1 custom-scrollbar"
-                      style={{ color: 'var(--on-surface)' }}
+                      className="w-full bg-transparent border-none outline-none text-[16.5px] leading-relaxed resize-none min-h-[85px] p-0 text-white placeholder:text-white/20"
+                      style={{ color: '#ffffff', fontFamily: 'inherit', resize: 'none', overflow: 'hidden' }}
                       placeholder="Edit message..."
                     />
-                    <div className="flex justify-end items-center gap-3 mt-4 w-full">
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', marginTop: '12px', width: '100%' }}>
                       <button 
                         onClick={() => { setEditingId(null); setEditValue(''); }}
-                        className="px-7 py-2.5 text-sm font-bold transition-all rounded-full active:scale-95 border"
+                        className="text-[14px] font-bold transition-all rounded-full active:scale-95 hover:opacity-80"
                         style={{ 
-                          background: resolvedTheme === 'dark' ? 'transparent' : '#f5f5f7', 
-                          color: 'var(--on-surface-muted)',
-                          borderColor: 'var(--divider)'
+                          background: '#000000', 
+                          color: '#ffffff', 
+                          padding: '10px 28px', 
+                          border: 'none', 
+                          cursor: 'pointer' 
                         }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                        onMouseLeave={e => e.currentTarget.style.background = resolvedTheme === 'dark' ? 'transparent' : '#f5f5f7'}
                       >
                         Cancel
                       </button>
                       <button 
                         onClick={() => handleSaveEdit(msg.id)}
-                        className="px-8 py-2.5 text-sm font-bold rounded-full transition-all shadow-xl shadow-none dark:shadow-xl active:scale-95"
+                        className="text-[14px] font-bold rounded-full transition-all active:scale-95 hover:opacity-90"
                         style={{ 
-                          background: resolvedTheme === 'dark' ? '#ffffff' : '#000000', 
-                          color: resolvedTheme === 'dark' ? '#000000' : '#ffffff',
-                          boxShadow: resolvedTheme === 'dark' ? '0 10px 25px -5px rgba(0,0,0,0.3)' : 'none'
+                          background: '#ffffff', 
+                          color: '#000000', 
+                          padding: '10px 28px', 
+                          border: 'none', 
+                          cursor: 'pointer' 
                         }}
                       >
                         Send
@@ -1603,8 +1805,10 @@ const ChatWindow = () => {
                     <div className={`w-full flex flex-col ${msg.role === 'user' ? 'items-end' : msg.isVoice ? 'items-center' : 'items-start'}`}>
                       <div className={`w-full flex ${msg.role === 'user' ? 'items-start flex-row-reverse' : msg.isVoice ? 'items-center justify-center' : 'items-start flex-row'}`}>
                         <motion.div 
+                           layout={msg.role === 'ai' && generatingId === msg.id ? false : "position"}
                            initial={{ opacity: 0, scale: 0.98, y: 10 }} 
                            animate={{ opacity: 1, scale: 1, y: 0 }} 
+                           transition={{ duration: 0.2, ease: "easeOut" }}
                          className={`relative transition-all duration-300 min-w-0 ${
                             msg.role === 'user' 
                               ? 'px-6 py-3 rounded-[24px] font-medium shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] border border-white/5' 
@@ -1686,11 +1890,34 @@ const ChatWindow = () => {
                             <MessageContent content={msg.content} isUser={msg.role === 'user'} />
                           </>
                         }
-                      </motion.div>
+                        </motion.div>
+                        {msg.role === 'user' && msg.versions && msg.versions.length > 1 && (
+                           <div className="flex items-center gap-1.5 mt-1.5 px-1 select-none opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200">
+                             <button 
+                               onClick={() => handleVersionChange(msg.id, -1)}
+                               disabled={msg.currentVersionIndex === 0}
+                               className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-hover-overlay disabled:opacity-10 transition-all text-on-surface/60 hover:text-on-surface"
+                               title="Previous version"
+                             >
+                               <ChevronLeft size={14} strokeWidth={3} />
+                             </button>
+                             <span className="text-[11px] font-bold text-on-surface/40 tracking-tight min-w-[30px] text-center">
+                               {msg.currentVersionIndex + 1} / {msg.versions.length}
+                             </span>
+                             <button 
+                               onClick={() => handleVersionChange(msg.id, 1)}
+                               disabled={msg.currentVersionIndex === msg.versions.length - 1}
+                               className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-hover-overlay disabled:opacity-10 transition-all text-on-surface/60 hover:text-on-surface"
+                               title="Next version"
+                             >
+                               <ChevronRight size={14} strokeWidth={3} />
+                             </button>
+                           </div>
+                        )}
                     </div>
 
                      {!msg.isVoice && (
-                       <div className={`w-full flex ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? 'opacity-100' : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
+                       <div className={`w-full flex ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? (generatingId === msg.id ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
                          <div className="flex gap-1">
                           {msg.role === 'ai' && chats.find(c => c.id === activeChatId)?.isGroup ? (
                             <>
@@ -1973,7 +2200,7 @@ const ChatWindow = () => {
           <AnimatePresence>
             {showScrollButton && (
               <button
-                onClick={scrollToBottom}
+                onClick={() => scrollToBottom(true)}
                 className="absolute left-1/2 -translate-x-1/2 z-[100]"
                 style={{ 
                   bottom: 'calc(100% + 24px)', 
@@ -2123,7 +2350,7 @@ const ChatWindow = () => {
                       className="temp-placeholder"
                       style={{ 
                         flex: 1, background: 'transparent', border: 'none', outline: 'none', 
-                        color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16, padding: '12px 14px'
+                        color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16, padding: isSmallMobile ? '12px 8px' : '12px 14px'
                       }} 
                     />
                     <div className="relative ml-1">
@@ -2141,7 +2368,7 @@ const ChatWindow = () => {
                         {aiModel === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
                         {aiModel === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
                         {aiModel === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                        <span className="text-[13px] font-semibold">{aiModel}</span>
+                        {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
                         <ChevronDown size={14} className={showModelSwitcher ? 'rotate-180 transition-transform' : 'transition-transform'} />
                       </button>
                       
@@ -2178,7 +2405,7 @@ const ChatWindow = () => {
                       </AnimatePresence>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingRight: 2, marginLeft: 'auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: isSmallMobile ? 1 : 4, paddingRight: 2, marginLeft: 'auto' }}>
                          {!isLoading && (
                            <div className="relative group/tooltip flex items-center justify-center">
                              <button 
@@ -2483,6 +2710,11 @@ const GroupChatModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   const handleStartGroup = () => {
+    if (!showLoggedIn) {
+      setAuthOpen(true);
+      onClose();
+      return;
+    }
     convertToGroupChat(activeChatId);
     onClose();
   };
@@ -2862,10 +3094,10 @@ const PeopleModal = ({ isOpen, onClose, onAddPeople }) => {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, color: resolvedTheme === 'dark' ? '#fff' : '#000', fontSize: '14.5px' }}>
-                {profile?.name || 'zeeshan'}
+                {profile?.displayName || 'User'}
               </div>
               <div style={{ fontSize: '12.5px', color: 'var(--on-surface-muted)', marginTop: '0px' }}>
-                You · {profile?.email || '@muhmmadzeeshanabid'} · admin
+                You · {profile?.email || 'user@example.com'} · admin
               </div>
             </div>
           </div>
