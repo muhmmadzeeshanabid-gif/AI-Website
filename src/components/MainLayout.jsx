@@ -35,7 +35,6 @@ function ModalContainer() {
         }
       }} />}
       {isLogoutOpen && <LogoutModal isOpen={true} onClose={() => router.push('/')} />}
-      {isLogoutOpen && <LogoutModal isOpen={true} onClose={() => router.push('/')} />}
     </>
   );
 }

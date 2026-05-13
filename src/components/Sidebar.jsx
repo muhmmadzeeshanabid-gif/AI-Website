@@ -22,6 +22,7 @@ const Sidebar = () => {
     archivePassword, setArchivePassword, closeArchivedChat, appView, setAppView, 
     isShareModalOpen, setIsShareModalOpen, shareChatId, setShareChatId,
     isGroupChatModalOpen, setIsGroupChatModalOpen,
+    groupChatTargetId, setGroupChatTargetId,
     isUpgradeModalOpen, setIsUpgradeModalOpen,
     isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId
   } = useAppContext();
@@ -640,7 +641,7 @@ const Sidebar = () => {
                               { icon: <Link size={16} />, label: isMobile ? 'Group link' : 'Add people via link', action: () => { setGroupLinkChatId(chat.id); setIsGroupLinkModalOpen(true); setOpenMenuIndex(null); } },
                             ] : [
                               { icon: <Share2 size={16} />, label: 'Share', action: () => { setShareChatId(chat.id); setIsShareModalOpen(true); setOpenMenuIndex(null); } },
-                              { icon: <Users size={16} />, label: 'Start a group chat', action: () => { setShareChatId(chat.id); setIsGroupChatModalOpen(true); setOpenMenuIndex(null); } },
+                              { icon: <Users size={16} />, label: 'Start a group chat', action: () => { setGroupChatTargetId(chat.id); setIsGroupChatModalOpen(true); setOpenMenuIndex(null); } },
                               { icon: <Pencil size={16} />, label: 'Rename', action: () => handleRename(i) },
                               { icon: <Pin size={16} />, label: chat.pinned ? 'Unpin chat' : 'Pin chat', action: () => handlePin(chat) },
                               { icon: <Archive size={16} />, label: 'Archive', action: () => { archiveChat(chat.id); setOpenMenuIndex(null); } },

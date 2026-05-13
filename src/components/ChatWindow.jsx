@@ -316,15 +316,17 @@ const ChatWindow = () => {
   const { 
     isSidebarOpen, appView, resolvedTheme, activeChatId, chats, 
     isShareModalOpen, setIsShareModalOpen, shareChatId, setShareChatId,
-    isGroupChatModalOpen, setIsGroupChatModalOpen, messages, setMessages, theme, 
+    isReportModalOpen, setIsReportModalOpen,
+    isGroupChatModalOpen, setIsGroupChatModalOpen, 
+    groupChatTargetId, setGroupChatTargetId,
+    isUpgradeModalOpen, setIsUpgradeModalOpen,
+    messages, setMessages, theme, 
     toggleTheme, updateChatTheme, chatTheme, setChats, setActiveChatId, 
     createNewChat, user, login, authOpen, setAuthOpen,
     fontSize, chatWidth, lineHeight, setIsSidebarOpen, isAuthLoading,
     profile, showLoggedIn, personalization, accentColor,
     deleteChat, archiveChat, aiModel, setAiModel, renameChat,
     isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId,
-    isReportModalOpen, setIsReportModalOpen,
-    isUpgradeModalOpen, setIsUpgradeModalOpen
   } = useAppContext();
 
   const [mounted, setMounted] = useState(false);
@@ -1244,6 +1246,7 @@ const ChatWindow = () => {
                           if (!showLoggedIn) {
                             setAuthOpen(true);
                           } else {
+                            setGroupChatTargetId(activeChatId);
                             setIsGroupChatModalOpen(true); 
                           }
                           setIsHeaderMoreOpen(false); 
@@ -1415,6 +1418,28 @@ const ChatWindow = () => {
                           <Globe size={22} style={{ color: accentColor }} />
                         </div>
                         <span>Look something up</span>
+                      </button>
+                    )}
+
+                    {activeCategory !== 'write' && (
+                      <button 
+                        onClick={() => {
+                          if (!showLoggedIn) {
+                            setAuthOpen(true);
+                          } else {
+                            setGroupChatTargetId(activeChatId);
+                            setIsGroupChatModalOpen(true);
+                          }
+                        }}
+                        className="w-full px-2 py-4 rounded-xl hover:bg-hover-overlay text-[16px] flex items-center gap-4 transition-all group/btn font-semibold active:scale-95"
+                        style={{ backgroundColor: 'transparent' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--hover-overlay)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-hover-overlay group-hover/btn:bg-primary transition-colors">
+                          <Users size={22} style={{ color: accentColor }} />
+                        </div>
+                        <span>Start a group chat</span>
                       </button>
                     )}
                   </div>
@@ -1679,6 +1704,28 @@ const ChatWindow = () => {
                         <div className="flex items-center gap-2">
                           <Globe size={18} style={{ color: accentColor }} />
                           <span>Look something up</span>
+                        </div>
+                      </button>
+                    )}
+
+                    {activeCategory !== 'write' && (
+                      <button 
+                        onClick={() => {
+                          if (!showLoggedIn) {
+                            setAuthOpen(true);
+                          } else {
+                            setGroupChatTargetId(activeChatId);
+                            setIsGroupChatModalOpen(true);
+                          }
+                        }}
+                        className="px-6 py-3 rounded-full border bg-surface-1 border-divider text-[14px] font-semibold active:scale-95 transition-all"
+                        style={{ backgroundColor: 'transparent' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${accentColor}10`; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Users size={18} style={{ color: accentColor }} />
+                          <span>Start a group chat</span>
                         </div>
                       </button>
                     )}
@@ -2333,7 +2380,7 @@ const ChatWindow = () => {
                             background: 'transparent'
                           }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent' }
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent' } }
                         >
                           <Check size={18} strokeWidth={3} />
                         </button>
@@ -2524,6 +2571,7 @@ const ChatWindow = () => {
         document.body
       )}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      {isLogoutOpen && <LogoutModal isOpen={true} onClose={() => router.push('/')} />}
       <ShareModal 
         isOpen={isShareModalOpen} 
         onClose={() => setIsShareModalOpen(false)} 
@@ -2705,7 +2753,7 @@ const MessageDeleteModal = ({ isOpen, onClose, onConfirm, resolvedTheme }) => {
 };
 
 const GroupChatModal = ({ isOpen, onClose }) => {
-  const { resolvedTheme, convertToGroupChat, activeChatId } = useAppContext();
+  const { resolvedTheme, convertToGroupChat, activeChatId, groupChatTargetId, showLoggedIn, setAuthOpen } = useAppContext();
   
   if (!isOpen) return null;
 
@@ -2715,7 +2763,7 @@ const GroupChatModal = ({ isOpen, onClose }) => {
       onClose();
       return;
     }
-    convertToGroupChat(activeChatId);
+    convertToGroupChat(groupChatTargetId || activeChatId);
     onClose();
   };
 

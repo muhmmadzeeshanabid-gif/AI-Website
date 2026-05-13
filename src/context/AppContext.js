@@ -124,8 +124,14 @@ export const AppProvider = ({ children }) => {
   // ──────────────────────────────────────────────────────────────────────────
 
   const [activeChatId, setActiveChatId] = useState(null);
-
   const [messages, setMessages] = useState([]);
+
+  // Strict enforcement: No messages allowed if no active chat
+  useEffect(() => {
+    if (!activeChatId && messages.length > 0) {
+      setMessages([]);
+    }
+  }, [activeChatId, messages.length]);
 
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -153,6 +159,7 @@ export const AppProvider = ({ children }) => {
   const [groupLinkChatId, setGroupLinkChatId] = useState(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isGroupChatModalOpen, setIsGroupChatModalOpen] = useState(false);
+  const [groupChatTargetId, setGroupChatTargetId] = useState(null);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
 
@@ -326,12 +333,11 @@ export const AppProvider = ({ children }) => {
     } catch (error) { console.error("Delete account failed:", error); }
   };
   const createNewChat = useCallback(() => {
-    if (activeChatId && messages.length === 0) return;
     const newId = Date.now().toString();
-    setChats(prev => [{ id: newId, title: 'New Chat', messages: [], timestamp: Date.now() }, ...prev]);
     setActiveChatId(newId);
     setMessages([]);
-  }, [activeChatId, messages, setActiveChatId, setMessages]);
+    if (typeof window !== 'undefined') window.history.pushState(null, '', `/`);
+  }, [setActiveChatId, setMessages]);
 
   const deleteChat = useCallback((id) => {
     setChats(prev => {
@@ -402,6 +408,7 @@ export const AppProvider = ({ children }) => {
       groupLinkChatId, setGroupLinkChatId,
       isReportModalOpen, setIsReportModalOpen,
       isGroupChatModalOpen, setIsGroupChatModalOpen,
+      groupChatTargetId, setGroupChatTargetId,
       isUpgradeModalOpen, setIsUpgradeModalOpen,
       convertToGroupChat,
       showLoggedIn: user || (isAuthLoading && typeof window !== 'undefined' && localStorage.getItem('aura-profile')),
