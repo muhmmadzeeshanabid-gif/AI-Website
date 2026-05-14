@@ -1421,27 +1421,6 @@ const ChatWindow = () => {
                       </button>
                     )}
 
-                    {activeCategory !== 'write' && (
-                      <button 
-                        onClick={() => {
-                          if (!showLoggedIn) {
-                            setAuthOpen(true);
-                          } else {
-                            setGroupChatTargetId(activeChatId);
-                            setIsGroupChatModalOpen(true);
-                          }
-                        }}
-                        className="w-full px-2 py-4 rounded-xl hover:bg-hover-overlay text-[16px] flex items-center gap-4 transition-all group/btn font-semibold active:scale-95"
-                        style={{ backgroundColor: 'transparent' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--hover-overlay)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                      >
-                        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-hover-overlay group-hover/btn:bg-primary transition-colors">
-                          <Users size={22} style={{ color: accentColor }} />
-                        </div>
-                        <span>Start a group chat</span>
-                      </button>
-                    )}
                   </div>
                 )}
 
@@ -1708,27 +1687,6 @@ const ChatWindow = () => {
                       </button>
                     )}
 
-                    {activeCategory !== 'write' && (
-                      <button 
-                        onClick={() => {
-                          if (!showLoggedIn) {
-                            setAuthOpen(true);
-                          } else {
-                            setGroupChatTargetId(activeChatId);
-                            setIsGroupChatModalOpen(true);
-                          }
-                        }}
-                        className="px-6 py-3 rounded-full border bg-surface-1 border-divider text-[14px] font-semibold active:scale-95 transition-all"
-                        style={{ backgroundColor: 'transparent' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${accentColor}10`; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Users size={18} style={{ color: accentColor }} />
-                          <span>Start a group chat</span>
-                        </div>
-                      </button>
-                    )}
                   </div>
                 )}
 
@@ -2571,7 +2529,6 @@ const ChatWindow = () => {
         document.body
       )}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
-      {isLogoutOpen && <LogoutModal isOpen={true} onClose={() => router.push('/')} />}
       <ShareModal 
         isOpen={isShareModalOpen} 
         onClose={() => setIsShareModalOpen(false)} 
