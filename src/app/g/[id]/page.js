@@ -2,29 +2,34 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppContext } from '@/context/AppContext';
-import { Loader2, AlertTriangle, Smartphone, Apple } from 'lucide-react';
+import { Loader2, AlertTriangle, Smartphone, Apple, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AutoJoinGroupPage() {
   const { id } = useParams();
   const router = useRouter();
-  const { joinGroup, showLoggedIn, login, db } = useAppContext();
+  const { joinGroup, showLoggedIn, login } = useAppContext();
   const [status, setStatus] = useState('loading'); // loading, joining, error, success, waiting-auth
   const [error, setError] = useState(null);
   const joiningStarted = useRef(false);
+  const [email, setEmail] = useState('');
+
+  // Styles from AuthModal
+  const text   = 'var(--on-surface)';
+  const muted  = 'var(--on-surface-muted)';
+  const border = 'var(--divider)';
+  const hover  = 'var(--hover-overlay)';
 
   useEffect(() => {
     if (!id) return;
 
     const performAutoJoin = async () => {
-      // If we are not logged in, show the login card immediately
       if (!showLoggedIn) {
         setStatus('waiting-auth');
         return;
       }
 
       if (joiningStarted.current) return;
-      
       joiningStarted.current = true;
       setStatus('joining');
       
@@ -51,7 +56,7 @@ export default function AutoJoinGroupPage() {
   }, [id, showLoggedIn, joinGroup, router]);
 
   const GoogleIcon = () => (
-    <svg viewBox="0 0 24 24" width="20" height="20">
+    <svg viewBox="0 0 24 24" width="18" height="18">
       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
       <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
@@ -60,72 +65,92 @@ export default function AutoJoinGroupPage() {
   );
 
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#0a0a0b] p-6 text-center font-sans overflow-hidden">
-      {/* Premium Background Effects */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-500/5 blur-[120px] animate-pulse" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-purple-500/5 blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
-
+    <div className="fixed inset-0 flex items-center justify-center bg-[#0a0a0b] p-6 overflow-hidden">
       <AnimatePresence mode="wait">
         {status === 'waiting-auth' && (
           <motion.div 
             key="login-card"
-            initial={{ opacity: 0, y: 40, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -40, scale: 0.95 }}
-            className="relative z-10 w-full max-w-[440px]"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            style={{
+              width: 440, maxWidth: '95vw',
+              background: 'var(--surface-1)',
+              borderRadius: 28,
+              padding: '48px 40px 40px',
+              border: `1px solid ${border}`,
+              textAlign: 'center',
+              position: 'relative',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.4)'
+            }}
           >
-            <div className="bg-[#111113] border border-white/10 p-10 rounded-[48px] shadow-[0_40px_80px_rgba(0,0,0,0.6)]">
-              <h2 className="text-[32px] font-black text-white leading-tight mb-3">
-                Log in or sign up
-              </h2>
-              <p className="text-white/40 text-[16px] mb-10 leading-relaxed">
-                Join the collaborative AI space. Get smarter responses and real-time updates.
-              </p>
+            <h2 style={{ fontSize: 32, fontWeight: 700, color: text, marginBottom: 12, tracking: '-0.02em' }}>
+              Log in or sign up
+            </h2>
+            <p style={{ fontSize: 16, color: muted, marginBottom: 32, lineHeight: 1.5 }}>
+              You'll get smarter responses and can upload files, images, and more.
+            </p>
 
-              <div className="space-y-3 mb-8">
-                <button
-                  onClick={async () => {
-                    try { await login(); } catch (e) {}
-                  }}
-                  className="w-full flex items-center justify-center gap-3 py-4 rounded-full border border-white/10 bg-transparent hover:bg-white/5 transition-all text-white font-semibold text-[16px]"
-                >
-                  <GoogleIcon />
-                  Continue with Google
-                </button>
-                
-                <button className="w-full flex items-center justify-center gap-3 py-4 rounded-full border border-white/10 bg-transparent hover:bg-white/5 transition-all text-white font-semibold text-[16px]">
-                  <Apple size={20} fill="currentColor" />
-                  Continue with Apple
-                </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+              <button
+                onClick={async () => { try { await login(); } catch (e) {} }}
+                style={{
+                  width: '100%', padding: '14px', borderRadius: 999,
+                  background: 'transparent', border: `1px solid ${border}`,
+                  color: text, fontSize: 16, fontWeight: 600, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+                  fontFamily: 'inherit', transition: 'background 0.15s',
+                }}
+              >
+                <GoogleIcon />
+                Continue with Google
+              </button>
+              
+              <button style={{ width: '100%', padding: '14px', borderRadius: 999, background: 'transparent', border: `1px solid ${border}`, color: text, fontSize: 16, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, fontFamily: 'inherit' }}>
+                <Apple size={18} fill="currentColor" />
+                Continue with Apple
+              </button>
 
-                <button className="w-full flex items-center justify-center gap-3 py-4 rounded-full border border-white/10 bg-transparent hover:bg-white/5 transition-all text-white font-semibold text-[16px]">
-                  <Smartphone size={20} />
-                  Continue with phone
-                </button>
-              </div>
+              <button style={{ width: '100%', padding: '14px', borderRadius: 999, background: 'transparent', border: `1px solid ${border}`, color: text, fontSize: 16, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, fontFamily: 'inherit' }}>
+                <Smartphone size={18} />
+                Continue with phone
+              </button>
+            </div>
 
-              <div className="flex items-center gap-4 mb-8">
-                <div className="flex-1 h-px bg-white/5" />
-                <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">OR</span>
-                <div className="flex-1 h-px bg-white/5" />
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+              <div style={{ flex: 1, height: 1, background: border }}></div>
+              <span style={{ fontSize: 12, color: muted, fontWeight: 700 }}>OR</span>
+              <div style={{ flex: 1, height: 1, background: border }}></div>
+            </div>
 
-              <div className="relative mb-6">
+            <form onSubmit={(e) => { e.preventDefault(); login(); }}>
+              <div style={{ marginBottom: 16 }}>
                 <input
                   type="email"
                   placeholder="Email address"
-                  className="w-full py-4.5 px-6 rounded-2xl bg-transparent border-2 border-white/5 focus:border-indigo-500 transition-all outline-none text-white text-[16px]"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  style={{
+                    width: '100%', padding: '16px 20px', borderRadius: 16,
+                    background: 'transparent', border: `2px solid ${border}`,
+                    color: text, fontSize: 16, fontFamily: 'inherit',
+                    outline: 'none',
+                  }}
                 />
               </div>
 
-              <button className="w-full py-4.5 rounded-full bg-white text-black font-black text-[16px] hover:opacity-90 transition-all active:scale-[0.98]">
+              <button
+                type="submit"
+                style={{
+                  width: '100%', padding: '15px', borderRadius: 999,
+                  background: 'var(--on-surface)', color: 'var(--bg-primary)',
+                  fontSize: 16, fontWeight: 800, cursor: 'pointer',
+                  border: 'none',
+                }}
+              >
                 Continue
               </button>
-            </div>
-            
-            <p className="mt-8 text-white/20 text-[11px] font-medium tracking-wide uppercase">
-              By joining, you agree to our Terms and Privacy Policy.
-            </p>
+            </form>
           </motion.div>
         )}
 
@@ -134,22 +159,18 @@ export default function AutoJoinGroupPage() {
             key="loading-view"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
             className="flex flex-col items-center gap-10"
           >
             <div className="relative">
               <Loader2 className="w-14 h-14 text-indigo-500 animate-spin" strokeWidth={1.5} />
               <div className="absolute inset-0 blur-2xl bg-indigo-500/30 rounded-full" />
             </div>
-            
-            <div className="space-y-4">
+            <div className="space-y-4 text-center">
               <h1 className="text-3xl font-black text-white tracking-tight">
                 {status === 'success' ? 'Welcome Aboard!' : 'Entering Session...'}
               </h1>
-              <p className="text-white/40 text-[16px] max-w-[320px] mx-auto leading-relaxed">
-                {status === 'success' 
-                  ? 'Your workspace is ready. Redirecting...' 
-                  : 'Authenticating your collaborative session'}
+              <p className="text-white/40 text-[16px]">
+                {status === 'success' ? 'Your workspace is ready.' : 'Authenticating...'}
               </p>
             </div>
           </motion.div>
@@ -160,18 +181,18 @@ export default function AutoJoinGroupPage() {
             key="error-view"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="max-w-[420px] w-full bg-[#111113] border border-white/5 p-12 rounded-[48px] shadow-2xl"
+            className="max-w-[440px] w-full bg-[#111113] border border-white/5 p-12 rounded-[28px] shadow-2xl text-center"
           >
             <div className="w-20 h-20 rounded-3xl bg-red-500/10 flex items-center justify-center mx-auto mb-8 border border-red-500/20">
               <AlertTriangle size={40} className="text-red-500" />
             </div>
-            <h2 className="text-2xl font-black text-white mb-4 tracking-tight uppercase tracking-wider">Join Failed</h2>
+            <h2 className="text-2xl font-black text-white mb-4 tracking-tight">Join Failed</h2>
             <p className="text-white/40 mb-10 leading-relaxed text-[16px]">
-              {error || "The link might be invalid, expired, or you don't have permission to join this session."}
+              {error || "The link might be invalid or expired."}
             </p>
             <button 
               onClick={() => router.push('/')}
-              className="w-full py-5 rounded-full bg-white/5 text-white font-bold hover:bg-white/10 transition-all active:scale-[0.97] border border-white/10"
+              className="w-full py-5 rounded-full bg-white/5 text-white font-bold hover:bg-white/10 transition-all border border-white/10"
             >
               Return Home
             </button>
