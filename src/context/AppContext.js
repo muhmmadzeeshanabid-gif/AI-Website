@@ -1,7 +1,8 @@
 'use client';
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { auth, googleProvider } from '@/lib/firebase';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { auth, googleProvider, db } from '@/lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, collection, query, orderBy, limit, enableNetwork } from 'firebase/firestore';
 
 const AppContext = createContext();
 
@@ -25,6 +26,7 @@ export const AppProvider = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpenState] = useState(true);
   const [isSidebarInitializing, setIsSidebarInitializing] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
+
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -132,6 +134,76 @@ export const AppProvider = ({ children }) => {
       setMessages([]);
     }
   }, [activeChatId, messages.length]);
+
+  // Firestore listeners cleanup
+  const unsubscribeRef = useRef(null);
+
+  useEffect(() => {
+    // 1. Immediate and absolute cleanup of any previous listener
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+    }
+
+    if (activeChatId) {
+      try {
+        const chatDocRef = doc(db, 'chats', activeChatId);
+        
+        // Use a persistent reference for the listener to prevent overlaps
+        const unsubscribe = onSnapshot(chatDocRef, (docSnap) => {
+          if (!docSnap.exists()) return;
+          
+          const data = docSnap.data();
+          // Only listen if it's actually a group chat
+          if (!data.isGroup) {
+            unsubscribe(); // Auto-unsubscribe if it's a personal chat
+            return;
+          }
+
+          const remoteMessages = data.messages || [];
+          
+          // Optimized Update: Check length first as a quick bail-out
+          setMessages(prev => {
+            if (prev.length === remoteMessages.length && (prev.length === 0 || prev[prev.length-1]?.id === remoteMessages[remoteMessages.length-1]?.id)) {
+              // Deep check only if simple checks pass but we want to be sure
+              if (JSON.stringify(prev) === JSON.stringify(remoteMessages)) return prev;
+            }
+            return remoteMessages;
+          });
+          
+          setChats(prev => {
+            const idx = prev.findIndex(c => c.id === activeChatId);
+            if (idx === -1) return prev;
+            
+            const existing = prev[idx];
+            // Only update if metadata or message count changed
+            if (existing.messages?.length === remoteMessages.length && 
+                existing.title === data.title &&
+                (remoteMessages.length === 0 || existing.messages[existing.messages.length-1]?.id === remoteMessages[remoteMessages.length-1]?.id)) {
+              return prev;
+            }
+
+            const updated = [...prev];
+            updated[idx] = { ...existing, messages: remoteMessages, title: data.title || existing.title };
+            return updated;
+          });
+        }, (error) => {
+          console.error("Group Listener Error:", error);
+        });
+
+        unsubscribeRef.current = unsubscribe;
+      } catch (err) {
+        console.error("Listener Setup Failed:", err);
+      }
+    }
+
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, [activeChatId]);
 
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -316,6 +388,8 @@ export const AppProvider = ({ children }) => {
     try {
       await signOut(auth);
       setUser(null);
+      setProfileState({ displayName: '', username: '', email: '', avatar: null });
+      localStorage.removeItem('aura-profile');
       localStorage.removeItem('aura-active-chat-id');
       setMessages([]);
       setActiveChatId(null);
@@ -359,21 +433,114 @@ export const AppProvider = ({ children }) => {
     });
   }, [setActiveChatId, setMessages]);
 
-  const renameChat = useCallback((id, newTitle) => {
+  const renameChat = useCallback(async (id, newTitle) => {
     setChats(prev => {
       const updated = prev.map(c => c.id === id ? { ...c, title: newTitle } : c);
       localStorage.setItem('aura-chats', JSON.stringify(updated));
       return updated;
     });
-  }, []);
 
-  const convertToGroupChat = useCallback((id) => {
+    const chat = chats.find(c => c.id === id);
+    if (chat?.isGroup) {
+      try {
+        await updateDoc(doc(db, 'chats', id), { title: newTitle });
+      } catch (err) {
+        console.error("Failed to sync group rename:", err);
+      }
+    }
+  }, [chats]);
+
+  const convertToGroupChat = useCallback(async (id) => {
+    const chatToConvert = chats.find(c => c.id === id);
+    if (!chatToConvert) return;
+
+    const groupData = {
+      ...chatToConvert,
+      isGroup: true,
+      creator: profile,
+      participants: [profile],
+      createdAt: new Date().toISOString()
+    };
+
     setChats(prev => {
-      const updated = prev.map(c => c.id === id ? { ...c, isGroup: true, creator: profile } : c);
+      const updated = prev.map(c => c.id === id ? groupData : c);
       localStorage.setItem('aura-chats', JSON.stringify(updated));
       return updated;
     });
-  }, [profile]);
+
+    // Save to Firestore for multi-user access
+    try {
+      await setDoc(doc(db, 'chats', id), groupData);
+    } catch (error) {
+      console.error("Failed to save group chat to Firestore:", error);
+    }
+  }, [profile, chats]);
+
+  const joinGroup = useCallback(async (id) => {
+    if (!profile) return { success: false, error: "Please log in to join the group" };
+    
+    console.log("Attempting to join group:", id);
+    
+    try {
+      const chatDocRef = doc(db, 'chats', id);
+      
+      // Force connection recovery
+      try {
+        await enableNetwork(db);
+      } catch (e) {
+        console.warn("Could not force enable network:", e);
+      }
+      
+      // Add a timeout to the fetch operation
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Connection timeout. Please check your internet.")), 10000)
+      );
+      
+      let docSnap;
+      try {
+        docSnap = await Promise.race([
+          getDoc(chatDocRef),
+          timeoutPromise
+        ]);
+      } catch (err) {
+        console.error("Fetch failed:", err);
+        if (err.message.includes('timeout') || err.code === 'unavailable' || err.message.includes('offline')) {
+          return { success: false, error: "Network connection issue. Please check your internet and try again." };
+        }
+        throw err;
+      }
+      
+      if (docSnap.exists()) {
+        const chatData = { id: docSnap.id, ...docSnap.data() };
+        console.log("Group found, updating participants...");
+        
+        // Add current user to participants
+        await updateDoc(chatDocRef, {
+          participants: arrayUnion({
+            uid: profile.uid || '',
+            displayName: profile.displayName || 'User',
+            avatar: profile.avatar || '',
+            email: profile.email || ''
+          })
+        });
+
+        setChats(prev => {
+          if (prev.find(c => c.id === id)) return prev;
+          const updated = [chatData, ...prev];
+          localStorage.setItem('aura-chats', JSON.stringify(updated));
+          return updated;
+        });
+
+        setActiveChatId(id);
+        return { success: true };
+      } else {
+        return { success: false, error: "Group chat not found. The link might be invalid or expired." };
+      }
+    } catch (error) {
+      console.error("Error joining group:", error);
+      return { success: false, error: error.message };
+    }
+  }, [profile, setActiveChatId, setChats]);
 
   return (
     <AppContext.Provider value={{
@@ -411,6 +578,7 @@ export const AppProvider = ({ children }) => {
       groupChatTargetId, setGroupChatTargetId,
       isUpgradeModalOpen, setIsUpgradeModalOpen,
       convertToGroupChat,
+      joinGroup,
       showLoggedIn: user || (isAuthLoading && typeof window !== 'undefined' && localStorage.getItem('aura-profile')),
     }}>
       {children}

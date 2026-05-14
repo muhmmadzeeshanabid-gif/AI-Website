@@ -48,7 +48,7 @@ export default function MainLayout({ children }) {
 
   // Navigation is handled via routing, no need for manual state sync here
 
-  if (isHelpPage || pathname?.includes('/upgrade')) {
+  if (isHelpPage || pathname?.includes('/upgrade') || pathname?.startsWith('/g/')) {
     return (
       <div style={{ 
         position: 'fixed', 

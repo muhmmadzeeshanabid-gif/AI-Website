@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getGeminiResponse } from '@/utils/gemini';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, arrayUnion, onSnapshot, getDoc } from 'firebase/firestore';
 import AuthModal from './AuthModal';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -344,7 +346,7 @@ const ChatWindow = () => {
     else if (hour < 17) welcome = "Good afternoon";
     else welcome = "Good evening";
 
-    const userName = profile?.displayName?.split(' ')[0] || '';
+    const userName = (user && profile?.displayName) ? profile.displayName.split(' ')[0] : '';
     const personalizedWelcome = userName ? `${welcome}, ${userName}.` : `${welcome}.`;
 
     const options = [
@@ -362,7 +364,7 @@ const ChatWindow = () => {
 
   useEffect(() => {
     setGreeting(getGreeting());
-  }, [activeChatId]);
+  }, [activeChatId, user, profile]);
   const [showSettings, setShowSettings] = useState(false);
   const messagesEndRef = useRef(null);
   const [editingId, setEditingId] = useState(null);
@@ -599,6 +601,8 @@ const ChatWindow = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isHeaderMoreOpen, activeMsgMoreId]);
 
+  // Redundant listener removed - global synchronization is handled in AppContext.js
+
   const scrollExplore = (direction) => {
     if (exploreScrollRef.current) {
       const scrollAmount = direction === 'left' ? -300 : 300;
@@ -742,7 +746,8 @@ const ChatWindow = () => {
         id: replyingToMsg.id,
         role: replyingToMsg.role,
         content: replyingToMsg.content
-      } : null
+      } : null,
+      sender: profile || { displayName: 'Guest', avatar: null }
     };
     const isFirstMessage = messages.length === 0;
 
@@ -778,11 +783,24 @@ const ChatWindow = () => {
       if (typeof window !== 'undefined') window.history.pushState(null, '', `/c/${newChatId}`);
     }
 
-    setMessages(prev => [...prev, userMessage]);
-    isAtBottomRef.current = true; // Force scroll focus on new message
-    scrollToBottom(true);
-    const currentInput = textToSend;
     if (!overrideInput) setInput('');
+    const currentInput = textToSend;
+    
+    const currentChat = chats.find(c => c.id === activeChatId);
+    const isGroup = currentChat?.isGroup;
+
+    if (isGroup) {
+      try {
+        await updateDoc(doc(db, 'chats', activeChatId), {
+          messages: arrayUnion(userMessage)
+        });
+      } catch (err) {
+        console.error("Failed to sync group message:", err);
+      }
+    } else {
+      setMessages(prev => [...prev, userMessage]);
+    }
+
     setIsLoading(true);
     abortControllerRef.current = new AbortController();
 
@@ -840,7 +858,16 @@ const ChatWindow = () => {
 
       const aiResponse = await getGeminiResponse(finalPrompt, messages, personalization, abortControllerRef.current.signal, onUpdate, aiModel);
       
-      // Auto-speech removed: Voice only plays on user click now
+      if (isGroup) {
+        try {
+          const finalAiMessage = { role: 'ai', content: aiResponse, id: aiMessageId };
+          await updateDoc(doc(db, 'chats', activeChatId), {
+            messages: arrayUnion(finalAiMessage)
+          });
+        } catch (err) {
+          console.error("Failed to sync AI response to group:", err);
+        }
+      }
     } catch (error) {
       if (error.name === 'AbortError') {
         console.log('Generation stopped by user');
@@ -1453,7 +1480,7 @@ const ChatWindow = () => {
                       <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
                     </div>
                     
-                    <form onSubmit={handleSend} className="flex-1 flex items-center">
+                    <form onSubmit={handleSend} className="flex-1 flex items-center gap-3">
                       {isListening && isVoiceMessageMode ? (
                         <div className="flex-1 flex items-center pr-1 pl-4 h-12 animate-in fade-in duration-200">
                           <div className="flex-1 flex items-center h-full" style={{ gap: 3, padding: '0 8px' }}>
@@ -1513,7 +1540,7 @@ const ChatWindow = () => {
                             }}
                             className="w-full bg-transparent border-none outline-none px-4 text-[16px] py-3 temp-placeholder"
                           />
-                          <div className="relative ml-1">
+                          <div className="relative ml-4">
                             <div className="relative">
                               <button 
                                 type="button"
@@ -1567,7 +1594,7 @@ const ChatWindow = () => {
                             </AnimatePresence>
                           </div>
                           
-                          <div className="flex items-center gap-2 pr-1 ml-auto">
+                          <div className="flex items-center gap-3 pr-1 ml-auto flex-shrink-0">
                             <div className="relative group/tooltip flex items-center justify-center">
                               <button type="button" onClick={() => { setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening(); }} className={`w-10 h-10 flex items-center justify-center transition-all duration-300 rounded-full ${isListening && !isVoiceMessageMode ? 'animate-pulse bg-red-500/20 text-red-500' : ''}`}
                                 style={{ 
@@ -1807,33 +1834,61 @@ const ChatWindow = () => {
                   </div>
                 ) : (
                   <>
-                    <div className={`w-full flex flex-col ${msg.role === 'user' ? 'items-end' : msg.isVoice ? 'items-center' : 'items-start'}`}>
-                      <div className={`w-full flex ${msg.role === 'user' ? 'items-start flex-row-reverse' : msg.isVoice ? 'items-center justify-center' : 'items-start flex-row'}`}>
-                        <motion.div 
-                           layout={msg.role === 'ai' && generatingId === msg.id ? false : "position"}
-                           initial={{ opacity: 0, scale: 0.98, y: 10 }} 
-                           animate={{ opacity: 1, scale: 1, y: 0 }} 
-                           transition={{ duration: 0.2, ease: "easeOut" }}
-                         className={`relative transition-all duration-300 min-w-0 ${
-                            msg.role === 'user' 
-                              ? 'px-6 py-3 rounded-[24px] font-medium shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] border border-white/5' 
-                              : 'px-0 py-2'
-                          }`}
-                         style={{ 
-                           maxWidth: msg.isVoice ? '340px' : msg.role === 'user' ? '78%' : '100%',
-                           overflow: 'hidden',
-                           wordBreak: 'break-word',
-                           background: msg.role === 'user' ? accentColor : 'transparent',
-                           color: msg.role === 'user' ? '#ffffff' : 'var(--on-surface)',
-                           border: msg.role === 'user' ? `1px solid ${accentColor}` : 'none',
-                           borderRadius: msg.isVoice ? '20px' : msg.role === 'user' ? '24px 24px 4px 24px' : '0',
-                           fontSize: fontSize === 'Small' ? '12.5px' : fontSize === 'Large' ? '16px' : '14px', 
-                              lineHeight: '1.7',
-                           boxShadow: (msg.role === 'user' && resolvedTheme === 'dark') ? '0 10px 20px -5px rgba(0,0,0,0.2)' : 'none',
-                           overflowWrap: 'anywhere',
-                           padding: msg.isVoice ? '12px 16px' : (msg.role === 'user' ? undefined : '0px')
-                         }}
-                       >
+                    {(() => {
+                      const isMe = msg.role === 'user' && (msg.sender?.email === profile?.email || !msg.sender?.email);
+                      const isOtherUser = msg.role === 'user' && !isMe;
+                      const isGroup = chats.find(c => c.id === activeChatId)?.isGroup;
+
+                      return (
+                        <div className={`w-full flex flex-col ${isMe ? 'items-end' : msg.isVoice ? 'items-center' : 'items-start'}`}>
+                          {/* Sender name for group chats */}
+                          {isGroup && isOtherUser && (
+                            <div style={{ marginLeft: '44px', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--on-surface-muted)', opacity: 0.8 }}>
+                              {msg.sender?.displayName || 'User'}
+                            </div>
+                          )}
+                          
+                          <div className={`w-full flex ${isMe ? 'items-start flex-row-reverse' : msg.isVoice ? 'items-center justify-center' : 'items-start flex-row'}`}>
+                            {/* Avatar for others in group chat */}
+                            {isGroup && !isMe && msg.role !== 'ai' && (
+                              <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', marginRight: '12px', flexShrink: 0, marginTop: '2px', border: '1px solid var(--divider)' }}>
+                                {msg.sender?.avatar ? (
+                                  <img src={msg.sender.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                  <div style={{ width: '100%', height: '100%', background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600 }}>
+                                    {(msg.sender?.displayName || 'U')[0].toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            <motion.div 
+                               layout={msg.role === 'ai' && generatingId === msg.id ? false : "position"}
+                               initial={{ opacity: 0, scale: 0.98, y: 10 }} 
+                               animate={{ opacity: 1, scale: 1, y: 0 }} 
+                               transition={{ duration: 0.2, ease: "easeOut" }}
+                             className={`relative transition-all duration-300 min-w-0 ${
+                                isMe 
+                                  ? 'px-6 py-3 rounded-[24px] font-medium shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] border border-white/5' 
+                                  : isOtherUser
+                                    ? 'px-6 py-3 rounded-[24px] bg-surface-2 border border-divider'
+                                    : 'px-0 py-2'
+                              }`}
+                             style={{ 
+                               maxWidth: msg.isVoice ? '340px' : isMe ? '78%' : isOtherUser ? '78%' : '100%',
+                               overflow: 'hidden',
+                               wordBreak: 'break-word',
+                               background: isMe ? accentColor : isOtherUser ? 'var(--surface-2)' : 'transparent',
+                               color: isMe ? '#ffffff' : 'var(--on-surface)',
+                               border: isMe ? `1px solid ${accentColor}` : isOtherUser ? '1px solid var(--divider)' : 'none',
+                               borderRadius: msg.isVoice ? '20px' : isMe ? '24px 24px 4px 24px' : isOtherUser ? '4px 24px 24px 24px' : '0',
+                               fontSize: fontSize === 'Small' ? '12.5px' : fontSize === 'Large' ? '16px' : '14px', 
+                               lineHeight: '1.7',
+                               boxShadow: (isMe && resolvedTheme === 'dark') ? '0 10px 20px -5px rgba(0,0,0,0.2)' : 'none',
+                               overflowWrap: 'anywhere',
+                               padding: msg.isVoice ? '12px 16px' : (isMe || isOtherUser ? undefined : '0px')
+                             }}
+                            >
                          {msg.isVoice ? 
                           <div className="flex items-center gap-3 min-w-[240px] max-w-full">
                             <div className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20 shrink-0">
@@ -1873,30 +1928,25 @@ const ChatWindow = () => {
                           <>
                             {msg.replyTo && 
                               <div 
-                                className="mb-2 p-2 px-3 rounded-xl border-l-2 text-[12.5px] opacity-90"
+                                className="mb-2 p-2.5 px-3.5 rounded-xl text-[13px] opacity-80"
                                 style={{ 
-                                  background: msg.role === 'user' ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.04)',
-                                  borderColor: msg.role === 'user' ? '#fff' : accentColor,
-                                  color: msg.role === 'user' ? '#fff' : 'inherit',
-                                  borderTop: msg.role === 'user' ? 'none' : `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
-                                  borderRight: msg.role === 'user' ? 'none' : `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
-                                  borderBottom: msg.role === 'user' ? 'none' : `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`
-                                }}
-                              >
-                                <div className="font-bold flex items-center gap-1.5 mb-0.5" style={{ color: msg.role === 'user' ? '#fff' : accentColor }}>
-                                  <Reply size={10} strokeWidth={3} />
-                                  {msg.replyTo.role === 'ai' ? 'Aura AI' : 'User'}
-                                </div>
-                                <div className="line-clamp-1 italic opacity-80 text-[12px]">
-                                  {msg.replyTo.content}
-                                </div>
+                                   background: isMe ? 'rgba(0,0,0,0.12)' : 'var(--hover-overlay)',
+                                   borderLeft: `2px solid ${isMe ? 'rgba(255,255,255,0.4)' : accentColor}`,
+                                   color: isMe ? 'rgba(255,255,255,0.9)' : 'var(--on-surface-muted)',
+                                 }}
+                               >
+                                 <p className="line-clamp-2 leading-relaxed">
+                                   <span className="opacity-40 mr-1 font-serif text-[15px]">“</span>
+                                   {msg.replyTo.content}
+                                   <span className="opacity-40 ml-1 font-serif text-[15px]">”</span>
+                                 </p>
                               </div>
                             }
                             <MessageContent content={msg.content} isUser={msg.role === 'user'} />
                           </>
                         }
                         </motion.div>
-                        {msg.role === 'user' && msg.versions && msg.versions.length > 1 && (
+                        {isMe && msg.versions && msg.versions.length > 1 && (
                            <div className="flex items-center gap-1.5 mt-1.5 px-1 select-none opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200">
                              <button 
                                onClick={() => handleVersionChange(msg.id, -1)}
@@ -1922,9 +1972,9 @@ const ChatWindow = () => {
                     </div>
 
                      {!msg.isVoice && (
-                       <div className={`w-full flex ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? (generatingId === msg.id ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
-                         <div className="flex gap-1">
-                          {msg.role === 'ai' && chats.find(c => c.id === activeChatId)?.isGroup ? (
+                       <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? (generatingId === msg.id ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
+                         <div className={`flex gap-1 ${!isMe && isOtherUser ? 'ml-[44px]' : ''}`}>
+                          {chats.find(c => c.id === activeChatId)?.isGroup ? (
                             <>
                               <div className="relative">
                                 {msgReactions[msg.id] && (
@@ -1957,7 +2007,11 @@ const ChatWindow = () => {
                                       animate={{ opacity: 1, y: 0, scale: 1 }}
                                       exit={{ opacity: 0, y: 5, scale: 0.95 }}
                                       className="absolute z-[20]"
-                                      style={{ bottom: 'calc(100% + 8px)', left: '0' }}
+                                      style={{ 
+                                        bottom: 'calc(100% + 4px)', 
+                                        left: isMe ? 'auto' : '0',
+                                        right: isMe ? '0' : 'auto'
+                                      }}
                                     >
                                       <div style={{
                                         display: 'inline-flex', alignItems: 'center', gap: '2px',
@@ -2010,7 +2064,7 @@ const ChatWindow = () => {
                               </div>
                               <ActionButton onClick={() => { setReplyingToMsg(msg.role === 'ai' ? (messages[index - 1] || msg) : msg); setTimeout(() => footerInputRef.current?.focus(), 100); }} label="Reply" icon={<Reply size={14} />} />
                               <ActionButton onClick={() => setMsgDeleteConfirm({ open: true, id: msg.id })} label="Delete" icon={<Trash2 size={14} />} />
-                              <ActionButton onClick={() => setIsReportModalOpen(true)} label="Report" icon={<Flag size={14} />} />
+                              {!isMe && <ActionButton onClick={() => setIsReportModalOpen(true)} label="Report" icon={<Flag size={14} />} />}
                             </>
                           ) : (
                             <>
@@ -2132,8 +2186,6 @@ const ChatWindow = () => {
                               </div>
                             </>
                           )}
-                        </>
-                      )}
                           {msg.role === 'user' && (
                             <ActionButton 
                               onClick={() => { setEditingId(msg.id); setEditValue(msg.content); }} 
@@ -2141,15 +2193,19 @@ const ChatWindow = () => {
                               icon={<Edit2 size={14} />} 
                             />
                           )}
-                          </div>
-                        </div>
+                        </>
                       )}
                     </div>
-                   </>
+                  </div>
                 )}
-
-            </div>
-            ))}
+              </div>
+            );
+          })()
+        }
+      </>
+    )}
+  </div>
+))}
             {isLoading && <div className="flex justify-start"><div className="px-0 py-4 flex gap-1.5 items-center"><span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce"></span><span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span><span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></span></div></div>}
           </div>
         )}
@@ -2167,7 +2223,9 @@ const ChatWindow = () => {
             background: 'transparent'
           }}>
             <p style={{ fontSize: '13.5px', color: 'var(--on-surface)', margin: 0 }}>
-              <span style={{ fontWeight: 700, color: 'var(--on-surface)' }}>{profile?.displayName?.toUpperCase() || 'MUHAMMAD ZEESHAN ABID'}</span>
+              <span style={{ fontWeight: 700, color: 'var(--on-surface)' }}>
+                {(chats.find(c => c.id === activeChatId)?.creator?.displayName || profile?.displayName || 'User').toUpperCase()}
+              </span>
               {' '}started the group chat with a group link.
             </p>
             <p style={{ fontSize: '13px', color: 'var(--on-surface-muted)', margin: 0 }}>
@@ -2225,54 +2283,51 @@ const ChatWindow = () => {
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}
               >
-                <ArrowDown size={22} strokeWidth={3} />
+<ArrowDown size={22} strokeWidth={3} />
               </button>
             )}
           </AnimatePresence>
-          <div className="max-w-3xl mx-auto w-full flex flex-col items-center gap-3 px-4">
+          <div className={`max-w-3xl mx-auto w-full flex flex-col items-center ${replyingToMsg ? 'gap-0' : 'gap-3'} px-4`}>
             <AnimatePresence>
               {replyingToMsg && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                  initial={{ opacity: 0, y: 5, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.98 }}
-                  className="w-full mb-0 p-4 flex flex-col border-l-4"
+                  exit={{ opacity: 0, y: 5, scale: 0.98 }}
+                  className="w-full p-2.5 flex items-center justify-between"
                   style={{
-                    background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-                    borderColor: accentColor || '#6b7280',
-                    borderRadius: '12px 16px 16px 12px',
-                    position: 'relative',
-                    backdropFilter: 'blur(10px)',
-                    borderTop: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
-                    borderRight: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
-                    borderBottom: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`
+                    background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                    borderRadius: '20px 20px 0 0',
+                    border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
+                    borderBottom: 'none',
+                    backdropFilter: 'blur(12px)'
                   }}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <Reply size={14} style={{ color: accentColor }} />
-                      <span className="text-[12px] font-bold uppercase tracking-wider" style={{ color: accentColor }}>
-                        Replying to {replyingToMsg.role === 'ai' ? 'Aura AI' : 'User'}
-                      </span>
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl" style={{ background: `${accentColor}15` }}>
+                      <Reply size={16} style={{ color: accentColor }} />
                     </div>
-                    <button 
-                      type="button"
-                      onClick={() => setReplyingToMsg(null)}
-                      className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
-                    >
-                      <X size={14} />
-                    </button>
+                    <p className="text-[14.5px] font-medium truncate" style={{ color: 'var(--on-surface)' }}>
+                      <span className="opacity-40 font-normal mr-1.5 font-serif">“</span>
+                      {replyingToMsg.content}
+                      <span className="opacity-40 font-normal ml-1.5 font-serif">”</span>
+                    </p>
                   </div>
-                  <p className="text-[14px] line-clamp-2" style={{ color: 'var(--on-surface-muted)' }}>
-                    {replyingToMsg.content}
-                  </p>
+                  <button 
+                    type="button"
+                    onClick={() => setReplyingToMsg(null)}
+                    className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-on-surface/10 transition-colors ml-2"
+                  >
+                    <X size={16} className="opacity-60" />
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
             <div style={{ 
               width: '100%', display: 'flex', alignItems: 'center', 
               background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
-              borderRadius: '26px', padding: '4px 6px 4px 16px', border: '1px solid var(--divider)',
+              borderRadius: replyingToMsg ? '0 0 26px 26px' : '26px', padding: '4px 6px 4px 16px', border: '1px solid var(--divider)',
+              borderTop: replyingToMsg ? 'none' : '1px solid var(--divider)',
               transition: 'all 0.3s ease'
             }}>                <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefFooter}>
                   <button 
@@ -2294,7 +2349,7 @@ const ChatWindow = () => {
                   <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
                 </div>
 
-              <form onSubmit={handleSend} style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+              <form onSubmit={handleSend} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: isSmallMobile ? '8px' : '16px' }}>
                 {isListening && isVoiceMessageMode ? (
                   <div className="flex-1 flex items-center pr-1 pl-4 h-[48px] animate-in fade-in duration-200">
                      <div className="flex-1 flex items-center h-full mr-4 relative overflow-hidden">
@@ -2358,7 +2413,7 @@ const ChatWindow = () => {
                         color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16, padding: isSmallMobile ? '12px 8px' : '12px 14px'
                       }} 
                     />
-                    <div className="relative ml-1">
+                    <div className="relative">
                       <button 
                         type="button"
                         onClick={() => setShowModelSwitcher(!showModelSwitcher)}
@@ -2410,7 +2465,7 @@ const ChatWindow = () => {
                       </AnimatePresence>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: isSmallMobile ? 1 : 4, paddingRight: 2, marginLeft: 'auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: isSmallMobile ? 6 : 10, paddingRight: 4 }}>
                          {!isLoading && (
                            <div className="relative group/tooltip flex items-center justify-center">
                              <button 
@@ -3325,9 +3380,17 @@ const RenameGroupModal = ({ isOpen, onClose, onConfirm, initialValue }) => {
 const GroupLinkModal = ({ isOpen, onClose, chatId }) => {
   const [copied, setCopied] = useState(false);
   const { resolvedTheme, accentColor } = useAppContext();
+  const [baseUrl, setBaseUrl] = useState('https://aura-ai.vercel.app');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setBaseUrl(window.location.origin);
+    }
+  }, []);
+
   if (!isOpen) return null;
 
-  const groupUrl = `https://kyra.ai/g/${chatId || '6a031d74364c81998712801ab7'}`;
+  const groupUrl = `${baseUrl}/g/${chatId || 'new'}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(groupUrl);
@@ -3514,7 +3577,7 @@ const ReportModal = ({ isOpen, onClose }) => {
               <div 
                 onClick={() => setSelectedOption(option)}
                 style={{
-                  width: '20px', height: '20px', borderRadius: '50%', border: `2px solid ${selectedOption === option ? (accentColor || 'var(--on-surface)') : 'var(--divider)'}`,
+                  width: '20px', height: '20px', borderRadius: '50%', border: `2px solid ${selectedOption === option ? (accentColor || 'var(--on-surface)') : (resolvedTheme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.25)')}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
                 }}
               >

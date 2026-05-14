@@ -1,5 +1,6 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD8GsU_ihOm03fvLStaJhkP0XtJN1W8X4U",
@@ -11,7 +12,9 @@ const firebaseConfig = {
   measurementId: "G-52M792YFLQ"
 };
 
-const app = initializeApp(firebaseConfig);
+// Use singleton pattern to prevent multiple instances during hot reloads
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
