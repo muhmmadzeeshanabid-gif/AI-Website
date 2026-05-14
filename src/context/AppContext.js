@@ -154,20 +154,22 @@ export const AppProvider = ({ children }) => {
           if (!docSnap.exists()) return;
           
           const data = docSnap.data();
-          // Only listen if it's actually a group chat
-          if (!data.isGroup) {
-            unsubscribe(); // Auto-unsubscribe if it's a personal chat
-            return;
-          }
+          // If it's not a group, we just don't process it here
+          if (!data || !data.isGroup) return;
 
           const remoteMessages = data.messages || [];
           
-          // Optimized Update: Check length first as a quick bail-out
           setMessages(prev => {
-            if (prev.length === remoteMessages.length && (prev.length === 0 || prev[prev.length-1]?.id === remoteMessages[remoteMessages.length-1]?.id)) {
-              // Deep check only if simple checks pass but we want to be sure
-              if (JSON.stringify(prev) === JSON.stringify(remoteMessages)) return prev;
+            // If remote messages are fewer than local, it's likely we just sent one 
+            // and the listener is seeing an old state. Let's wait for Firestore to catch up.
+            if (remoteMessages.length < prev.length) {
+              // Only keep local if the last few messages match
+              const match = remoteMessages.every((m, i) => m.id === prev[i]?.id);
+              if (match) return prev;
             }
+
+            // Standard deep comparison to avoid unnecessary re-renders
+            if (JSON.stringify(prev) === JSON.stringify(remoteMessages)) return prev;
             return remoteMessages;
           });
           
@@ -375,24 +377,42 @@ export const AppProvider = ({ children }) => {
     try {
       googleProvider.setCustomParameters({ prompt: 'select_account consent' });
       await signInWithPopup(auth, googleProvider);
+      
+      // 1. Wipe ALL guest data from memory
       setMessages([]);
+      setChats([]);
       setActiveChatId(null);
+      
+      // 2. Wipe ALL guest data from browser storage
+      localStorage.removeItem('aura-chats');
       localStorage.removeItem('aura-active-chat-id');
+      localStorage.removeItem('aura-messages');
+      
     } catch (error) {
       console.error("Login failed:", error);
       if (error.code === 'auth/configuration-not-found') alert("Firebase Error: Google Auth is not enabled.");
       else alert("Login failed: " + error.message);
     }
   };
+
   const logout = async () => {
     try {
       await signOut(auth);
+      
+      // Clear states
       setUser(null);
       setProfileState({ displayName: '', username: '', email: '', avatar: null });
+      setMessages([]);
+      setChats([]);
+      setActiveChatId(null);
+      
+      // Clear storage
       localStorage.removeItem('aura-profile');
       localStorage.removeItem('aura-active-chat-id');
-      setMessages([]);
-      setActiveChatId(null);
+      localStorage.removeItem('aura-chats');
+      localStorage.removeItem('aura-messages');
+      
+      window.location.href = '/';
     } catch (error) { console.error("Logout failed:", error); }
   };
   const deleteAccount = async () => {

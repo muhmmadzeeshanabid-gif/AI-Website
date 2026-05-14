@@ -786,6 +786,9 @@ const ChatWindow = () => {
     if (!overrideInput) setInput('');
     const currentInput = textToSend;
     
+    // Optimistically update local state for better UX
+    setMessages(prev => [...prev, userMessage]);
+
     const currentChat = chats.find(c => c.id === activeChatId);
     const isGroup = currentChat?.isGroup;
 
@@ -797,8 +800,6 @@ const ChatWindow = () => {
       } catch (err) {
         console.error("Failed to sync group message:", err);
       }
-    } else {
-      setMessages(prev => [...prev, userMessage]);
     }
 
     setIsLoading(true);
@@ -1032,6 +1033,24 @@ const ChatWindow = () => {
     });
   };
 
+  const handleDeleteMsg = async () => {
+    if (!msgDeleteConfirm.id) return;
+    
+    const currentChat = chats.find(c => c.id === activeChatId);
+    if (currentChat?.isGroup) {
+      try {
+        const chatRef = doc(db, 'chats', activeChatId);
+        const updatedMessages = messages.filter(m => m.id !== msgDeleteConfirm.id);
+        await updateDoc(chatRef, { messages: updatedMessages });
+      } catch (err) {
+        console.error("Failed to delete group message:", err);
+      }
+    } else {
+      setMessages(prev => prev.filter(m => m.id !== msgDeleteConfirm.id));
+    }
+    setMsgDeleteConfirm({ open: false, id: null });
+  };
+
   if (!mounted) return null;
 
   return (
@@ -1061,6 +1080,11 @@ const ChatWindow = () => {
       <ReportModal 
         isOpen={isReportModalOpen} 
         onClose={() => setIsReportModalOpen(false)} 
+      />
+      <MsgDeleteModal 
+        isOpen={msgDeleteConfirm.open}
+        onClose={() => setMsgDeleteConfirm({ open: false, id: null })}
+        onConfirm={handleDeleteMsg}
       />
       <style>{`
         .temp-placeholder::placeholder {
@@ -1977,21 +2001,25 @@ const ChatWindow = () => {
                           {chats.find(c => c.id === activeChatId)?.isGroup ? (
                             <>
                               <div className="relative">
-                                {msgReactions[msg.id] && (
+                                {((chats.find(c => c.id === activeChatId)?.isGroup ? msg.reactions : null) || msgReactions[msg.id]) && (
                                   <div 
-                                    className="absolute"
-                                    title={msgReactions[msg.id]?.user}
+                                    className="absolute flex items-center gap-1"
                                     style={{
                                       bottom: 'calc(100% + 4px)',
                                       left: '0',
                                       background: resolvedTheme === 'dark' ? '#2a2a2c' : '#ffffff',
                                       border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                                      borderRadius: '999px', padding: '2px 6px', fontSize: '14px',
+                                      borderRadius: '999px', padding: '2px 6px', fontSize: '12px',
                                       boxShadow: '0 2px 8px rgba(0,0,0,0.15)', cursor: 'default', zIndex: 5,
-                                      display: 'flex', alignItems: 'center', justifyContent: 'center'
                                     }}
                                   >
-                                    {msgReactions[msg.id]?.emoji || msgReactions[msg.id]}
+                                    {chats.find(c => c.id === activeChatId)?.isGroup ? (
+                                      Object.entries(msg.reactions || {}).map(([email, r]) => (
+                                        <span key={email} title={r.user}>{r.emoji}</span>
+                                      ))
+                                    ) : (
+                                      <span>{msgReactions[msg.id]?.emoji || msgReactions[msg.id]}</span>
+                                    )}
                                   </div>
                                 )}
                                 {hoveredReactionMsgId === msg.id && (
@@ -2021,13 +2049,44 @@ const ChatWindow = () => {
                                         boxShadow: '0 4px 16px rgba(0,0,0,0.2)'
                                       }}>
                                         {['👍','👎','❤️','🎉','🔥','🤔','😂','🤯'].map(emoji => {
-                                          const reacted = msgReactions[msg.id]?.emoji === emoji || msgReactions[msg.id] === emoji;
+                                          const isGroup = chats.find(c => c.id === activeChatId)?.isGroup;
+                                          const reacted = isGroup 
+                                            ? msg.reactions?.[profile?.email || 'guest']?.emoji === emoji
+                                            : (msgReactions[msg.id]?.emoji === emoji || msgReactions[msg.id] === emoji);
                                           return (
                                             <button
                                               key={emoji}
-                                              onClick={() => {
+                                              onClick={async () => {
                                                 const userName = profile?.displayName || 'User';
-                                                setMsgReactions(prev => ({ ...prev, [msg.id]: reacted ? null : { emoji, user: userName } }));
+                                                const currentChat = chats.find(c => c.id === activeChatId);
+                                                
+                                                if (currentChat?.isGroup) {
+                                                  // Group Reaction Sync
+                                                  try {
+                                                    const chatRef = doc(db, 'chats', activeChatId);
+                                                    const updatedMessages = messages.map(m => {
+                                                      if (m.id === msg.id) {
+                                                        const existingReaction = m.reactions?.[profile?.email || 'guest'];
+                                                        const newReactions = { ...(m.reactions || {}) };
+                                                        
+                                                        if (existingReaction?.emoji === emoji) {
+                                                          delete newReactions[profile?.email || 'guest'];
+                                                        } else {
+                                                          newReactions[profile?.email || 'guest'] = { emoji, user: userName };
+                                                        }
+                                                        return { ...m, reactions: newReactions };
+                                                      }
+                                                      return m;
+                                                    });
+                                                    
+                                                    await updateDoc(chatRef, { messages: updatedMessages });
+                                                  } catch (err) {
+                                                    console.error("Failed to sync reaction:", err);
+                                                  }
+                                                } else {
+                                                  // Local Reaction for non-group
+                                                  setMsgReactions(prev => ({ ...prev, [msg.id]: reacted ? null : { emoji, user: userName } }));
+                                                }
                                                 setHoveredReactionMsgId(null);
                                               }}
                                               style={{
@@ -3600,6 +3659,66 @@ const ReportModal = ({ isOpen, onClose }) => {
             }}
           >
             Next
+          </button>
+        </div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+};
+
+const MsgDeleteModal = ({ isOpen, onClose, onConfirm }) => {
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div 
+      style={{
+        position: 'fixed', inset: 0, zIndex: 99999999,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.4)',
+        backdropFilter: 'blur(2px)'
+      }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'var(--surface-1)',
+          borderRadius: '24px',
+          border: '1px solid var(--divider)',
+          padding: '28px',
+          width: '380px',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+        }}
+      >
+        <h3 style={{ color: 'var(--on-surface)', fontSize: '18px', fontWeight: 600, marginBottom: '14px' }}>
+          Delete message?
+        </h3>
+        <p style={{ color: 'var(--on-surface-muted)', fontSize: '14.5px', lineHeight: 1.5, marginBottom: '24px' }}>
+          This will remove the message for you and other participants. This action cannot be undone.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '9px 20px', borderRadius: '999px',
+              background: 'var(--hover-overlay-2)', color: 'var(--on-surface-muted)',
+              fontSize: '14px', fontWeight: 600, cursor: 'pointer', border: '1px solid var(--divider)'
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              padding: '9px 20px', borderRadius: '999px',
+              background: '#e53e3e', color: '#fff',
+              fontSize: '14px', fontWeight: 700, cursor: 'pointer', border: 'none'
+            }}
+          >
+            Delete
           </button>
         </div>
       </motion.div>
