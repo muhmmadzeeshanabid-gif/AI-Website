@@ -1728,7 +1728,7 @@ const ChatWindow = () => {
               className="mx-auto w-full flex flex-col"
               style={{
                 maxWidth: chatWidth === 'Wide' ? 'min(1000px, 100%)' : chatWidth === 'Full' ? '100%' : 'min(768px, 100%)',
-                padding: '80px 20px 20px',
+                padding: '55px 20px 20px',
               }}
             >
             {chats.find(c => c.id === activeChatId)?.isGroup && (
