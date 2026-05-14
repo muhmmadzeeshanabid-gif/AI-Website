@@ -65,26 +65,26 @@ export default function AutoJoinGroupPage() {
   );
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-[#0a0a0b] p-6 overflow-hidden">
+    <div className="fixed inset-0 z-[9999] bg-[#0a0a0b] flex items-center justify-center p-6 overflow-hidden">
       <AnimatePresence mode="wait">
         {status === 'waiting-auth' && (
           <motion.div 
             key="login-card"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -20 }}
             style={{
-              width: 440, maxWidth: '95vw',
+              width: 440, maxWidth: '100%',
               background: 'var(--surface-1)',
-              borderRadius: 28,
+              borderRadius: 32,
               padding: '48px 40px 40px',
               border: `1px solid ${border}`,
               textAlign: 'center',
-              position: 'relative',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.4)'
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              margin: 'auto'
             }}
           >
-            <h2 style={{ fontSize: 32, fontWeight: 700, color: text, marginBottom: 12, tracking: '-0.02em' }}>
+            <h2 style={{ fontSize: 32, fontWeight: 700, color: text, marginBottom: 12, letterSpacing: '-0.02em' }}>
               Log in or sign up
             </h2>
             <p style={{ fontSize: 16, color: muted, marginBottom: 32, lineHeight: 1.5 }}>
@@ -167,11 +167,8 @@ export default function AutoJoinGroupPage() {
             </div>
             <div className="space-y-4 text-center">
               <h1 className="text-3xl font-black text-white tracking-tight">
-                {status === 'success' ? 'Welcome Aboard!' : 'Entering Session...'}
+                {status === 'success' ? 'Welcome!' : 'Processing...'}
               </h1>
-              <p className="text-white/40 text-[16px]">
-                {status === 'success' ? 'Your workspace is ready.' : 'Authenticating...'}
-              </p>
             </div>
           </motion.div>
         )}
@@ -181,13 +178,13 @@ export default function AutoJoinGroupPage() {
             key="error-view"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="max-w-[440px] w-full bg-[#111113] border border-white/5 p-12 rounded-[28px] shadow-2xl text-center"
+            className="max-w-[440px] w-full bg-[#111113] border border-white/5 p-12 rounded-[32px] shadow-2xl text-center"
           >
             <div className="w-20 h-20 rounded-3xl bg-red-500/10 flex items-center justify-center mx-auto mb-8 border border-red-500/20">
               <AlertTriangle size={40} className="text-red-500" />
             </div>
-            <h2 className="text-2xl font-black text-white mb-4 tracking-tight">Join Failed</h2>
-            <p className="text-white/40 mb-10 leading-relaxed text-[16px]">
+            <h2 className="text-2xl font-black text-white mb-4">Join Failed</h2>
+            <p className="text-white/40 mb-10 text-[16px]">
               {error || "The link might be invalid or expired."}
             </p>
             <button 
