@@ -65,23 +65,37 @@ export default function AutoJoinGroupPage() {
   );
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-[#0a0a0b] flex items-center justify-center p-6 overflow-hidden">
+    <div 
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999999,
+        background: '#0a0a0b',
+        display: 'grid',
+        placeItems: 'center',
+        padding: '24px',
+        width: '100vw',
+        height: '100vh',
+        overflow: 'hidden'
+      }}
+    >
       <AnimatePresence mode="wait">
         {status === 'waiting-auth' && (
           <motion.div 
             key="login-card"
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -20 }}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
             style={{
-              width: 440, maxWidth: '100%',
+              width: 440,
+              maxWidth: '100%',
               background: 'var(--surface-1)',
               borderRadius: 32,
               padding: '48px 40px 40px',
               border: `1px solid ${border}`,
               textAlign: 'center',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-              margin: 'auto'
+              boxShadow: '0 30px 60px rgba(0,0,0,0.6)',
+              position: 'relative'
             }}
           >
             <h2 style={{ fontSize: 32, fontWeight: 700, color: text, marginBottom: 12, letterSpacing: '-0.02em' }}>
@@ -162,12 +176,12 @@ export default function AutoJoinGroupPage() {
             className="flex flex-col items-center gap-10"
           >
             <div className="relative">
-              <Loader2 className="w-14 h-14 text-indigo-500 animate-spin" strokeWidth={1.5} />
+              <Loader2 className="w-16 h-16 text-indigo-500 animate-spin" strokeWidth={1.5} />
               <div className="absolute inset-0 blur-2xl bg-indigo-500/30 rounded-full" />
             </div>
             <div className="space-y-4 text-center">
               <h1 className="text-3xl font-black text-white tracking-tight">
-                {status === 'success' ? 'Welcome!' : 'Processing...'}
+                {status === 'success' ? 'Welcome!' : 'Entering Session...'}
               </h1>
             </div>
           </motion.div>
@@ -178,7 +192,16 @@ export default function AutoJoinGroupPage() {
             key="error-view"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="max-w-[440px] w-full bg-[#111113] border border-white/5 p-12 rounded-[32px] shadow-2xl text-center"
+            style={{
+              maxWidth: 440,
+              width: '100%',
+              background: '#111113',
+              border: '1px solid rgba(255,255,255,0.05)',
+              padding: '48px',
+              borderRadius: 32,
+              textAlign: 'center',
+              boxShadow: '0 30px 60px rgba(0,0,0,0.4)'
+            }}
           >
             <div className="w-20 h-20 rounded-3xl bg-red-500/10 flex items-center justify-center mx-auto mb-8 border border-red-500/20">
               <AlertTriangle size={40} className="text-red-500" />
