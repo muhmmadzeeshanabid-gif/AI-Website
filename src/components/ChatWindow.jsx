@@ -7,7 +7,7 @@ import {
   Check, Copy, ThumbsUp, ThumbsDown, Share, Share2, RefreshCcw, MoreHorizontal, 
   AlertTriangle, ChevronDown, Mic, Square, ArrowUp, Plus, AudioLines, X, Menu,
   ChevronRight, Paperclip, Image, Lightbulb, Monitor, BookOpen, PenTool, Telescope, Cpu, Zap, Brain,
-  ArrowDown, MessageSquareDashed, PenLine, Globe, RotateCw, UserPlus, Pin, Archive, Trash2, Volume2, VolumeX, GitBranch, Settings, SmilePlus, Reply, Flag, ChevronLeft
+  ArrowDown, MessageSquareDashed, PenLine, Globe, RotateCw, UserPlus, Users, Pin, Archive, Trash2, Volume2, VolumeX, GitBranch, Settings, SmilePlus, Reply, Flag, ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getGeminiResponse } from '@/utils/gemini';
