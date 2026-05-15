@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { auth, googleProvider, db } from '@/lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, collection, query, orderBy, limit, enableNetwork } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove, deleteDoc, collection, query, where, orderBy, limit, enableNetwork } from 'firebase/firestore';
 
 const AppContext = createContext();
 
@@ -125,91 +125,11 @@ export const AppProvider = ({ children }) => {
   }, []);
   // ──────────────────────────────────────────────────────────────────────────
 
-  const [activeChatId, setActiveChatId] = useState(null);
-  const [messages, setMessages] = useState([]);
-
-  // Strict enforcement: No messages allowed if no active chat
-  useEffect(() => {
-    if (!activeChatId && messages.length > 0) {
-      setMessages([]);
-    }
-  }, [activeChatId, messages.length]);
-
-  // Firestore listeners cleanup
-  const unsubscribeRef = useRef(null);
-
-  useEffect(() => {
-    // 1. Immediate and absolute cleanup of any previous listener
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current();
-      unsubscribeRef.current = null;
-    }
-
-    if (activeChatId) {
-      try {
-        const chatDocRef = doc(db, 'chats', activeChatId);
-        
-        // Use a persistent reference for the listener to prevent overlaps
-        const unsubscribe = onSnapshot(chatDocRef, (docSnap) => {
-          if (!docSnap.exists()) return;
-          
-          const data = docSnap.data();
-          // If it's not a group, we just don't process it here
-          if (!data || !data.isGroup) return;
-
-          const remoteMessages = data.messages || [];
-          
-          setMessages(prev => {
-            // If remote messages are fewer than local, it's likely we just sent one 
-            // and the listener is seeing an old state. Let's wait for Firestore to catch up.
-            if (remoteMessages.length < prev.length) {
-              // Only keep local if the last few messages match
-              const match = remoteMessages.every((m, i) => m.id === prev[i]?.id);
-              if (match) return prev;
-            }
-
-            // Standard deep comparison to avoid unnecessary re-renders
-            if (JSON.stringify(prev) === JSON.stringify(remoteMessages)) return prev;
-            return remoteMessages;
-          });
-          
-          setChats(prev => {
-            const idx = prev.findIndex(c => c.id === activeChatId);
-            if (idx === -1) return prev;
-            
-            const existing = prev[idx];
-            // Only update if metadata or message count changed
-            if (existing.messages?.length === remoteMessages.length && 
-                existing.title === data.title &&
-                (remoteMessages.length === 0 || existing.messages[existing.messages.length-1]?.id === remoteMessages[remoteMessages.length-1]?.id)) {
-              return prev;
-            }
-
-            const updated = [...prev];
-            updated[idx] = { ...existing, messages: remoteMessages, title: data.title || existing.title };
-            return updated;
-          });
-        }, (error) => {
-          console.error("Group Listener Error:", error);
-        });
-
-        unsubscribeRef.current = unsubscribe;
-      } catch (err) {
-        console.error("Listener Setup Failed:", err);
-      }
-    }
-
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
-      }
-    };
-  }, [activeChatId]);
-
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [authOpen, setAuthOpen] = useState(false);
+  const [activeChatId, setActiveChatId] = useState(null);
+  const [messages, setMessages] = useState([]);
   
   const [fontSize, setFontSizeState] = useState(() => {
     if (typeof window === 'undefined') return 'Medium';
@@ -235,7 +155,6 @@ export const AppProvider = ({ children }) => {
   const [isGroupChatModalOpen, setIsGroupChatModalOpen] = useState(false);
   const [groupChatTargetId, setGroupChatTargetId] = useState(null);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-
 
   const [personalization, setPersonalizationState] = useState(() => {
     const defaults = {
@@ -264,6 +183,148 @@ export const AppProvider = ({ children }) => {
     } catch { return defaults; }
   });
 
+  // Strict enforcement: No messages allowed if no active chat
+  useEffect(() => {
+    if (!activeChatId && messages.length > 0) {
+      setMessages([]);
+    }
+  }, [activeChatId, messages.length]);
+
+  // Firestore listeners cleanup
+  const unsubscribeRef = useRef(null);
+
+  const activeChatIsGroup = chats.find(c => c.id === activeChatId)?.isGroup;
+  
+  useEffect(() => {
+    // 1. Sidebar/Chats Listener (sync all groups user belongs to)
+    let chatsUnsubscribe = () => {};
+    if (profile?.uid) {
+      const q = query(
+        collection(db, 'chats'),
+        where('participantIds', 'array-contains', profile.uid)
+      );
+      
+      chatsUnsubscribe = onSnapshot(q, (querySnapshot) => {
+        const remoteGroups = [];
+        querySnapshot.forEach((doc) => {
+          remoteGroups.push({ id: doc.id, ...doc.data() });
+        });
+
+        setChats(prev => {
+          // Merge remote groups into local chats list
+          const localOnly = prev.filter(lc => !lc.isGroup);
+          // Combine local personal chats with remote group chats
+          const combined = [...localOnly];
+          
+          remoteGroups.forEach(rg => {
+            const existingIdx = combined.findIndex(c => c.id === rg.id);
+            if (existingIdx === -1) {
+              combined.push(rg);
+            } else {
+              combined[existingIdx] = rg;
+            }
+          });
+          
+          // Sort by timestamp if available
+          combined.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.createdAt || 0);
+            const timeB = new Date(b.timestamp || b.createdAt || 0);
+            return timeB - timeA;
+          });
+
+          localStorage.setItem('aura-chats', JSON.stringify(combined));
+          return combined;
+        });
+      });
+    }
+
+    // 2. Active Chat Messages Listener
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+    }
+
+    if (activeChatId) {
+      const currentChat = chats.find(c => c.id === activeChatId);
+      if (currentChat?.isGroup) {
+        try {
+          const chatDocRef = doc(db, 'chats', activeChatId);
+        
+        // Use a persistent reference for the listener to prevent overlaps
+        const unsubscribe = onSnapshot(chatDocRef, (docSnap) => {
+          if (!docSnap.exists()) return;
+          
+          const data = docSnap.data();
+          // If it's not a group, we just don't process it here
+          if (!data || !data.isGroup) return;
+
+          const remoteMessages = data.messages || [];
+          
+          setMessages(prev => {
+            // Check if we have a local AI message that's currently generating
+            const localAiMsg = prev.find(m => m.role === 'ai' && !remoteMessages.some(rm => rm.id === m.id));
+            
+            if (localAiMsg) {
+              // Append local AI message to remote messages to keep it visible while streaming
+              return [...remoteMessages, localAiMsg];
+            }
+
+            // Standard deep comparison to avoid unnecessary re-renders
+            if (JSON.stringify(prev) === JSON.stringify(remoteMessages)) return prev;
+            return remoteMessages;
+          });
+          
+          setChats(prev => {
+            const idx = prev.findIndex(c => c.id === activeChatId);
+            if (idx === -1) return prev;
+            
+            const existing = prev[idx];
+            // Only update if metadata or message count changed
+            if (existing.messages?.length === remoteMessages.length && 
+                existing.title === data.title &&
+                (remoteMessages.length === 0 || existing.messages[existing.messages.length-1]?.id === remoteMessages[remoteMessages.length-1]?.id)) {
+              return prev;
+            }
+
+            const updated = [...prev];
+            updated[idx] = { ...existing, messages: remoteMessages, title: data.title || existing.title };
+
+            // Sync Group Theme Settings
+            if (data.accentColor && data.accentColor !== accentColor) {
+              setAccentColorState(data.accentColor);
+              localStorage.setItem('aura-accent', data.accentColor);
+              document.documentElement.style.setProperty('--accent-color', data.accentColor);
+              document.documentElement.style.setProperty('--chat-bubble-user', data.accentColor);
+            }
+            if (data.chatTheme && data.chatTheme !== chatTheme) {
+              setChatTheme(data.chatTheme);
+              localStorage.setItem('aura-chat-theme', data.chatTheme);
+              document.documentElement.setAttribute('data-chat-theme', data.chatTheme);
+            }
+
+            return updated;
+          });
+        }, (error) => {
+          console.error("Group Listener Error:", error);
+        });
+
+        unsubscribeRef.current = unsubscribe;
+        } catch (err) {
+          console.error("Listener Setup Failed:", err);
+        }
+      }
+    }
+
+    return () => {
+      chatsUnsubscribe();
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, [activeChatId, profile, activeChatIsGroup]);
+
+
   useEffect(() => {
     document.documentElement.style.setProperty('--accent-color', accentColor);
     document.documentElement.style.setProperty('--chat-bubble-user', accentColor);
@@ -283,6 +344,7 @@ export const AppProvider = ({ children }) => {
         const avatarUrl = photoURL || currentProfile?.avatar || null;
         
         const updatedProfile = {
+          uid: firebaseUser.uid,
           displayName: firebaseUser.displayName || currentProfile?.displayName || 'User',
           username: firebaseUser.email?.split('@')[0] || currentProfile?.username || 'user',
           email: firebaseUser.email || currentProfile?.email || '',
@@ -344,6 +406,11 @@ export const AppProvider = ({ children }) => {
     localStorage.setItem('aura-accent', color);
     document.documentElement.style.setProperty('--accent-color', color);
     document.documentElement.style.setProperty('--chat-bubble-user', color);
+
+    // Sync to Group Chat if active
+    if (activeChatIsGroup) {
+      updateDoc(doc(db, 'chats', activeChatId), { accentColor: color }).catch(console.error);
+    }
   };
   const setLanguage = (lang) => { setLanguageState(lang); localStorage.setItem('aura-language', lang); };
   const setFontSize = (size) => { setFontSizeState(size); localStorage.setItem('aura-font-size', size); };
@@ -372,6 +439,11 @@ export const AppProvider = ({ children }) => {
     setChatTheme(newChatTheme);
     localStorage.setItem('aura-chat-theme', newChatTheme);
     document.documentElement.setAttribute('data-chat-theme', newChatTheme);
+
+    // Sync to Group Chat if active
+    if (activeChatIsGroup) {
+      updateDoc(doc(db, 'chats', activeChatId), { chatTheme: newChatTheme }).catch(console.error);
+    }
   };
   const login = async () => {
     try {
@@ -433,17 +505,79 @@ export const AppProvider = ({ children }) => {
     if (typeof window !== 'undefined') window.history.pushState(null, '', `/`);
   }, [setActiveChatId, setMessages]);
 
-  const deleteChat = useCallback((id) => {
+  const deleteChat = useCallback(async (id) => {
+    const chatToDelete = chats.find(c => c.id === id);
+    
+    // 1. Handle Firestore removal if it's a group
+    if (chatToDelete?.isGroup) {
+      try {
+        const chatRef = doc(db, 'chats', id);
+        // If owner, delete the whole doc. If member, just remove self.
+        if (chatToDelete.creator?.uid === profile?.uid) {
+          await deleteDoc(chatRef);
+        } else {
+          await updateDoc(chatRef, {
+            participantIds: arrayRemove(profile.uid),
+            // We also need to remove the participant object. 
+            // Since arrayRemove needs exact object match, we find it first.
+            participants: arrayRemove(chatToDelete.participants?.find(p => p.uid === profile.uid))
+          });
+        }
+      } catch (err) {
+        console.error("Error deleting/leaving group:", err);
+      }
+    }
+
+    // 2. Local state cleanup
     setChats(prev => {
       const updatedChats = prev.filter(chat => chat.id !== id);
       if (activeChatId === id) {
-        // Reset to landing page (New Chat) instead of switching to an old chat
         setActiveChatId(null);
         setMessages([]);
       }
       return updatedChats;
     });
-  }, [activeChatId, setActiveChatId, setMessages]);
+  }, [activeChatId, chats, profile]);
+
+  const leaveGroup = useCallback(async (id) => {
+    const chatToLeave = chats.find(c => c.id === id);
+    if (!chatToLeave || !profile) return;
+
+    try {
+      const chatRef = doc(db, 'chats', id);
+      
+      // 1. Add System Message: [Name] left the group
+      const leaveMsgId = `leave-${profile.uid}-${Date.now()}`;
+      const leaveMessage = {
+        id: leaveMsgId,
+        content: `${profile.displayName} left the group`,
+        role: 'system',
+        timestamp: new Date().toISOString(),
+        type: 'leave'
+      };
+
+      // 2. Remove from Firestore and add system message
+      await updateDoc(chatRef, {
+        participantIds: arrayRemove(profile.uid),
+        participants: arrayRemove(chatToLeave.participants?.find(p => p.uid === profile.uid)),
+        messages: arrayUnion(leaveMessage)
+      });
+
+      // 3. Local cleanup
+      setChats(prev => {
+        const updated = prev.filter(c => c.id !== id);
+        localStorage.setItem('aura-chats', JSON.stringify(updated));
+        if (activeChatId === id) {
+          setActiveChatId(null);
+          setMessages([]);
+        }
+        return updated;
+      });
+      
+    } catch (err) {
+      console.error("Error leaving group:", err);
+    }
+  }, [chats, profile, activeChatId]);
 
   const switchChat = useCallback((id) => {
     setChats(prev => {
@@ -463,7 +597,7 @@ export const AppProvider = ({ children }) => {
     const chat = chats.find(c => c.id === id);
     if (chat?.isGroup) {
       try {
-        await updateDoc(doc(db, 'chats', id), { title: newTitle });
+        await setDoc(doc(db, 'chats', id), { title: newTitle }, { merge: true });
       } catch (err) {
         console.error("Failed to sync group rename:", err);
       }
@@ -479,7 +613,11 @@ export const AppProvider = ({ children }) => {
       isGroup: true,
       creator: profile,
       participants: [profile],
-      createdAt: new Date().toISOString()
+      participantIds: [profile.uid],
+      createdAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
+      chatTheme: chatTheme,
+      accentColor: accentColor
     };
 
     setChats(prev => {
@@ -504,13 +642,6 @@ export const AppProvider = ({ children }) => {
     try {
       const chatDocRef = doc(db, 'chats', id);
       
-      // Force connection recovery
-      try {
-        await enableNetwork(db);
-      } catch (e) {
-        console.warn("Could not force enable network:", e);
-      }
-      
       // Add a timeout to the fetch operation
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error("Connection timeout. Please check your internet.")), 10000)
@@ -532,16 +663,43 @@ export const AppProvider = ({ children }) => {
       
       if (docSnap.exists()) {
         const chatData = { id: docSnap.id, ...docSnap.data() };
-        console.log("Group found, updating participants...");
+        console.log("Group found, checking membership...");
+        
+        // Prevent duplicate join messages and participant entries
+        if (chatData.participantIds?.includes(profile.uid)) {
+          console.log("User already a member, switching to chat.");
+          setChats(prev => {
+            if (prev.find(c => c.id === id)) return prev;
+            const updated = [chatData, ...prev];
+            localStorage.setItem('aura-chats', JSON.stringify(updated));
+            return updated;
+          });
+          setActiveChatId(id);
+          return { success: true };
+        }
+
+        console.log("New user joining, updating participants...");
         
         // Add current user to participants
+        const newParticipant = {
+          uid: profile.uid || '',
+          displayName: profile.displayName || 'User',
+          avatar: profile.avatar || '',
+          email: profile.email || ''
+        };
+
+        // Add a system message for the join event with a deterministic ID
+        const joinMessage = {
+          id: `join-${profile.uid}-${Date.now()}`,
+          role: 'system',
+          content: `${profile.displayName || 'A user'} joined the group`,
+          timestamp: new Date().toISOString()
+        };
+
         await updateDoc(chatDocRef, {
-          participants: arrayUnion({
-            uid: profile.uid || '',
-            displayName: profile.displayName || 'User',
-            avatar: profile.avatar || '',
-            email: profile.email || ''
-          })
+          participants: arrayUnion(newParticipant),
+          participantIds: arrayUnion(profile.uid),
+          messages: arrayUnion(joinMessage)
         });
 
         setChats(prev => {
@@ -599,6 +757,7 @@ export const AppProvider = ({ children }) => {
       isUpgradeModalOpen, setIsUpgradeModalOpen,
       convertToGroupChat,
       joinGroup,
+      leaveGroup,
       showLoggedIn: user || (isAuthLoading && typeof window !== 'undefined' && localStorage.getItem('aura-profile')),
     }}>
       {children}

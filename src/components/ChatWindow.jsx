@@ -7,7 +7,7 @@ import {
   Check, Copy, ThumbsUp, ThumbsDown, Share, Share2, RefreshCcw, MoreHorizontal, 
   AlertTriangle, ChevronDown, Mic, Square, ArrowUp, Plus, AudioLines, X, Menu,
   ChevronRight, Paperclip, Image, Lightbulb, Monitor, BookOpen, PenTool, Telescope, Cpu, Zap, Brain,
-  ArrowDown, MessageSquareDashed, PenLine, Globe, RotateCw, UserPlus, Users, Pin, Archive, Trash2, Volume2, VolumeX, GitBranch, Settings, SmilePlus, Reply, Flag, ChevronLeft
+  ArrowDown, MessageSquareDashed, PenLine, Globe, RotateCw, UserPlus, Users, Pin, Archive, Trash2, Volume2, VolumeX, GitBranch, Settings, SmilePlus, Reply, Flag, ChevronLeft, LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getGeminiResponse } from '@/utils/gemini';
@@ -329,6 +329,7 @@ const ChatWindow = () => {
     profile, showLoggedIn, personalization, accentColor,
     deleteChat, archiveChat, aiModel, setAiModel, renameChat,
     isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId,
+    leaveGroup
   } = useAppContext();
 
   const [mounted, setMounted] = useState(false);
@@ -338,6 +339,7 @@ const ChatWindow = () => {
   const [hoveredChip, setHoveredChip] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [generatingId, setGeneratingId] = useState(null);
+  const currentResponseRef = useRef("");
   const [isTemporary, setIsTemporary] = useState(false);
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -354,7 +356,7 @@ const ChatWindow = () => {
       "Where should we begin?",
       "What's on the agenda today?",
       "Ready when you are.",
-      "What’s on your mind today?",
+      "What's on your mind today?",
 
       "Share your vision with me.",
       "How can I assist you today?"
@@ -410,6 +412,7 @@ const ChatWindow = () => {
   const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
   const [isGroupChatMenuOpen, setIsGroupChatMenuOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [tempGroupName, setTempGroupName] = useState('');
   const headerMoreRef = useRef(null);
@@ -601,7 +604,494 @@ const ChatWindow = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isHeaderMoreOpen, activeMsgMoreId]);
 
-  // Redundant listener removed - global synchronization is handled in AppContext.js
+  // Modular message rendering to resolve JSX parsing complexity
+  const renderMessageView = (msg, index) => {
+    // Calculate context first
+    const isMe = msg.role === 'user' && (msg.sender?.email === profile?.email || !msg.sender?.email);
+    const isOtherUser = msg.role === 'user' && !isMe;
+    const isGroup = chats.find(c => c.id === activeChatId)?.isGroup;
+
+    // 1. Handle Deletion State
+    const isDeletedForMe = msg.deletedBy?.includes(user?.uid);
+    const isDeletedForEveryone = msg.isDeleted;
+    
+    if (isDeletedForMe || isDeletedForEveryone) {
+      return (
+        <div className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in my-10`}>
+          <div className="px-6 py-3 flex items-center gap-2.5 transition-all" 
+            style={{ 
+              background: isMe ? `${accentColor}15` : 'var(--surface-2)', 
+              border: `1px dashed ${isMe ? accentColor : 'var(--divider)'}`,
+              color: 'var(--on-surface-subtle)',
+              fontSize: '13px',
+              opacity: 0.6,
+              borderRadius: isMe ? '24px 24px 4px 24px' : '4px 24px 24px 24px',
+              marginLeft: !isMe && isOtherUser ? '44px' : '0'
+            }}>
+            <Trash2 size={13} className="opacity-30" />
+            <span className="italic tracking-tight">
+              {isDeletedForMe ? 'You deleted this message' : 'This message was deleted'}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // 2. Handle Editing State
+    if (editingId === msg.id) {
+      return (
+        <div className="w-full max-w-full flex flex-col p-5 animate-fade-in relative transition-all duration-300" 
+          style={{ background: '#2f2f2f', borderRadius: '26px', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 50px rgba(0,0,0,0.4)', margin: '20px 0' }}>
+          <textarea
+            autoFocus
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            className="w-full bg-transparent border-none outline-none text-[16.5px] leading-relaxed resize-none min-h-[85px] p-0 text-white placeholder:text-white/20"
+            placeholder="Edit your message..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                handleSaveEdit(msg.id);
+              }
+              if (e.key === 'Escape') {
+                setEditingId(null);
+              }
+            }}
+          />
+          <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-white/5">
+            <button 
+              onClick={() => { setEditingId(null); setEditValue(''); }}
+              className="px-4 py-1.5 rounded-full text-[13px] font-medium text-white/40 hover:text-white hover:bg-white/5 transition-all"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={() => handleSaveEdit(msg.id)}
+              className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white transition-all"
+              style={{ background: accentColor || 'var(--primary)' }}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // 3. Handle Normal Rendering
+
+    if (msg.role === 'system') {
+      let displayContent = msg.content;
+      if (msg.id.startsWith('join-')) {
+        const joinedUid = msg.id.split('join-')[1];
+        if (joinedUid === profile?.uid) {
+          displayContent = 'You joined the group';
+        }
+      } else if (msg.id.startsWith('leave-')) {
+        if (profile?.displayName && msg.content.includes(profile.displayName)) {
+          displayContent = msg.content.replace(profile.displayName, 'You');
+        }
+      } else if (profile?.displayName && msg.content.startsWith(profile.displayName)) {
+        displayContent = msg.content.replace(profile.displayName, 'You');
+      }
+
+      return (
+        <div className="w-full flex justify-center mt-8 mb-20 animate-fade-in">
+          <p className="text-[13px] font-normal text-on-surface-muted m-0 opacity-40 text-center tracking-tight">
+            {displayContent}
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className={`w-full flex flex-col ${isMe ? 'items-end' : msg.isVoice ? 'items-center' : 'items-start'}`}>
+
+        
+        <div className={`w-full flex ${isMe ? 'items-start flex-row-reverse' : msg.isVoice ? 'items-center justify-center' : 'items-start flex-row'}`}>
+          {isGroup && !isMe && msg.role !== 'ai' && (
+            <div title={msg.sender?.displayName || 'User'} style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', marginRight: '12px', flexShrink: 0, marginTop: '2px', border: '1px solid var(--divider)' }}>
+              {msg.sender?.avatar ? (
+                <img src={msg.sender.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ width: '100%', height: '100%', background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600 }}>
+                  {(msg.sender?.displayName || 'U')[0].toUpperCase()}
+                </div>
+              )}
+            </div>
+          )}
+
+          <motion.div 
+             layout={msg.role === 'ai' && generatingId === msg.id ? false : "position"}
+             initial={{ opacity: 0, scale: 0.98, y: 10 }} 
+             animate={{ opacity: 1, scale: 1, y: 0 }} 
+             transition={{ duration: 0.2, ease: "easeOut" }}
+           className={`relative transition-all duration-300 min-w-0 ${
+              isMe 
+                ? 'px-6 py-3 rounded-[24px] font-medium shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] border border-white/5' 
+                : isOtherUser
+                  ? 'px-6 py-3 rounded-[24px] bg-surface-2 border border-divider'
+                  : 'px-0 py-2'
+            }`}
+           style={{ 
+             maxWidth: msg.isVoice ? '340px' : isMe ? '78%' : isOtherUser ? '78%' : '100%',
+             overflow: 'hidden',
+             wordBreak: 'break-word',
+             background: isMe ? accentColor : isOtherUser ? 'var(--surface-2)' : 'transparent',
+             color: isMe ? '#ffffff' : 'var(--on-surface)',
+             border: isMe ? `1px solid ${accentColor}` : isOtherUser ? '1px solid var(--divider)' : 'none',
+             borderRadius: msg.isVoice ? '20px' : isMe ? '24px 24px 4px 24px' : isOtherUser ? '4px 24px 24px 24px' : '0',
+             fontSize: fontSize === 'Small' ? '12.5px' : fontSize === 'Large' ? '16px' : '14px', 
+             lineHeight: '1.7',
+             boxShadow: (isMe || isOtherUser) && resolvedTheme === 'dark' ? '0 10px 20px -5px rgba(0,0,0,0.2)' : 'none',
+             overflowWrap: 'anywhere',
+             padding: msg.isVoice ? '12px 16px' : (isMe || isOtherUser ? undefined : '0px')
+           }}
+          >
+       {msg.isVoice ? 
+        <div className="flex items-center gap-3 min-w-[240px] max-w-full">
+          <div className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20 shrink-0">
+            <AudioLines size={18} className="text-white" />
+          </div>
+          <div className="flex flex-col flex-1 min-w-0">
+            <span className="text-[14px] font-semibold text-white tracking-tight">Voice chat ended</span>
+            <span className="text-[12px] text-white/70">{msg.duration || '0s'}</span>
+          </div>
+          <div className="flex items-center gap-2 pl-3 border-l border-white/10">
+            {ratings[msg.id] !== 'bad' && 
+              <button 
+                onClick={() => handleRate(msg.id, ratings[msg.id] === 'good' ? undefined : 'good')}
+                className={`p-1.5 rounded-lg transition-all ${ratings[msg.id] === 'good' ? 'text-green-400 bg-white/10' : 'text-white/50 hover:text-white hover:bg-white/10'}`}
+              >
+                <ThumbsUp size={13} fill={ratings[msg.id] === 'good' ? 'currentColor' : 'none'} />
+              </button>
+            }
+            {ratings[msg.id] !== 'good' && 
+              <button 
+                onClick={() => handleRate(msg.id, ratings[msg.id] === 'bad' ? undefined : 'bad')}
+                className={`p-1.5 rounded-lg transition-all ${ratings[msg.id] === 'bad' ? 'text-red-400 bg-white/10' : 'text-white/50 hover:text-white hover:bg-white/10'}`}
+              >
+                <ThumbsDown size={13} fill={ratings[msg.id] === 'bad' ? 'currentColor' : 'none'} />
+              </button>
+            }
+            <div className="w-px h-4 bg-white/10 mx-1"></div>
+            <button 
+              onClick={() => setMessages(prev => prev.filter(m => m.id !== msg.id))}
+              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-red-500/20 transition-all"
+            >
+              <X size={13} strokeWidth={2.5} />
+            </button>
+          </div>
+        </div>
+       : 
+        <>
+          {msg.replyTo && 
+            <div 
+              className="mb-2 p-2.5 px-3.5 rounded-xl text-[13px] opacity-80"
+              style={{ 
+                 background: isMe ? 'rgba(0,0,0,0.12)' : 'var(--hover-overlay)',
+                 borderLeft: `2px solid ${isMe ? 'rgba(255,255,255,0.4)' : accentColor}`,
+                 color: isMe ? 'rgba(255,255,255,0.9)' : 'var(--on-surface-muted)',
+               }}
+             >
+               <p className="line-clamp-2 leading-relaxed">
+                 <span className="opacity-40 mr-1 font-serif text-[15px]">"</span>
+                 {msg.replyTo.content}
+                 <span className="opacity-40 ml-1 font-serif text-[15px]">"</span>
+               </p>
+            </div>
+          }
+          <MessageContent content={msg.content} isUser={msg.role === 'user'} />
+        </>
+      }
+      </motion.div>
+      {isMe && msg.versions && msg.versions.length > 1 && (
+         <div className="flex items-center gap-1.5 mt-1.5 px-1 select-none opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200">
+           <button 
+             onClick={() => handleVersionChange(msg.id, -1)}
+             disabled={msg.currentVersionIndex === 0}
+             className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-hover-overlay disabled:opacity-10 transition-all text-on-surface/60 hover:text-on-surface"
+             title="Previous version"
+           >
+             <ChevronLeft size={14} strokeWidth={3} />
+           </button>
+           <span className="text-[11px] font-bold text-on-surface/40 tracking-tight min-w-[30px] text-center">
+             {msg.currentVersionIndex + 1} / {msg.versions.length}
+           </span>
+           <button 
+             onClick={() => handleVersionChange(msg.id, 1)}
+             disabled={msg.currentVersionIndex === msg.versions.length - 1}
+             className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-hover-overlay disabled:opacity-10 transition-all text-on-surface/60 hover:text-on-surface"
+             title="Next version"
+           >
+             <ChevronRight size={14} strokeWidth={3} />
+           </button>
+         </div>
+      )}
+    </div>
+
+     {!msg.isVoice && (
+        <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? (generatingId === msg.id ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
+         <div className={`flex gap-1 ${!isMe && isOtherUser ? 'ml-[44px]' : ''}`}>
+          {chats.find(c => c.id === activeChatId)?.isGroup ? (
+            <>
+              <div className="relative">
+                {((chats.find(c => c.id === activeChatId)?.isGroup ? msg.reactions : null) || msgReactions[msg.id]) && (
+                  <div 
+                    className="absolute flex items-center gap-1"
+                    style={{
+                      bottom: 'calc(100% + 4px)',
+                      left: '0',
+                      background: resolvedTheme === 'dark' ? '#2a2a2c' : '#ffffff',
+                      border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                      borderRadius: '999px', padding: '2px 6px', fontSize: '12px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)', cursor: 'default', zIndex: 5,
+                    }}
+                  >
+                    {chats.find(c => c.id === activeChatId)?.isGroup ? (
+                      Object.entries(msg.reactions || {}).map(([email, r]) => (
+                        <span key={email} title={r.user}>{r.emoji}</span>
+                      ))
+                    ) : (
+                      <span>{msgReactions[msg.id]?.emoji || msgReactions[msg.id]}</span>
+                    )}
+                  </div>
+                )}
+                {hoveredReactionMsgId === msg.id && (
+                  <div 
+                    className="fixed inset-0 z-[15]" 
+                    onClick={(e) => { e.stopPropagation(); setHoveredReactionMsgId(null); }}
+                  />
+                )}
+                <AnimatePresence>
+                  {hoveredReactionMsgId === msg.id && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 5, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 5, scale: 0.95 }}
+                      className="absolute z-[20]"
+                      style={{ 
+                        bottom: 'calc(100% + 4px)', 
+                        left: isMe ? 'auto' : '0',
+                        right: isMe ? '0' : 'auto'
+                      }}
+                    >
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '2px',
+                        background: resolvedTheme === 'dark' ? '#1c1c1e' : '#f2f2f2',
+                        border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
+                        borderRadius: '999px', padding: '5px 8px',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.2)'
+                      }}>
+                        {['👍','👎','❤️','🎉','🔥','🤔','😂','😮'].map(emoji => {
+                          const isGroup = chats.find(c => c.id === activeChatId)?.isGroup;
+                          const reacted = isGroup 
+                            ? msg.reactions?.[profile?.email || 'guest']?.emoji === emoji
+                            : (msgReactions[msg.id]?.emoji === emoji || msgReactions[msg.id] === emoji);
+                          return (
+                            <button
+                              key={emoji}
+                              onClick={async () => {
+                                const userName = profile?.displayName || 'User';
+                                const currentChat = chats.find(c => c.id === activeChatId);
+                                
+                                if (currentChat?.isGroup) {
+                                  try {
+                                    const chatRef = doc(db, 'chats', activeChatId);
+                                    const updatedMessages = messages.map(m => {
+                                      if (m.id === msg.id) {
+                                        const existingReaction = m.reactions?.[profile?.email || 'guest'];
+                                        const newReactions = { ...(m.reactions || {}) };
+                                        if (existingReaction?.emoji === emoji) {
+                                          delete newReactions[profile?.email || 'guest'];
+                                        } else {
+                                          newReactions[profile?.email || 'guest'] = { emoji, user: userName };
+                                        }
+                                        return { ...m, reactions: newReactions };
+                                      }
+                                      return m;
+                                    });
+                                    await updateDoc(chatRef, { messages: updatedMessages });
+                                  } catch (err) {
+                                    console.error("Failed to sync reaction:", err);
+                                  }
+                                } else {
+                                  setMsgReactions(prev => ({ ...prev, [msg.id]: reacted ? null : { emoji, user: userName } }));
+                                }
+                                setHoveredReactionMsgId(null);
+                              }}
+                              style={{
+                                width: '34px', height: '34px', borderRadius: '50%', border: 'none',
+                                background: reacted ? (accentColor ? `${accentColor}30` : 'rgba(255,255,255,0.15)') : 'transparent',
+                                cursor: 'pointer', fontSize: '18px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'all 0.15s', transform: reacted ? 'scale(1.2)' : 'scale(1)'
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'scale(1.15)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = reacted ? (accentColor ? `${accentColor}30` : 'rgba(255,255,255,0.15)') : 'transparent'; e.currentTarget.style.transform = reacted ? 'scale(1.2)' : 'scale(1)'; }}
+                            >{emoji}</button>
+                          );
+                        })}
+                        <div style={{ width: '1px', height: '20px', background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', margin: '0 4px' }} />
+                        <button style={{
+                          width: '34px', height: '34px', borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer',
+                          fontSize: '18px', color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', fontWeight: 300
+                        }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          onClick={() => { setActiveReactionPickerMsgId(msg.id); setHoveredReactionMsgId(null); }}
+                        >+</button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <ActionButton 
+                  onClick={() => setHoveredReactionMsgId(prev => prev === msg.id ? null : msg.id)}
+                  label="React" 
+                  icon={<SmilePlus size={14} />} 
+                />
+              </div>
+              <ActionButton 
+                onClick={() => { setReplyingToMsg(msg.role === 'ai' ? (messages[index - 1] || msg) : msg); setTimeout(() => footerInputRef.current?.focus(), 100); }} 
+                label="Reply" 
+                icon={<Reply size={14} />} 
+              />
+              <ActionButton 
+                onClick={() => setMsgDeleteConfirm({ open: true, id: msg.id })} 
+                label="Delete" 
+                icon={<Trash2 size={14} />} 
+              />
+              {isMe && (
+                <ActionButton 
+                  onClick={() => { setEditingId(msg.id); setEditValue(msg.content); }} 
+                  label="Edit" 
+                  icon={<Edit2 size={14} />} 
+                />
+              )}
+              {!isMe && (
+                <ActionButton 
+                  onClick={() => setIsReportModalOpen(true)} 
+                  label="Report" 
+                  icon={<Flag size={14} />} 
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <ActionButton 
+                onClick={() => handleCopy(msg.content, msg.id)} 
+                label={copyingId === msg.id ? "Copied" : "Copy"} 
+                icon={copyingId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />} 
+              />
+              {msg.role === 'ai' && (
+                <>
+                  {(ratings[msg.id] === 'good' || !ratings[msg.id]) && (
+                    <ActionButton 
+                      onClick={() => handleRate(msg.id, 'good')} 
+                      label="Good Response" 
+                      className={ratings[msg.id] === 'good' ? 'text-green-500' : ''} 
+                      icon={<ThumbsUp size={14} fill={ratings[msg.id] === 'good' ? "currentColor" : "none"} />} 
+                    />
+                  )}
+                  {(ratings[msg.id] === 'bad' || !ratings[msg.id]) && (
+                    <ActionButton 
+                      onClick={() => handleRate(msg.id, 'bad')} 
+                      label="Bad Response" 
+                      className={ratings[msg.id] === 'bad' ? 'text-red-500' : ''} 
+                      icon={<ThumbsDown size={14} fill={ratings[msg.id] === 'bad' ? "currentColor" : "none"} />} 
+                    />
+                  )}
+                  <ActionButton 
+                    onClick={() => setIsShareModalOpen(true)} 
+                    label="Share" 
+                    icon={<Share size={14} />} 
+                  />
+                  <ActionButton 
+                    onClick={() => {}} 
+                    label="Regenerate" 
+                    icon={<RefreshCcw size={14} />} 
+                  />
+                </>
+              )}
+                  
+                  <div className="relative" ref={activeMsgMoreId === msg.id ? msgMoreRef : null}>
+                    <ActionButton 
+                      onClick={() => setActiveMsgMoreId(activeMsgMoreId === msg.id ? null : msg.id)} 
+                      label="More" 
+                      icon={<MoreHorizontal size={14} />} 
+                      className={activeMsgMoreId === msg.id ? 'bg-hover-overlay text-on-surface' : ''}
+                    />
+                
+                <AnimatePresence>
+                  {activeMsgMoreId === msg.id && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                      className="absolute right-0 z-[100]"
+                      style={{
+                        bottom: "calc(100% + 6px)",
+                        top: "auto", 
+                        minWidth: '210px',
+                        background: 'var(--surface-1)',
+                        border: '1px solid var(--divider)',
+                        borderRadius: '16px',
+                        padding: '6px',
+                        boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                      }}
+                    >
+                      <div style={{ padding: '8px 14px 6px', fontSize: '11px', color: 'var(--on-surface-subtle)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        {new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      </div>
+                      
+                      <button
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '9px 14px', borderRadius: 10, background: 'transparent',
+                          border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                          fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                          fontFamily: 'inherit', transition: 'background 0.15s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <BookOpen size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                        <span>View sources</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => { handleBranchChat(msg.id); setActiveMsgMoreId(null); }}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: 'transparent', border: 'none', color: 'var(--on-surface)', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <GitBranch size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                        <span>Branch in new chat</span>
+                      </button>
+                      
+                      <button 
+                        onClick={() => { speak(msg.content, msg.id); setActiveMsgMoreId(null); }}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: 'transparent', border: 'none', color: 'var(--on-surface)', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <Volume2 size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                        <span style={{ color: 'var(--on-surface-muted)' }}>{currentlySpeakingId === msg.id ? "Stop Reading" : "Read aloud"}</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                </div>
+            </>
+          )}
+         </div>
+        </div>
+     )}
+      </div>
+    );
+  };
 
   const scrollExplore = (direction) => {
     if (exploreScrollRef.current) {
@@ -695,6 +1185,26 @@ const ChatWindow = () => {
     }
   }, [activeChatId, chats]);
 
+  const formatDateLabel = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+    
+    if (isToday) return 'Today';
+    if (isYesterday) return 'Yesterday';
+    
+    return date.toLocaleDateString('en-US', { 
+      day: 'numeric', 
+      month: 'long', 
+      year: 'numeric' 
+    });
+  };
+
   const handleCopy = (text, id) => {
     navigator.clipboard.writeText(text);
     setCopyingId(id);
@@ -733,13 +1243,25 @@ const ChatWindow = () => {
     const textToSend = overrideInput || input;
     if (!textToSend.trim() || isLoading) return;
 
+    // Snapshot history immediately to isolate this request from parallel messages
+    const historySnapshot = [...messages]; 
+    
+    setIsLoading(true);
+    
+    // Sync generating status for group chats
+    const currentChat = chats.find(c => c.id === activeChatId);
+    const isGroup = currentChat?.isGroup;
+    if (isGroup) {
+      updateDoc(doc(db, 'chats', activeChatId), { isGenerating: true }).catch(console.error);
+    }
+
     const words = textToSend.split(' ').length;
     const duration = Math.max(1, Math.floor(words * 0.4)) + 's';
 
     const userMessage = { 
       role: 'user', 
       content: textToSend, 
-      id: Date.now(), 
+      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
       isVoice, 
       duration,
       replyTo: replyingToMsg ? {
@@ -747,14 +1269,24 @@ const ChatWindow = () => {
         role: replyingToMsg.role,
         content: replyingToMsg.content
       } : null,
-      sender: profile || { displayName: 'Guest', avatar: null }
+      sender: profile || { displayName: 'Guest', avatar: null },
+      timestamp: new Date().toISOString()
     };
     const isFirstMessage = messages.length === 0;
+    const aiMessageId = Date.now() + 1;
+    const aiPlaceholder = { 
+      role: 'ai', 
+      content: '', 
+      id: aiMessageId, 
+      isPlaceholder: true,
+      respondingTo: userMessage.id,
+      timestamp: new Date().toISOString()
+    };
 
     // Clear reply state
     if (replyingToMsg) setReplyingToMsg(null);
 
-    // If it's a voice message, just show the bubble — don't call AI
+    // If it's a voice message, just show the bubble ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â don't call AI
     if (isVoice) {
       if (isFirstMessage && !isTemporary) {
         const newChatId = Date.now().toString();
@@ -789,20 +1321,15 @@ const ChatWindow = () => {
     // Optimistically update local state for better UX
     setMessages(prev => [...prev, userMessage]);
 
-    const currentChat = chats.find(c => c.id === activeChatId);
-    const isGroup = currentChat?.isGroup;
-
     if (isGroup) {
       try {
         await updateDoc(doc(db, 'chats', activeChatId), {
-          messages: arrayUnion(userMessage)
+          messages: arrayUnion(userMessage, aiPlaceholder)
         });
       } catch (err) {
         console.error("Failed to sync group message:", err);
       }
     }
-
-    setIsLoading(true);
     abortControllerRef.current = new AbortController();
 
     // 1. Generate a smart title in parallel if it's the first message
@@ -849,22 +1376,28 @@ const ChatWindow = () => {
         Do NOT add any other text unless necessary.`;
       }
 
-      const aiMessageId = Date.now() + 1;
       setGeneratingId(aiMessageId);
-      setMessages(prev => [...prev, { role: 'ai', content: '', id: aiMessageId }]);
+      setMessages(prev => [...prev, aiPlaceholder]);
       
+      currentResponseRef.current = "";
       const onUpdate = (text) => {
+        currentResponseRef.current = text;
         setMessages(prev => prev.map(m => m.id === aiMessageId ? { ...m, content: text } : m));
       };
 
-      const aiResponse = await getGeminiResponse(finalPrompt, messages, personalization, abortControllerRef.current.signal, onUpdate, aiModel);
+      const aiResponse = await getGeminiResponse(finalPrompt, historySnapshot, personalization, abortControllerRef.current.signal, onUpdate, aiModel);
       
       if (isGroup) {
         try {
-          const finalAiMessage = { role: 'ai', content: aiResponse, id: aiMessageId };
-          await updateDoc(doc(db, 'chats', activeChatId), {
-            messages: arrayUnion(finalAiMessage)
-          });
+          const chatRef = doc(db, 'chats', activeChatId);
+          const docSnap = await getDoc(chatRef);
+          if (docSnap.exists()) {
+            const currentMsgs = docSnap.data().messages || [];
+            const updatedMsgs = currentMsgs.map(m => 
+              m.id === aiMessageId ? { ...m, content: aiResponse, isPlaceholder: false } : m
+            );
+            await updateDoc(chatRef, { messages: updatedMsgs });
+          }
         } catch (err) {
           console.error("Failed to sync AI response to group:", err);
         }
@@ -872,13 +1405,35 @@ const ChatWindow = () => {
     } catch (error) {
       if (error.name === 'AbortError') {
         console.log('Generation stopped by user');
+        if (isGroup) {
+          try {
+            const partialText = currentResponseRef.current || "Response stopped.";
+            const chatRef = doc(db, 'chats', activeChatId);
+            const docSnap = await getDoc(chatRef);
+            if (docSnap.exists()) {
+              const currentMsgs = docSnap.data().messages || [];
+              const updatedMsgs = currentMsgs.map(m => 
+                m.id === aiMessageId ? { ...m, content: partialText, isPlaceholder: false, isStopped: true } : m
+              );
+              await updateDoc(chatRef, { messages: updatedMsgs });
+            }
+          } catch (err) {
+            console.error("Failed to sync partial AI response:", err);
+          }
+        }
       } else {
         console.error(error);
       }
     } finally {
+      currentResponseRef.current = "";
       setIsLoading(false);
       setGeneratingId(null);
       abortControllerRef.current = null;
+      
+      // Clear generating status
+      if (chats.find(c => c.id === activeChatId)?.isGroup) {
+        updateDoc(doc(db, 'chats', activeChatId), { isGenerating: false }).catch(console.error);
+      }
     }
   };
 
@@ -950,7 +1505,7 @@ const ChatWindow = () => {
       if (!isNextAI) {
         setMessages(prev => {
           const updated = [...prev];
-          updated.splice(userMsgIdx + 1, 0, { role: 'ai', content: '', id: aiMessageId });
+          updated.splice(userMsgIdx + 1, 0, { role: 'ai', content: '', id: aiMessageId, timestamp: new Date().toISOString() });
           return updated;
         });
       }
@@ -1036,12 +1591,27 @@ const ChatWindow = () => {
   const handleDeleteMsg = async () => {
     if (!msgDeleteConfirm.id) return;
     
+    const userId = user?.uid;
+    if (!userId) return;
+
     const currentChat = chats.find(c => c.id === activeChatId);
     if (currentChat?.isGroup) {
       try {
         const chatRef = doc(db, 'chats', activeChatId);
-        const updatedMessages = messages.filter(m => m.id !== msgDeleteConfirm.id);
-        await updateDoc(chatRef, { messages: updatedMessages });
+        const docSnap = await getDoc(chatRef);
+        if (docSnap.exists()) {
+          const currentMsgs = docSnap.data().messages || [];
+          const updatedMsgs = currentMsgs.map(m => {
+            if (m.id === msgDeleteConfirm.id) {
+              const deletedBy = m.deletedBy || [];
+              if (!deletedBy.includes(userId)) {
+                return { ...m, deletedBy: [...deletedBy, userId] };
+              }
+            }
+            return m;
+          });
+          await updateDoc(chatRef, { messages: updatedMsgs });
+        }
       } catch (err) {
         console.error("Failed to delete group message:", err);
       }
@@ -1162,13 +1732,15 @@ const ChatWindow = () => {
                     <UserPlus size={18} className="text-on-surface-muted" />
                     <span className="text-[14px] font-medium text-on-surface">People</span>
                   </button>
-                  <button 
-                    onClick={() => { setGroupLinkChatId(activeChatId); setIsGroupLinkModalOpen(true); setIsGroupChatMenuOpen(false); }}
-                    className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
-                  >
-                    <Paperclip size={18} className="text-on-surface-muted" />
-                    <span className="text-[14px] font-medium text-on-surface">Manage group link</span>
-                  </button>
+                  {chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid && (
+                    <button 
+                      onClick={() => { setGroupLinkChatId(activeChatId); setIsGroupLinkModalOpen(true); setIsGroupChatMenuOpen(false); }}
+                      className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                    >
+                      <Paperclip size={18} className="text-on-surface-muted" />
+                      <span className="text-[14px] font-medium text-on-surface">Manage group link</span>
+                    </button>
+                  )}
                   <button className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
                     <Edit2 size={18} className="text-on-surface-muted" />
                     <span className="text-[14px] font-medium text-on-surface" onClick={() => { 
@@ -1189,13 +1761,23 @@ const ChatWindow = () => {
                     <AlertTriangle size={18} style={{ color: '#ef4444' }} />
                     <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Report</span>
                   </button>
-                  <button 
-                    className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
-                    onClick={() => { setIsDeleteConfirmOpen(true); setIsGroupChatMenuOpen(false); }}
-                  >
-                    <Trash2 size={18} style={{ color: '#ef4444' }} />
-                    <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Delete group</span>
-                  </button>
+                  {chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid ? (
+                    <button 
+                      className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                      onClick={() => { setIsDeleteConfirmOpen(true); setIsGroupChatMenuOpen(false); }}
+                    >
+                      <Trash2 size={18} style={{ color: '#ef4444' }} />
+                      <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Delete group</span>
+                    </button>
+                  ) : (
+                    <button 
+                      className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                      onClick={() => { setIsExitConfirmOpen(true); setIsGroupChatMenuOpen(false); }}
+                    >
+                      <LogOut size={18} style={{ color: '#ef4444' }} />
+                      <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Exit group</span>
+                    </button>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1765,7 +2347,7 @@ const ChatWindow = () => {
                   alignItems: 'center',
                   gap: '4px'
                 }}>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--on-surface-subtle)', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: resolvedTheme === 'dark' ? '#ffffff' : 'var(--on-surface-subtle)', opacity: 0.5, marginBottom: '4px', letterSpacing: '0.02em' }}>
                     {(() => {
                       const d = new Date(chats.find(c => c.id === activeChatId)?.timestamp || Date.now());
                       const now = new Date();
@@ -1799,478 +2381,73 @@ const ChatWindow = () => {
                   </div>
                 </div>
               )}
-            {messages.map((msg, index) => (
-              <div key={msg.id} className={`w-full flex flex-col gap-3 mb-12 group/msg ${msg.role === 'ai' ? 'mt-4' : ''}`}>
-                {msg.isDeleted ? (
-                  <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-                    <div className="px-5 py-2.5 rounded-[22px] flex items-center gap-2" 
-                      style={{ 
-                        background: 'var(--surface-2)', 
-                        border: '1px dashed var(--divider)',
-                        color: 'var(--on-surface-subtle)',
-                        fontSize: '13px'
-                      }}>
-                      <Trash2 size={14} className="opacity-50" />
-                      <span className="italic opacity-70">
-                        {msg.role === 'user' ? 'You deleted this message' : 'AI response was removed'}
-                      </span>
-                    </div>
-                  </div>
-                ) : editingId === msg.id ? (
-                  <div className="w-full max-w-full flex flex-col p-5 animate-fade-in relative transition-all duration-300" 
-                    style={{ background: '#2f2f2f', borderRadius: '26px', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 50px rgba(0,0,0,0.4)', margin: '20px 0' }}>
-                    <textarea
-                      autoFocus
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      className="w-full bg-transparent border-none outline-none text-[16.5px] leading-relaxed resize-none min-h-[85px] p-0 text-white placeholder:text-white/20"
-                      style={{ color: '#ffffff', fontFamily: 'inherit', resize: 'none', overflow: 'hidden' }}
-                      placeholder="Edit message..."
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', marginTop: '12px', width: '100%' }}>
-                      <button 
-                        onClick={() => { setEditingId(null); setEditValue(''); }}
-                        className="text-[14px] font-bold transition-all rounded-full active:scale-95 hover:opacity-80"
-                        style={{ 
-                          background: '#000000', 
-                          color: '#ffffff', 
-                          padding: '10px 28px', 
-                          border: 'none', 
-                          cursor: 'pointer' 
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button 
-                        onClick={() => handleSaveEdit(msg.id)}
-                        className="text-[14px] font-bold rounded-full transition-all active:scale-95 hover:opacity-90"
-                        style={{ 
-                          background: '#ffffff', 
-                          color: '#000000', 
-                          padding: '10px 28px', 
-                          border: 'none', 
-                          cursor: 'pointer' 
-                        }}
-                      >
-                        Send
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {(() => {
-                      const isMe = msg.role === 'user' && (msg.sender?.email === profile?.email || !msg.sender?.email);
-                      const isOtherUser = msg.role === 'user' && !isMe;
-                      const isGroup = chats.find(c => c.id === activeChatId)?.isGroup;
+            {(() => {
+              const getTime = (m) => {
+                if (m.timestamp) {
+                  if (typeof m.timestamp === 'object' && m.timestamp.seconds) return m.timestamp.seconds * 1000;
+                  const d = new Date(m.timestamp);
+                  if (!isNaN(d.getTime())) return d.getTime();
+                }
+                if (typeof m.id === 'string') {
+                  const match = m.id.match(/\d+/);
+                  if (match) return parseInt(match[0]);
+                }
+                if (typeof m.id === 'number') return m.id;
+                return 0;
+              };
 
-                      return (
-                        <div className={`w-full flex flex-col ${isMe ? 'items-end' : msg.isVoice ? 'items-center' : 'items-start'}`}>
-                          {/* Sender name for group chats */}
-                          {isGroup && isOtherUser && (
-                            <div style={{ marginLeft: '44px', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--on-surface-muted)', opacity: 0.8 }}>
-                              {msg.sender?.displayName || 'User'}
-                            </div>
-                          )}
-                          
-                          <div className={`w-full flex ${isMe ? 'items-start flex-row-reverse' : msg.isVoice ? 'items-center justify-center' : 'items-start flex-row'}`}>
-                            {/* Avatar for others in group chat */}
-                            {isGroup && !isMe && msg.role !== 'ai' && (
-                              <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', marginRight: '12px', flexShrink: 0, marginTop: '2px', border: '1px solid var(--divider)' }}>
-                                {msg.sender?.avatar ? (
-                                  <img src={msg.sender.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                ) : (
-                                  <div style={{ width: '100%', height: '100%', background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600 }}>
-                                    {(msg.sender?.displayName || 'U')[0].toUpperCase()}
-                                  </div>
-                                )}
-                              </div>
-                            )}
+              const sortedMessages = [...messages].sort((a, b) => getTime(a) - getTime(b));
 
-                            <motion.div 
-                               layout={msg.role === 'ai' && generatingId === msg.id ? false : "position"}
-                               initial={{ opacity: 0, scale: 0.98, y: 10 }} 
-                               animate={{ opacity: 1, scale: 1, y: 0 }} 
-                               transition={{ duration: 0.2, ease: "easeOut" }}
-                             className={`relative transition-all duration-300 min-w-0 ${
-                                isMe 
-                                  ? 'px-6 py-3 rounded-[24px] font-medium shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] border border-white/5' 
-                                  : isOtherUser
-                                    ? 'px-6 py-3 rounded-[24px] bg-surface-2 border border-divider'
-                                    : 'px-0 py-2'
-                              }`}
-                             style={{ 
-                               maxWidth: msg.isVoice ? '340px' : isMe ? '78%' : isOtherUser ? '78%' : '100%',
-                               overflow: 'hidden',
-                               wordBreak: 'break-word',
-                               background: isMe ? accentColor : isOtherUser ? 'var(--surface-2)' : 'transparent',
-                               color: isMe ? '#ffffff' : 'var(--on-surface)',
-                               border: isMe ? `1px solid ${accentColor}` : isOtherUser ? '1px solid var(--divider)' : 'none',
-                               borderRadius: msg.isVoice ? '20px' : isMe ? '24px 24px 4px 24px' : isOtherUser ? '4px 24px 24px 24px' : '0',
-                               fontSize: fontSize === 'Small' ? '12.5px' : fontSize === 'Large' ? '16px' : '14px', 
-                               lineHeight: '1.7',
-                               boxShadow: (isMe && resolvedTheme === 'dark') ? '0 10px 20px -5px rgba(0,0,0,0.2)' : 'none',
-                               overflowWrap: 'anywhere',
-                               padding: msg.isVoice ? '12px 16px' : (isMe || isOtherUser ? undefined : '0px')
-                             }}
-                            >
-                         {msg.isVoice ? 
-                          <div className="flex items-center gap-3 min-w-[240px] max-w-full">
-                            <div className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20 shrink-0">
-                              <AudioLines size={18} className="text-white" />
-                            </div>
-                            <div className="flex flex-col flex-1 min-w-0">
-                              <span className="text-[14px] font-semibold text-white tracking-tight">Voice chat ended</span>
-                              <span className="text-[12px] text-white/70">{msg.duration || '0s'}</span>
-                            </div>
-                            <div className="flex items-center gap-2 pl-3 border-l border-white/10">
-                              {ratings[msg.id] !== 'bad' && 
-                                <button 
-                                  onClick={() => handleRate(msg.id, ratings[msg.id] === 'good' ? undefined : 'good')}
-                                  className={`p-1.5 rounded-lg transition-all ${ratings[msg.id] === 'good' ? 'text-green-400 bg-white/10' : 'text-white/50 hover:text-white hover:bg-white/10'}`}
-                                >
-                                  <ThumbsUp size={13} fill={ratings[msg.id] === 'good' ? 'currentColor' : 'none'} />
-                                </button>
-                              }
-                              {ratings[msg.id] !== 'good' && 
-                                <button 
-                                  onClick={() => handleRate(msg.id, ratings[msg.id] === 'bad' ? undefined : 'bad')}
-                                  className={`p-1.5 rounded-lg transition-all ${ratings[msg.id] === 'bad' ? 'text-red-400 bg-white/10' : 'text-white/50 hover:text-white hover:bg-white/10'}`}
-                                >
-                                  <ThumbsDown size={13} fill={ratings[msg.id] === 'bad' ? 'currentColor' : 'none'} />
-                                </button>
-                              }
-                              <div className="w-px h-4 bg-white/10 mx-1"></div>
-                              <button 
-                                onClick={() => setMessages(prev => prev.filter(m => m.id !== msg.id))}
-                                className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-red-500/20 transition-all"
-                              >
-                                <X size={13} strokeWidth={2.5} />
-                              </button>
-                            </div>
-                          </div>
-                         : 
-                          <>
-                            {msg.replyTo && 
-                              <div 
-                                className="mb-2 p-2.5 px-3.5 rounded-xl text-[13px] opacity-80"
-                                style={{ 
-                                   background: isMe ? 'rgba(0,0,0,0.12)' : 'var(--hover-overlay)',
-                                   borderLeft: `2px solid ${isMe ? 'rgba(255,255,255,0.4)' : accentColor}`,
-                                   color: isMe ? 'rgba(255,255,255,0.9)' : 'var(--on-surface-muted)',
-                                 }}
-                               >
-                                 <p className="line-clamp-2 leading-relaxed">
-                                   <span className="opacity-40 mr-1 font-serif text-[15px]">“</span>
-                                   {msg.replyTo.content}
-                                   <span className="opacity-40 ml-1 font-serif text-[15px]">”</span>
-                                 </p>
-                              </div>
-                            }
-                            <MessageContent content={msg.content} isUser={msg.role === 'user'} />
-                          </>
-                        }
-                        </motion.div>
-                        {isMe && msg.versions && msg.versions.length > 1 && (
-                           <div className="flex items-center gap-1.5 mt-1.5 px-1 select-none opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200">
-                             <button 
-                               onClick={() => handleVersionChange(msg.id, -1)}
-                               disabled={msg.currentVersionIndex === 0}
-                               className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-hover-overlay disabled:opacity-10 transition-all text-on-surface/60 hover:text-on-surface"
-                               title="Previous version"
-                             >
-                               <ChevronLeft size={14} strokeWidth={3} />
-                             </button>
-                             <span className="text-[11px] font-bold text-on-surface/40 tracking-tight min-w-[30px] text-center">
-                               {msg.currentVersionIndex + 1} / {msg.versions.length}
-                             </span>
-                             <button 
-                               onClick={() => handleVersionChange(msg.id, 1)}
-                               disabled={msg.currentVersionIndex === msg.versions.length - 1}
-                               className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-hover-overlay disabled:opacity-10 transition-all text-on-surface/60 hover:text-on-surface"
-                               title="Next version"
-                             >
-                               <ChevronRight size={14} strokeWidth={3} />
-                             </button>
-                           </div>
-                        )}
-                    </div>
+              return sortedMessages.map((msg, index) => {
+                const prevMsg = index > 0 ? sortedMessages[index - 1] : null;
+                const msgTime = getTime(msg);
+                const prevTime = prevMsg ? getTime(prevMsg) : 0;
+                
+                const msgDate = new Date(msgTime || Date.now()).toDateString();
+                const prevDate = prevTime ? new Date(prevTime).toDateString() : null;
+                const showDateHeader = msgDate !== prevDate;
 
-                     {!msg.isVoice && (
-                       <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? (generatingId === msg.id ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
-                         <div className={`flex gap-1 ${!isMe && isOtherUser ? 'ml-[44px]' : ''}`}>
-                          {chats.find(c => c.id === activeChatId)?.isGroup ? (
-                            <>
-                              <div className="relative">
-                                {((chats.find(c => c.id === activeChatId)?.isGroup ? msg.reactions : null) || msgReactions[msg.id]) && (
-                                  <div 
-                                    className="absolute flex items-center gap-1"
-                                    style={{
-                                      bottom: 'calc(100% + 4px)',
-                                      left: '0',
-                                      background: resolvedTheme === 'dark' ? '#2a2a2c' : '#ffffff',
-                                      border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                                      borderRadius: '999px', padding: '2px 6px', fontSize: '12px',
-                                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)', cursor: 'default', zIndex: 5,
-                                    }}
-                                  >
-                                    {chats.find(c => c.id === activeChatId)?.isGroup ? (
-                                      Object.entries(msg.reactions || {}).map(([email, r]) => (
-                                        <span key={email} title={r.user}>{r.emoji}</span>
-                                      ))
-                                    ) : (
-                                      <span>{msgReactions[msg.id]?.emoji || msgReactions[msg.id]}</span>
-                                    )}
-                                  </div>
-                                )}
-                                {hoveredReactionMsgId === msg.id && (
-                                  <div 
-                                    className="fixed inset-0 z-[15]" 
-                                    onClick={(e) => { e.stopPropagation(); setHoveredReactionMsgId(null); }}
-                                  />
-                                )}
-                                <AnimatePresence>
-                                  {hoveredReactionMsgId === msg.id && (
-                                    <motion.div 
-                                      initial={{ opacity: 0, y: 5, scale: 0.95 }}
-                                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                                      exit={{ opacity: 0, y: 5, scale: 0.95 }}
-                                      className="absolute z-[20]"
-                                      style={{ 
-                                        bottom: 'calc(100% + 4px)', 
-                                        left: isMe ? 'auto' : '0',
-                                        right: isMe ? '0' : 'auto'
-                                      }}
-                                    >
-                                      <div style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: '2px',
-                                        background: resolvedTheme === 'dark' ? '#1c1c1e' : '#f2f2f2',
-                                        border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
-                                        borderRadius: '999px', padding: '5px 8px',
-                                        boxShadow: '0 4px 16px rgba(0,0,0,0.2)'
-                                      }}>
-                                        {['👍','👎','❤️','🎉','🔥','🤔','😂','🤯'].map(emoji => {
-                                          const isGroup = chats.find(c => c.id === activeChatId)?.isGroup;
-                                          const reacted = isGroup 
-                                            ? msg.reactions?.[profile?.email || 'guest']?.emoji === emoji
-                                            : (msgReactions[msg.id]?.emoji === emoji || msgReactions[msg.id] === emoji);
-                                          return (
-                                            <button
-                                              key={emoji}
-                                              onClick={async () => {
-                                                const userName = profile?.displayName || 'User';
-                                                const currentChat = chats.find(c => c.id === activeChatId);
-                                                
-                                                if (currentChat?.isGroup) {
-                                                  // Group Reaction Sync
-                                                  try {
-                                                    const chatRef = doc(db, 'chats', activeChatId);
-                                                    const updatedMessages = messages.map(m => {
-                                                      if (m.id === msg.id) {
-                                                        const existingReaction = m.reactions?.[profile?.email || 'guest'];
-                                                        const newReactions = { ...(m.reactions || {}) };
-                                                        
-                                                        if (existingReaction?.emoji === emoji) {
-                                                          delete newReactions[profile?.email || 'guest'];
-                                                        } else {
-                                                          newReactions[profile?.email || 'guest'] = { emoji, user: userName };
-                                                        }
-                                                        return { ...m, reactions: newReactions };
-                                                      }
-                                                      return m;
-                                                    });
-                                                    
-                                                    await updateDoc(chatRef, { messages: updatedMessages });
-                                                  } catch (err) {
-                                                    console.error("Failed to sync reaction:", err);
-                                                  }
-                                                } else {
-                                                  // Local Reaction for non-group
-                                                  setMsgReactions(prev => ({ ...prev, [msg.id]: reacted ? null : { emoji, user: userName } }));
-                                                }
-                                                setHoveredReactionMsgId(null);
-                                              }}
-                                              style={{
-                                                width: '34px', height: '34px', borderRadius: '50%', border: 'none',
-                                                background: reacted ? (accentColor ? `${accentColor}30` : 'rgba(255,255,255,0.15)') : 'transparent',
-                                                cursor: 'pointer', fontSize: '18px',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                transition: 'all 0.15s', transform: reacted ? 'scale(1.2)' : 'scale(1)'
-                                              }}
-                                              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'scale(1.15)'; }}
-                                              onMouseLeave={e => { e.currentTarget.style.background = reacted ? (accentColor ? `${accentColor}30` : 'rgba(255,255,255,0.15)') : 'transparent'; e.currentTarget.style.transform = reacted ? 'scale(1.2)' : 'scale(1)'; }}
-                                            >{emoji}</button>
-                                          );
-                                        })}
-                                        <div style={{ width: '1px', height: '20px', background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', margin: '0 4px' }} />
-                                        <button style={{
-                                          width: '34px', height: '34px', borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer',
-                                          fontSize: '18px', color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)',
-                                          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', fontWeight: 300
-                                        }}
-                                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                          onClick={() => { setActiveReactionPickerMsgId(msg.id); setHoveredReactionMsgId(null); }}
-                                        >+</button>
-                                      </div>
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
-                                <ActionButton 
-                                  onClick={() => setHoveredReactionMsgId(prev => prev === msg.id ? null : msg.id)}
-                                  label="React" 
-                                  icon={<SmilePlus size={14} />} 
-                                />
-                              </div>
-                              <ActionButton onClick={() => { setReplyingToMsg(msg.role === 'ai' ? (messages[index - 1] || msg) : msg); setTimeout(() => footerInputRef.current?.focus(), 100); }} label="Reply" icon={<Reply size={14} />} />
-                              <ActionButton onClick={() => setMsgDeleteConfirm({ open: true, id: msg.id })} label="Delete" icon={<Trash2 size={14} />} />
-                              {!isMe && <ActionButton onClick={() => setIsReportModalOpen(true)} label="Report" icon={<Flag size={14} />} />}
-                            </>
-                          ) : (
-                            <>
-                              <ActionButton 
-                                onClick={() => handleCopy(msg.content, msg.id)} 
-                                label={copyingId === msg.id ? "Copied" : "Copy"} 
-                                icon={copyingId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />} 
-                              />
-                              {msg.role === 'ai' && (
-                                <>
-                                  {(ratings[msg.id] === 'good' || !ratings[msg.id]) && (
-                                    <ActionButton 
-                                      onClick={() => handleRate(msg.id, 'good')} 
-                                      label="Good Response" 
-                                      className={ratings[msg.id] === 'good' ? 'text-green-500' : ''} 
-                                      icon={<ThumbsUp size={14} fill={ratings[msg.id] === 'good' ? "currentColor" : "none"} />} 
-                                    />
-                                  )}
-                                  {(ratings[msg.id] === 'bad' || !ratings[msg.id]) && (
-                                    <ActionButton 
-                                      onClick={() => handleRate(msg.id, 'bad')} 
-                                      label="Bad Response" 
-                                      className={ratings[msg.id] === 'bad' ? 'text-red-500' : ''} 
-                                      icon={<ThumbsDown size={14} fill={ratings[msg.id] === 'bad' ? "currentColor" : "none"} />} 
-                                    />
-                                  )}
-                                  <ActionButton 
-                                    onClick={() => setIsShareModalOpen(true)} 
-                                    label="Share" 
-                                    icon={<Share size={14} />} 
-                                  />
-                                  <ActionButton 
-                                    onClick={() => {}} 
-                                    label="Regenerate" 
-                                    icon={<RefreshCcw size={14} />} 
-                                  />
-                                  
-                                  <div className="relative" ref={activeMsgMoreId === msg.id ? msgMoreRef : null}>
-                                    <ActionButton 
-                                      onClick={() => setActiveMsgMoreId(activeMsgMoreId === msg.id ? null : msg.id)} 
-                                      label="More" 
-                                      icon={<MoreHorizontal size={14} />} 
-                                      className={activeMsgMoreId === msg.id ? 'bg-hover-overlay text-on-surface' : ''}
-                                    />
-                                
-                                <AnimatePresence>
-                                  {activeMsgMoreId === msg.id && (
-                                    <motion.div 
-                                      initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                      className="absolute right-0 z-[100]"
-                                      style={{
-                                        bottom: "calc(100% + 6px)",
-                                        top: "auto", 
-                                        minWidth: '210px',
-                                        background: 'var(--surface-1)',
-                                        border: '1px solid var(--divider)',
-                                        borderRadius: '16px',
-                                        padding: '6px',
-                                        boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: 2,
-                                      }}
-                                    >
-                                      <div style={{ padding: '8px 14px 6px', fontSize: '11px', color: 'var(--on-surface-subtle)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                                        {new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                                      </div>
-                                      
-                                      <button
-                                        style={{
-                                          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                                          padding: '9px 14px', borderRadius: 10, background: 'transparent',
-                                          border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                                          fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                                          fontFamily: 'inherit', transition: 'background 0.15s'
-                                        }}
-                                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                      >
-                                        <BookOpen size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                                        <span>View sources</span>
-                                      </button>
-                                      
-                                      <button
-                                        style={{
-                                          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                                          padding: '9px 14px', borderRadius: 10, background: 'transparent',
-                                          border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                                          fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                                          fontFamily: 'inherit', transition: 'background 0.15s'
-                                        }}
-                                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                      >
-                                        <GitBranch size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                                        <span>Branch in new chat</span>
-                                      </button>
-                                      
-                                      <button 
-                                        onClick={() => { speak(msg.content, msg.id); setActiveMsgMoreId(null); }}
-                                        style={{
-                                          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                                          padding: '9px 14px', borderRadius: 10, background: 'transparent',
-                                          border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                                          fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                                          fontFamily: 'inherit', transition: 'background 0.15s'
-                                        }}
-                                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                      >
-                                        <Volume2 size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                                        <span>{currentlySpeakingId === msg.id ? "Stop Reading" : "Read aloud"}</span>
-                                      </button>
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
-                              </div>
-                            </>
-                          )}
-                          {msg.role === 'user' && (
-                            <ActionButton 
-                              onClick={() => { setEditingId(msg.id); setEditValue(msg.content); }} 
-                              label="Edit" 
-                              icon={<Edit2 size={14} />} 
-                            />
-                          )}
-                        </>
-                      )}
+                return (
+                <React.Fragment key={msg.id}>
+                  {showDateHeader && (
+                    <div className="w-full flex justify-center mt-20 mb-14 animate-fade-in relative">
+                      <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                        <div className="w-full border-t border-divider opacity-[0.03]"></div>
+                      </div>
+                      <div className="relative px-4 py-1">
+                        <span className="text-[8px] font-semibold text-on-surface-subtle uppercase tracking-[0.2em] opacity-30">
+                          {formatDateLabel(msgTime || Date.now())}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()
-        }
-      </>
-    )}
-  </div>
-))}
-            {isLoading && <div className="flex justify-start"><div className="px-0 py-4 flex gap-1.5 items-center"><span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce"></span><span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span><span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></span></div></div>}
+                  )}
+                  <div className={`w-full flex flex-col gap-4 mb-16 group/msg ${msg.role === 'ai' ? 'mt-8' : ''}`}>
+                    {renderMessageView(msg, index)}
+                    </div>
+                  </React.Fragment>
+                );
+              })
+            })()}
           </div>
         )}
 
-        {/* Group Chat Intro - Always visible above input in group chats */}
-        {chats.find(c => c.id === activeChatId)?.isGroup && (
+            {(isLoading || chats.find(c => c.id === activeChatId)?.isGenerating) && (
+              <div className="flex justify-start animate-fade-in">
+                <div className="px-0 py-4 flex flex-col gap-2">
+                  <div className="flex gap-1.5 items-center">
+                    <span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce" style={{ animationDuration: '1s' }}></span>
+                    <span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce" style={{ animationDelay: '0.2s', animationDuration: '1s' }}></span>
+                    <span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce" style={{ animationDelay: '0.4s', animationDuration: '1s' }}></span>
+                  </div>
+                  {chats.find(c => c.id === activeChatId)?.isGroup && !isLoading && (
+                    <span className="text-[10px] text-on-surface-subtle/50 font-medium tracking-wide">Kyra is thinking...</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+        {/* Group Chat Intro - Only visible to admin in group chats */}
+        {chats.find(c => c.id === activeChatId)?.isGroup && chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid && (
           <div style={{
             width: '100%',
             textAlign: 'center',
@@ -2667,15 +2844,48 @@ const ChatWindow = () => {
           />
         )}
       </AnimatePresence>
-
       <AnimatePresence>
         {msgDeleteConfirm.open && (
           <MessageDeleteModal
             isOpen={msgDeleteConfirm.open}
             onClose={() => setMsgDeleteConfirm({ open: false, id: null })}
-            onConfirm={() => {
-              setMessages(prev => prev.map(m => m.id === msgDeleteConfirm.id ? { ...m, isDeleted: true } : m));
+            onConfirm={async () => {
+              const msgId = msgDeleteConfirm.id;
+              const currentChat = chats.find(c => c.id === activeChatId);
+              
+              if (currentChat?.isGroup) {
+                try {
+                  const chatRef = doc(db, 'chats', activeChatId);
+                  const docSnap = await getDoc(chatRef);
+                  if (docSnap.exists()) {
+                    const currentMsgs = docSnap.data().messages || [];
+                    const updatedMsgs = currentMsgs.map(m => 
+                      m.id === msgId ? { ...m, isDeleted: true } : m
+                    );
+                    await updateDoc(chatRef, { messages: updatedMsgs });
+                  }
+                } catch (err) {
+                  console.error("Failed to delete message for everyone:", err);
+                }
+              } else {
+                setMessages(prev => prev.map(m => m.id === msgId ? { ...m, isDeleted: true } : m));
+              }
               setMsgDeleteConfirm({ open: false, id: null });
+            }}
+            resolvedTheme={resolvedTheme}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isExitConfirmOpen && (
+          <ExitConfirmModal
+            isOpen={isExitConfirmOpen}
+            onClose={() => setIsExitConfirmOpen(false)}
+            onConfirm={() => {
+              leaveGroup(activeChatId);
+              setIsExitConfirmOpen(false);
+              createNewChat();
             }}
             resolvedTheme={resolvedTheme}
           />
@@ -2689,22 +2899,22 @@ const EmojiReactionModal = ({ isOpen, onClose, onSelectEmoji, resolvedTheme }) =
   if (!isOpen) return null;
   
   const smileys = [
-    '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
-    '🥲', '☺️', '😊', '😇', '🙂', '🙃', '😉', '😌',
-    '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛',
-    '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥸',
-    '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕',
-    '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢',
-    '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵',
-    '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔',
-    '🫣', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬',
-    '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴',
-    '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧',
-    '😷', '🤒', '🤕', '🤑', '🤠', '😈', '👿', '👹',
-    '👺', '🤡', '💩', '👻', '💀', '☠️', '👽', '👾',
-    '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽',
-    '🙀', '😿', '😾', '🫶', '👐', '🤲', '🙌', '👏',
-    '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔'
+    'ðŸ˜€', 'ðŸ˜ƒ', 'ðŸ˜„', 'ðŸ˜', 'ðŸ˜†', 'ðŸ˜…', 'ðŸ˜‚', 'ðŸ¤£',
+    'ðŸ¥²', 'â˜ºï¸', 'ðŸ˜Š', 'ðŸ˜‡', 'ðŸ™‚', 'ðŸ™ƒ', 'ðŸ˜‰', 'ðŸ˜Œ',
+    'ðŸ˜', 'ðŸ¥°', 'ðŸ˜˜', 'ðŸ˜—', 'ðŸ˜™', 'ðŸ˜š', 'ðŸ˜‹', 'ðŸ˜›',
+    'ðŸ˜', 'ðŸ˜œ', 'ðŸ¤ª', 'ðŸ¤¨', 'ðŸ§', 'ðŸ¤“', 'ðŸ˜Ž', 'ðŸ¥¸',
+    'ðŸ¤©', 'ðŸ¥³', 'ðŸ˜', 'ðŸ˜’', 'ðŸ˜ž', 'ðŸ˜”', 'ðŸ˜Ÿ', 'ðŸ˜•',
+    'ðŸ™', 'â˜¹ï¸', 'ðŸ˜£', 'ðŸ˜–', 'ðŸ˜«', 'ðŸ˜©', 'ðŸ¥º', 'ðŸ˜¢',
+    'ðŸ˜­', 'ðŸ˜¤', 'ðŸ˜ ', 'ðŸ˜¡', 'ðŸ¤¬', 'ðŸ¤¯', 'ðŸ˜³', 'ðŸ¥µ',
+    'ðŸ¥¶', 'ðŸ˜±', 'ðŸ˜¨', 'ðŸ˜°', 'ðŸ˜¥', 'ðŸ˜“', 'ðŸ¤—', 'ðŸ¤”',
+    'ðŸ«£', 'ðŸ¤­', 'ðŸ¤«', 'ðŸ¤¥', 'ðŸ˜¶', 'ðŸ˜', 'ðŸ˜‘', 'ðŸ˜¬',
+    'ðŸ™„', 'ðŸ˜¯', 'ðŸ˜¦', 'ðŸ˜§', 'ðŸ˜®', 'ðŸ˜²', 'ðŸ¥±', 'ðŸ˜´',
+    'ðŸ¤¤', 'ðŸ˜ª', 'ðŸ˜µ', 'ðŸ¤', 'ðŸ¥´', 'ðŸ¤¢', 'ðŸ¤®', 'ðŸ¤§',
+    'ðŸ˜·', 'ðŸ¤’', 'ðŸ¤•', 'ðŸ¤‘', 'ðŸ¤ ', 'ðŸ˜ˆ', 'ðŸ‘¿', 'ðŸ‘¹',
+    'ðŸ‘º', 'ðŸ¤¡', 'ðŸ’©', 'ðŸ‘»', 'ðŸ’€', 'â˜ ï¸', 'ðŸ‘½', 'ðŸ‘¾',
+    'ðŸ¤–', 'ðŸŽƒ', 'ðŸ˜º', 'ðŸ˜¸', 'ðŸ˜¹', 'ðŸ˜»', 'ðŸ˜¼', 'ðŸ˜½',
+    'ðŸ™€', 'ðŸ˜¿', 'ðŸ˜¾', 'ðŸ«¶', 'ðŸ‘', 'ðŸ¤²', 'ðŸ™Œ', 'ðŸ‘',
+    'ðŸ’›', 'ðŸ’š', 'ðŸ’™', 'ðŸ’œ', 'ðŸ–¤', 'ðŸ¤', 'ðŸ¤Ž', 'ðŸ’”'
   ];
 
   return createPortal(
@@ -3697,7 +3907,7 @@ const MsgDeleteModal = ({ isOpen, onClose, onConfirm }) => {
           Delete message?
         </h3>
         <p style={{ color: 'var(--on-surface-muted)', fontSize: '14.5px', lineHeight: 1.5, marginBottom: '24px' }}>
-          This will remove the message for you and other participants. This action cannot be undone.
+          This will remove the message from your view. Other participants will still be able to see it.
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
           <button
@@ -3719,6 +3929,51 @@ const MsgDeleteModal = ({ isOpen, onClose, onConfirm }) => {
             }}
           >
             Delete
+          </button>
+        </div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+};
+
+const ExitConfirmModal = ({ isOpen, onClose, onConfirm, resolvedTheme }) => {
+  if (!isOpen) return null;
+  return createPortal(
+    <div 
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100000000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)'
+      }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '400px', background: resolvedTheme === 'dark' ? 'var(--surface-1)' : '#fff',
+          borderRadius: '24px', padding: '28px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+          border: '1px solid var(--divider)'
+        }}
+      >
+        <h3 style={{ color: 'var(--on-surface)', fontSize: '18px', fontWeight: 600, marginBottom: '14px', fontFamily: 'inherit' }}>Exit group?</h3>
+        <p style={{ color: 'var(--on-surface-muted)', fontSize: '14.5px', lineHeight: 1.55, marginBottom: '24px' }}>
+          Are you sure you want to leave this group? You will no longer be able to see or send messages in this chat.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button
+            onClick={onClose}
+            style={{ padding: '9px 22px', borderRadius: '999px', background: 'var(--hover-overlay-2)', color: 'var(--on-surface-muted)', fontSize: '14px', fontWeight: 600, cursor: 'pointer', border: '1px solid var(--divider)' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{ padding: '9px 22px', borderRadius: '999px', background: '#ef4444', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', border: 'none' }}
+          >
+            Exit
           </button>
         </div>
       </motion.div>

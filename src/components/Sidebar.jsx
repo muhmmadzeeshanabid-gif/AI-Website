@@ -24,7 +24,8 @@ const Sidebar = () => {
     isGroupChatModalOpen, setIsGroupChatModalOpen,
     groupChatTargetId, setGroupChatTargetId,
     isUpgradeModalOpen, setIsUpgradeModalOpen,
-    isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId
+    isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId,
+    leaveGroup
   } = useAppContext();
   const [mounted, setMounted] = React.useState(false);
 
@@ -42,6 +43,8 @@ const Sidebar = () => {
   const [moreMenuPos, setMoreMenuPos] = React.useState({ top: 0, left: 0 });
   const moreMenuRef = React.useRef(null);
   const [profileMenuPos, setProfileMenuPos] = React.useState({ bottom: 0, left: 0, width: 0 });
+  const [isExitConfirmOpen, setIsExitConfirmOpen] = React.useState(false);
+  const [exitChatId, setExitChatId] = React.useState(null);
 
   React.useEffect(() => {
     const handleClickOutside = (event) => {
@@ -592,18 +595,48 @@ const Sidebar = () => {
                           }}
                         >
                           {chat.isGroup && hoveredChat !== i && openMenuIndex !== i ? (
-                            <div style={{ 
-                              width: '24px', height: '24px', borderRadius: '50%', 
-                              background: 'var(--hover-overlay-2)', overflow: 'hidden',
-                              border: '1px solid var(--divider)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            }}>
-                              {profile?.avatar ? (
-                                <img src={profile.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              chat.participants && chat.participants.length > 0 ? (
+                                <div style={{ display: 'flex', position: 'relative', width: '32px', height: '32px', alignItems: 'center' }}>
+                                  {chat.participants.slice(0, 2).map((p, idx) => (
+                                    <div 
+                                      key={idx}
+                                      style={{
+                                        width: '19px', height: '19px', borderRadius: '50%', overflow: 'hidden',
+                                        border: '1.5px solid var(--chat-item-active)', position: 'absolute',
+                                        left: idx === 0 ? '0px' : '10px', 
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        zIndex: 2 - idx,
+                                        background: 'var(--surface-3)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                      }}
+                                    >
+                                      {p.avatar ? (
+                                        <img src={p.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      ) : (
+                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 600 }}>
+                                          {(p.displayName || 'U')[0]}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {chat.participants.length > 2 && (
+                                    <div style={{ 
+                                      position: 'absolute', right: '-2px', bottom: '2px', 
+                                      fontSize: '9px', fontWeight: 800, color: '#ffffff',
+                                      background: '#6366f1', padding: '1px 4px', borderRadius: '5px',
+                                      zIndex: 5, border: '1.5px solid var(--chat-item-active)',
+                                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                                    }}>
+                                      +{chat.participants.length - 2}
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
                                 <User size={12} style={{ color: 'var(--on-surface-subtle)' }} />
-                              )}
-                            </div>
+                              )
                           ) : (
                             <MoreHorizontal size={15} style={{ color: 'var(--on-surface)' }} />
                           )}
@@ -645,7 +678,11 @@ const Sidebar = () => {
                               { icon: <Pencil size={16} />, label: 'Rename', action: () => handleRename(i) },
                               { icon: <Pin size={16} />, label: chat.pinned ? 'Unpin chat' : 'Pin chat', action: () => handlePin(chat) },
                               { icon: <Archive size={16} />, label: 'Archive', action: () => { archiveChat(chat.id); setOpenMenuIndex(null); } },
-                            ]).map((item, j) => (
+                            ]).filter(item => {
+                              // Restrict link sharing to creator
+                              if (item.label.toLowerCase().includes('link') && chat.creator?.uid !== profile?.uid) return false;
+                              return true;
+                            }).map((item, j) => (
                               <button
                                 key={j}
                                 onClick={(e) => { e.stopPropagation(); item.action(); }}
@@ -664,8 +701,17 @@ const Sidebar = () => {
                               </button>
                             ))}
                             <div style={{ height: 1, background: 'var(--divider)', margin: '2px 4px' }} />
-                             <button
-                                onClick={(e) => { e.stopPropagation(); handleDelete(chat); }}
+                              <button
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  if (chat.isGroup && chat.creator?.uid !== profile?.uid) {
+                                    setExitChatId(chat.id);
+                                    setIsExitConfirmOpen(true);
+                                    setOpenMenuIndex(null);
+                                  } else {
+                                    handleDelete(chat); 
+                                  }
+                                }}
                                 style={{
                                   width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                                   padding: '10px 14px', borderRadius: 12, background: 'transparent',
@@ -676,8 +722,17 @@ const Sidebar = () => {
                                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                               >
-                                <Trash2 size={16} style={{ color: '#ef4444' }} />
-                                Delete
+                                {chat.isGroup && chat.creator?.uid !== profile?.uid ? (
+                                  <>
+                                    <LogOut size={16} style={{ color: '#ef4444' }} />
+                                    Exit group
+                                  </>
+                                ) : (
+                                  <>
+                                    <Trash2 size={16} style={{ color: '#ef4444' }} />
+                                    Delete
+                                  </>
+                                )}
                               </button>
                           </motion.div>
                         )}
@@ -1094,7 +1149,66 @@ const Sidebar = () => {
         </div>
       )}
 
+      <AnimatePresence>
+        {isExitConfirmOpen && (
+          <ExitConfirmModal
+            isOpen={isExitConfirmOpen}
+            onClose={() => setIsExitConfirmOpen(false)}
+            onConfirm={() => {
+              leaveGroup(exitChatId);
+              setIsExitConfirmOpen(false);
+              if (activeChatId === exitChatId) createNewChat();
+            }}
+            resolvedTheme={resolvedTheme}
+          />
+        )}
+      </AnimatePresence>
     </>
+  );
+};
+
+const ExitConfirmModal = ({ isOpen, onClose, onConfirm, resolvedTheme }) => {
+  if (!isOpen) return null;
+  return ReactDOM.createPortal(
+    <div 
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100000000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)'
+      }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '400px', background: resolvedTheme === 'dark' ? 'var(--surface-1)' : '#fff',
+          borderRadius: '24px', padding: '28px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+          border: '1px solid var(--divider)'
+        }}
+      >
+        <h3 style={{ color: 'var(--on-surface)', fontSize: '18px', fontWeight: 600, marginBottom: '14px', fontFamily: 'inherit' }}>Exit group?</h3>
+        <p style={{ color: 'var(--on-surface-muted)', fontSize: '14.5px', lineHeight: 1.55, marginBottom: '24px' }}>
+          Are you sure you want to leave this group? You will no longer be able to see or send messages in this chat.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button
+            onClick={onClose}
+            style={{ padding: '9px 22px', borderRadius: '999px', background: 'var(--hover-overlay-2)', color: 'var(--on-surface-muted)', fontSize: '14px', fontWeight: 600, cursor: 'pointer', border: '1px solid var(--divider)' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{ padding: '9px 22px', borderRadius: '999px', background: '#ef4444', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', border: 'none' }}
+          >
+            Exit
+          </button>
+        </div>
+      </motion.div>
+    </div>,
+    document.body
   );
 };
 
