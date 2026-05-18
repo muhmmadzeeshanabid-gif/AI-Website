@@ -259,19 +259,40 @@ export const AppProvider = ({ children }) => {
           if (!data || !data.isGroup) return;
 
           const remoteMessages = data.messages || [];
-          
+          const streamContent = data.streamContent || {};
+
+          // Overlay streaming content onto placeholder AI messages for remote viewers
+          // This gives other group members the live "typewriter" effect as the generator streams
+          const messagesWithStream = remoteMessages.map(msg => {
+            if (msg.role === 'ai' && msg.isPlaceholder && streamContent[msg.id]) {
+              return { ...msg, content: streamContent[msg.id] };
+            }
+            return msg;
+          });
+
           setMessages(prev => {
-            // Check if we have a local AI message that's currently generating
-            const localAiMsg = prev.find(m => m.role === 'ai' && !remoteMessages.some(rm => rm.id === m.id));
+            // If the local user is generating, keep their local AI message visible (still streaming)
+            const localAiMsg = prev.find(m => m.role === 'ai' && !messagesWithStream.some(rm => rm.id === m.id));
             
             if (localAiMsg) {
-              // Append local AI message to remote messages to keep it visible while streaming
-              return [...remoteMessages, localAiMsg];
+              return [...messagesWithStream, localAiMsg];
             }
 
-            // Standard deep comparison to avoid unnecessary re-renders
-            if (JSON.stringify(prev) === JSON.stringify(remoteMessages)) return prev;
-            return remoteMessages;
+            // Tag brand-new messages from OTHER users with _typewriter so ChatWindow animates them
+            const prevIds = new Set(prev.map(m => m.id));
+            const merged = messagesWithStream.map(rm => {
+              if (!prevIds.has(rm.id) && rm.role === 'user' && rm.sender?.email !== profile?.email) {
+                return { ...rm, _typewriter: true };
+              }
+              return rm;
+            });
+
+            // Always return merged (don't skip on equality) while streamContent is active
+            // so remote users see every streaming update from Firestore
+            const hasActiveStream = Object.keys(streamContent).length > 0;
+            if (!hasActiveStream && JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+
+            return merged;
           });
           
           setChats(prev => {
@@ -279,15 +300,27 @@ export const AppProvider = ({ children }) => {
             if (idx === -1) return prev;
             
             const existing = prev[idx];
-            // Only update if metadata or message count changed
+            
+            // Check if typing status or generation status changed to ensure we propagate updates
+            const typingChanged = JSON.stringify(existing?.typing) !== JSON.stringify(data?.typing);
+            const generatingChanged = existing?.isGenerating !== data?.isGenerating;
+
+            // Only update if metadata, message count, typing state, or generation status changed
             if (existing.messages?.length === remoteMessages.length && 
                 existing.title === data.title &&
+                !typingChanged &&
+                !generatingChanged &&
                 (remoteMessages.length === 0 || existing.messages[existing.messages.length-1]?.id === remoteMessages[remoteMessages.length-1]?.id)) {
               return prev;
             }
 
             const updated = [...prev];
-            updated[idx] = { ...existing, messages: remoteMessages, title: data.title || existing.title };
+            updated[idx] = { 
+              ...existing, 
+              ...data,
+              messages: remoteMessages, 
+              title: data.title || existing.title 
+            };
 
             // Sync Group Theme Settings
             if (data.accentColor && data.accentColor !== accentColor) {

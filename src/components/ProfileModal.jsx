@@ -53,8 +53,9 @@ export default function ProfileModal({ onClose }) {
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 99999999,
-        background: 'rgba(0,0,0,0.4)',
+        background: 'rgba(0,0,0,0.55)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        backdropFilter: 'blur(2px)',
       }}
       onClick={onClose}
     >

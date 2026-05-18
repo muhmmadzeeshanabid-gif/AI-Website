@@ -17,16 +17,23 @@ function ModalContainer() {
   const { isUpgradeModalOpen, setIsUpgradeModalOpen } = useAppContext();
   const activeTab = searchParams.get('tab') || 'general';
 
+  const [isMobile, setIsMobile] = React.useState(false);
+  React.useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const isSettingsOpen = pathname?.includes('/settings');
-  const isProfileOpen = pathname?.includes('/profile');
   const isSearchOpen = pathname?.includes('/search');
   const isLogoutOpen = pathname?.includes('/logout');
+  const isProfileOpen = pathname?.includes('/profile') && !isMobile;
   const isUpgradeOpen = pathname?.includes('/upgrade') || isUpgradeModalOpen;
 
   return (
     <>
       {isSettingsOpen && <SettingsModal isOpen={true} onClose={() => window.history.back()} initialTab={activeTab} />}
-      {isProfileOpen && <ProfileModal isOpen={true} onClose={() => window.history.back()} />}
       {isSearchOpen && <SearchModal isOpen={true} onClose={() => {
         if (window.history.length > 1) {
           window.history.back();
@@ -35,6 +42,13 @@ function ModalContainer() {
         }
       }} />}
       {isLogoutOpen && <LogoutModal isOpen={true} onClose={() => router.push('/')} />}
+      {isProfileOpen && <ProfileModal onClose={() => {
+        if (window.history.length > 1) {
+          window.history.back();
+        } else {
+          router.push('/');
+        }
+      }} />}
     </>
   );
 }
@@ -46,19 +60,31 @@ export default function MainLayout({ children }) {
   const isHelpPage = pathname?.includes('/help');
   const isUpgradeOpen = pathname?.includes('upgrade') || isUpgradeModalOpen;
 
-  // Navigation is handled via routing, no need for manual state sync here
+  const [isMobile, setIsMobile] = React.useState(false);
+  React.useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
-  if (isHelpPage || pathname?.includes('/upgrade') || pathname?.startsWith('/g/')) {
+  // Show full page layout on mobile for /profile, but render standard chat container + overlay on desktop
+  const isFullPage = isHelpPage || pathname?.includes('/upgrade') || (pathname?.includes('/profile') && isMobile) || pathname?.startsWith('/g/');
+
+  if (isFullPage) {
     return (
-      <div style={{ 
-        position: 'fixed', 
-        inset: 0, 
-        zIndex: 999999, 
-        background: 'var(--bg-primary)', 
-        overflowY: 'auto',
-        width: '100vw',
-        height: '100vh'
-      }}>
+      <div 
+        id="profile-scroll-container"
+        style={{ 
+          position: 'fixed', 
+          inset: 0, 
+          zIndex: 999999, 
+          background: 'var(--bg-primary)', 
+          overflowY: 'auto',
+          width: '100vw',
+          height: '100vh'
+        }}
+      >
         {children}
       </div>
     );

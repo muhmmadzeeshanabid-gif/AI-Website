@@ -493,3 +493,31 @@ textarea { font-family: inherit; }
     display: none !important;
   }
 }
+
+@keyframes typing-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.typing-dot {
+  animation: typing-bounce 1.2s infinite ease-in-out !important;
+}
+
+@keyframes thinking-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.thinking-shimmer {
+  animation: thinking-pulse 1.8s ease-in-out infinite !important;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}

@@ -8,7 +8,8 @@ import {
   Users, User, ChevronDown, Lock, Check, LogOut, Sparkles, Plus,
   HelpCircle, Info, ChevronRight, Smartphone, Key, History, Type,
   Maximize, Image as ImageIcon, Trash2, Moon, Sun, Monitor, Bot, 
-  Search as SearchIcon, AlertTriangle, Archive, Eye, EyeOff, MessageSquare, ChevronUp, Play, Pause
+  Search as SearchIcon, AlertTriangle, Archive, Eye, EyeOff, MessageSquare, ChevronUp, Play, Pause,
+  ArrowLeft, LayoutGrid
 } from 'lucide-react';
 
 const VOICES = [
@@ -75,7 +76,13 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
     openArchivedChat
   } = useAppContext();
   const [activeTab, setActiveTab] = React.useState(initialTab);
+  const [connectedApps, setConnectedApps] = React.useState(['github', 'spotify']);
+  const [isBrowsingApps, setIsBrowsingApps] = React.useState(false);
   
+  React.useEffect(() => {
+    setIsBrowsingApps(false);
+  }, [activeTab]);
+
   React.useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
   }, [initialTab]);
@@ -659,36 +666,231 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
             </div>
           )}
 
-          {activeTab === 'apps' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {[
-                { name: 'Google Search', icon: <SearchIcon size={20} />, status: 'Connected', desc: 'Allow Kyra to search the web for latest info.' },
-                { name: 'GitHub', icon: <Bot size={20} />, status: 'Not Connected', desc: 'Search and read code from your repositories.' },
-                { name: 'Spotify', icon: <Bot size={20} />, status: 'Not Connected', desc: 'Control playback and search for music.' },
-                { name: 'Google Drive', icon: <Database size={20} />, status: 'Not Connected', desc: 'Read and analyze your documents.' },
-              ].map(app => (
-                <div key={app.name} style={{
-                  display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', borderRadius: 20,
-                  border: `1px solid ${borderColor}`, background: 'var(--surface-1)'
-                }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: isDark ? 'rgba(255,255,255,0.05)' : '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: accentColor }}>
-                    {app.icon}
+          {activeTab === 'apps' && (() => {
+            const INTEGRATIONS = [
+              { 
+                id: 'notion', 
+                name: 'Notion', 
+                icon: (
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                    <path d="M4.6 2.3h14.8c1.3 0 2.3 1 2.3 2.3v14.8c0 1.3-1 2.3-2.3 2.3H4.6c-1.3 0-2.3-1-2.3-2.3V4.6c0-1.3 1-2.3 2.3-2.3zm1.7 4.1v11.3h2.1V9.9L14.7 17.7h3.1V6.4h-2.1v6.5L9.4 6.4H6.3z" />
+                  </svg>
+                ), 
+                desc: 'Sync notes, databases, and workspace documents.',
+                color: isDark ? '#ffffff' : '#000000'
+              },
+              { 
+                id: 'gdrive', 
+                name: 'Google Drive', 
+                icon: (
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path fill="#4285F4" d="M28.7 40.5L18 59h35.3L64 40.5H28.7z" />
+                    <path fill="#FBBC05" d="M61 35.3L42.7 3.6H21.3l18.3 31.7H61z" />
+                    <path fill="#34A853" d="M18.3 8.8L0 40.5 10.7 59 29 27.3 18.3 8.8z" />
+                  </svg>
+                ), 
+                desc: 'Read and analyze your documents.',
+                color: '#34A853'
+              },
+              { 
+                id: 'slack', 
+                name: 'Slack', 
+                icon: (
+                  <svg viewBox="0 0 54 54" width="20" height="20">
+                    <g fill="none" fillRule="evenodd">
+                      <path d="M19.712 28.992a3.552 3.552 0 1 1-3.552 3.552h3.552v-3.552zm1.776 0a3.552 3.552 0 0 1 3.552-3.552h7.104a3.552 3.552 0 0 1 3.552 3.552v7.104a3.552 3.552 0 0 1-3.552 3.552h-7.104a3.552 3.552 0 0 1-3.552-3.552v-7.104z" fill="#36C5F0" />
+                      <path d="M25.04 14.784a3.552 3.552 0 1 1 3.552-3.552v3.552h-3.552zm0 1.776a3.552 3.552 0 0 1 3.552 3.552v7.104a3.552 3.552 0 0 1-3.552 3.552h-7.104a3.552 3.552 0 0 1-3.552-3.552v-7.104a3.552 3.552 0 0 1 3.552-3.552h7.104z" fill="#2EB67D" />
+                      <path d="M39.264 20.112a3.552 3.552 0 1 1 3.552-3.552h-3.552v3.552zm-1.776 0a3.552 3.552 0 0 1-3.552 3.552h-7.104a3.552 3.552 0 0 1-3.552-3.552v-7.104a3.552 3.552 0 0 1 3.552-3.552h7.104a3.552 3.552 0 0 1 3.552 3.552v7.104z" fill="#ECB22E" />
+                      <path d="M33.936 34.32a3.552 3.552 0 1 1-3.552 3.552v-3.552h3.552zm0-1.776a3.552 3.552 0 0 1-3.552-3.552v-7.104a3.552 3.552 0 0 1 3.552-3.552h7.104a3.552 3.552 0 0 1 3.552 3.552v7.104a3.552 3.552 0 0 1-3.552 3.552h-7.104z" fill="#E01E5A" />
+                    </g>
+                  </svg>
+                ), 
+                desc: 'Connect your channels and search chat logs.',
+                color: '#4A154B'
+              },
+              { 
+                id: 'github', 
+                name: 'GitHub', 
+                icon: (
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                  </svg>
+                ), 
+                desc: 'Search and read code from your repositories.',
+                color: isDark ? '#ffffff' : '#000000'
+              },
+              { 
+                id: 'spotify', 
+                name: 'Spotify', 
+                icon: (
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="#1DB954">
+                    <circle cx="12" cy="12" r="12" />
+                    <path d="M17.9 10.9C14.7 9 9.3 8.8 6.2 9.8c-.5.1-1-.1-1.2-.6s.1-1 .6-1.2C9 6.9 15 7.1 18.7 9.3c.4.2.6.8.3 1.2-.2.4-.7.6-1.1.4zm-.1 2.3c-.2.4-.7.5-1.1.3-2.6-1.6-6.6-2.1-9.7-1.2-.4.1-.9-.1-1-.6-.1-.4.1-.9.6-1 3.5-1.1 7.9-.5 10.9 1.3.4.2.5.8.3 1.2zM15.2 16c-.2.3-.6.4-.9.2-2.3-1.4-5.2-1.7-8.6-.9-.3.1-.7-.1-.8-.4-.1-.3.1-.7.4-.8 3.7-.8 6.9-.5 9.5 1.1.3.2.4.6.2.8z" fill="#ffffff"/>
+                  </svg>
+                ), 
+                desc: 'Control playback and search for music.',
+                color: '#1DB954'
+              }
+            ];
+
+            if (isBrowsingApps) {
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+                    <button 
+                      onClick={() => setIsBrowsingApps(false)}
+                      style={{
+                        background: 'transparent', border: 'none', color: textColor,
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: 8, borderRadius: '50%', transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
+                    <span style={{ fontSize: 16, fontWeight: 600, color: textColor }}>Browse Integrations</span>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: textColor }}>{app.name}</div>
-                    <div style={{ fontSize: 12, color: subtleColor, marginTop: 2 }}>{app.desc}</div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {INTEGRATIONS.map(app => {
+                      const isConnected = connectedApps.includes(app.id);
+                      return (
+                        <div key={app.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', borderRadius: 20,
+                          border: `1px solid ${borderColor}`, background: isDark ? 'rgba(255,255,255,0.02)' : '#ffffff'
+                        }}>
+                          <div style={{ 
+                            width: 44, 
+                            height: 44, 
+                            borderRadius: 12, 
+                            background: isDark ? 'rgba(255,255,255,0.05)' : '#f0f0f0', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            color: app.color 
+                          }}>
+                            {app.icon}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: textColor }}>{app.name}</div>
+                            <div style={{ fontSize: 12, color: subtleColor, marginTop: 2 }}>{app.desc}</div>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              setConnectedApps(prev => 
+                                prev.includes(app.id) ? prev.filter(id => id !== app.id) : [...prev, app.id]
+                              );
+                            }}
+                            style={{
+                              padding: '8px 16px', borderRadius: 99, 
+                              background: isConnected ? 'rgba(239, 68, 68, 0.1)' : accentColor,
+                              border: isConnected ? '1px solid rgba(239, 68, 68, 0.2)' : 'none',
+                              color: isConnected ? '#ef4444' : '#fff', 
+                              fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            {isConnected ? 'Disconnect' : 'Connect'}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <button style={{
-                    padding: '8px 16px', borderRadius: 99, background: app.status === 'Connected' ? 'transparent' : accentColor,
-                    border: app.status === 'Connected' ? `1px solid ${borderColor}` : 'none',
-                    color: app.status === 'Connected' ? textColor : '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer'
-                  }}>
-                    {app.status === 'Connected' ? 'Manage' : 'Connect'}
-                  </button>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            }
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* Intro Card */}
+                <div style={{
+                  background: isDark ? 'rgba(255,255,255,0.02)' : '#ffffff', borderRadius: 20, padding: 20, 
+                  border: `1px solid ${borderColor}`
+                }}>
+                  <p style={{ margin: 0, fontSize: 13.5, color: subtleColor, lineHeight: 1.5 }}>
+                    Kyra can access information from connected apps, based on what you're authorized to view.{' '}
+                    <span style={{ color: accentColor, fontWeight: 600, cursor: 'pointer' }}>
+                      Learn more
+                    </span>
+                  </p>
+                </div>
+
+                {/* Connected Apps List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: subtleColor, paddingLeft: 8 }}>
+                    Connected Apps
+                  </span>
+                  <div style={{
+                    background: isDark ? 'rgba(255,255,255,0.02)' : '#ffffff', borderRadius: 20, 
+                    border: `1px solid ${borderColor}`, overflow: 'hidden'
+                  }}>
+                    {connectedApps.length === 0 ? (
+                      <div style={{ padding: '24px 20px', textAlign: 'center', color: subtleColor, fontSize: 13.5 }}>
+                        No connected integrations. Click "Browse apps" to connect one.
+                      </div>
+                    ) : (
+                      connectedApps.map((appId, index) => {
+                        const app = INTEGRATIONS.find(a => a.id === appId);
+                        if (!app) return null;
+                        const isLast = index === connectedApps.length - 1;
+                        return (
+                          <div key={app.id} style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '16px 20px', borderBottom: isLast ? 'none' : `1px solid ${borderColor}`
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                              <div style={{ display: 'flex', color: app.color }}>{app.icon}</div>
+                              <span style={{ fontSize: 15, fontWeight: 500, color: textColor }}>{app.name}</span>
+                            </div>
+                            <button 
+                              onClick={() => setConnectedApps(prev => prev.filter(id => id !== app.id))}
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', 
+                                color: '#ef4444', padding: '6px 12px', borderRadius: 8, fontSize: 13, 
+                                fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+                            >
+                              Disconnect
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Available integrations row */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: subtleColor, paddingLeft: 8 }}>
+                    Available Integrations
+                  </span>
+                  <div style={{
+                    background: isDark ? 'rgba(255,255,255,0.02)' : '#ffffff', borderRadius: 20, 
+                    border: `1px solid ${borderColor}`, overflow: 'hidden'
+                  }}>
+                    <div 
+                      onClick={() => setIsBrowsingApps(true)}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '16px 20px', cursor: 'pointer', transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <LayoutGrid size={18} style={{ color: textColor }} />
+                        <span style={{ fontSize: 15, fontWeight: 500, color: textColor }}>Browse apps</span>
+                      </div>
+                      <ChevronRight size={18} style={{ color: subtleColor }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {activeTab === 'data' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>

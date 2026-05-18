@@ -4,8 +4,8 @@ import { createPortal } from 'react-dom';
 import { useAppContext } from '@/context/AppContext';
 import { 
   Send, Bot, User, Sparkles, Languages, Moon, Sun, Palette, Edit2, 
-  Check, Copy, ThumbsUp, ThumbsDown, Share, Share2, RefreshCcw, MoreHorizontal, 
-  AlertTriangle, ChevronDown, Mic, Square, ArrowUp, Plus, AudioLines, X, Menu,
+  Check, Copy, ThumbsUp, ThumbsDown, Share, Share2, RefreshCcw, MoreHorizontal, MoreVertical,
+  AlertTriangle, ChevronDown, Mic, Square, ArrowUp, Plus, AudioLines, X, Menu, SquarePen,
   ChevronRight, Paperclip, Image, Lightbulb, Monitor, BookOpen, PenTool, Telescope, Cpu, Zap, Brain,
   ArrowDown, MessageSquareDashed, PenLine, Globe, RotateCw, UserPlus, Users, Pin, Archive, Trash2, Volume2, VolumeX, GitBranch, Settings, SmilePlus, Reply, Flag, ChevronLeft, LogOut
 } from 'lucide-react';
@@ -21,7 +21,7 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 const AttachmentMenu = ({ isOpen, onClose, position = 'bottom' }) => {
   const [hoveredMore, setHoveredMore] = useState(false);
-  
+
   const menuItems = [
     { icon: <Paperclip size={18} strokeWidth={2.2} />, text: 'Add photos & files' },
     { icon: <Image size={18} strokeWidth={2.2} />, text: 'Create image' },
@@ -171,6 +171,83 @@ const CodeCopyButton = ({ code }) => {
       {copied ? <Check size={13} style={{ color: '#4ade80' }} /> : <Copy size={13} style={{ color: '#ffffff' }} />}
       <span>{copied ? 'Copied!' : 'Copy'}</span>
     </button>
+  );
+};
+
+const TypewriterMessage = ({ content, isUser = false, onDone }) => {
+  const { resolvedTheme } = useAppContext();
+  const [displayed, setDisplayed] = useState('');
+  const idxRef = useRef(0);
+  const rafRef = useRef(null);
+  // User messages type faster — feel more like real-time chat
+  const CHARS_PER_FRAME = isUser ? 5 : 3;
+
+  useEffect(() => {
+    idxRef.current = 0;
+    setDisplayed('');
+    const animate = () => {
+      idxRef.current = Math.min(idxRef.current + CHARS_PER_FRAME, content.length);
+      setDisplayed(content.slice(0, idxRef.current));
+      if (idxRef.current < content.length) {
+        rafRef.current = requestAnimationFrame(animate);
+      } else {
+        onDone?.();
+      }
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [content]);
+
+  if (isUser) {
+    return <p className="leading-relaxed whitespace-pre-wrap font-medium">{displayed}</p>;
+  }
+
+  return (
+    <div className="markdown-content w-full overflow-hidden">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ node, inline, className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || '');
+            const lang = match ? match[1] : '';
+            const codeContent = String(children).replace(/\n$/, '');
+            return !inline ? (
+              <div style={{ margin: '20px 0', borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)', boxShadow: resolvedTheme === 'dark' ? '0 8px 32px rgba(0,0,0,0.25)' : 'none', maxWidth: '100%', width: '100%' }}>
+                <div style={{ background: '#1a1a1a', padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f56]" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e]" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#27c93f]" />
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginLeft: 8 }}>{lang || 'Code'}</span>
+                  </div>
+                  <CodeCopyButton code={codeContent} />
+                </div>
+                <SyntaxHighlighter style={vscDarkPlus} language={lang || 'javascript'} PreTag="div" customStyle={{ margin: 0, padding: '20px 24px', background: '#0d0d0d', fontSize: '13.5px', lineHeight: '1.7' }} showLineNumbers={false} {...props}>{codeContent}</SyntaxHighlighter>
+              </div>
+            ) : (
+              <code className="px-1.5 py-0.5 rounded-md bg-white/10 font-mono text-[0.9em] border border-white/5" {...props}>{children}</code>
+            );
+          },
+          p({ node, children }) { return <div className="mb-4 last:mb-0 leading-relaxed text-on-surface/90">{children}</div>; },
+          h1({ children }) { return <h1 className="text-2xl font-bold mb-4 mt-6 text-on-surface">{children}</h1>; },
+          h2({ children }) { return <h2 className="text-xl font-bold mb-3 mt-5 text-on-surface">{children}</h2>; },
+          h3({ children }) { return <h3 className="text-lg font-bold mb-2 mt-4 text-on-surface">{children}</h3>; },
+          ul({ children }) { return <ul>{children}</ul>; },
+          ol({ children }) { return <ol>{children}</ol>; },
+          li({ children }) { return <li>{children}</li>; },
+          blockquote({ children }) { return <blockquote className="border-l-4 border-accent-color/40 bg-accent-color/5 px-4 py-2 my-4 rounded-r-lg italic text-on-surface/80">{children}</blockquote>; },
+          hr() { return <hr className="my-8 border-t border-white/5" />; },
+          table({ children }) { return <div className="overflow-x-auto my-6 rounded-xl border border-divider"><table className="w-full text-left border-collapse">{children}</table></div>; },
+          th({ children }) { return <th className="px-4 py-3 bg-surface-2 font-bold border-b border-divider">{children}</th>; },
+          td({ children }) { return <td className="px-4 py-3 border-b border-divider last:border-b-0">{children}</td>; },
+          a({ children, href }) { return <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent-color hover:underline font-medium">{children}</a>; }
+        }}
+      >
+        {displayed}
+      </ReactMarkdown>
+    </div>
   );
 };
 
@@ -341,6 +418,27 @@ const ChatWindow = () => {
   const [generatingId, setGeneratingId] = useState(null);
   const currentResponseRef = useRef("");
   const [isTemporary, setIsTemporary] = useState(false);
+  
+  const currentChatForSend = chats.find(c => c.id === activeChatId);
+  const isGroupForSend = currentChatForSend?.isGroup;
+  
+  // Calculate if AI is generating with a 30-second stuck-safety window
+  let isGeneratingRemote = false;
+  if (isGroupForSend && currentChatForSend?.isGenerating) {
+    const chatMessages = currentChatForSend?.messages || [];
+    const lastMsg = chatMessages[chatMessages.length - 1];
+    const lastMsgTime = lastMsg ? new Date(lastMsg.timestamp).getTime() : 0;
+    
+    const genTime = currentChatForSend?.generatingTimestamp 
+      ? new Date(currentChatForSend.generatingTimestamp).getTime() 
+      : lastMsgTime;
+      
+    if (!genTime || (Date.now() - genTime) < 30000) {
+      isGeneratingRemote = true;
+    }
+  }
+  
+  const isSendDisabled = isLoading || isGeneratingRemote;
   const getGreeting = () => {
     const hour = new Date().getHours();
     let welcome = "";
@@ -447,6 +545,76 @@ const ChatWindow = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Handle real-time typing status in Firestore for group chats
+  const typingTimeoutRef = useRef(null);
+  const lastTypingStateRef = useRef(false);
+
+  const stopUserTyping = (chatId = activeChatId) => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if (lastTypingStateRef.current && chatId && profile?.uid) {
+      lastTypingStateRef.current = false;
+      const chatRef = doc(db, 'chats', chatId);
+      updateDoc(chatRef, {
+        [`typing.${profile.uid}`]: {
+          isTyping: false,
+          timestamp: new Date().toISOString()
+        }
+      }).catch(console.error);
+    }
+  };
+
+  const handleUserTyping = () => {
+    const currentChat = chats.find(c => c.id === activeChatId);
+    const isGroup = currentChat?.isGroup;
+    if (!isGroup || !profile?.uid || !activeChatId) return;
+
+    const updateTypingStatus = async (isTyping) => {
+      try {
+        const chatRef = doc(db, 'chats', activeChatId);
+        await updateDoc(chatRef, {
+          [`typing.${profile.uid}`]: isTyping ? {
+            displayName: profile.displayName || 'User',
+            avatar: profile.avatar || null,
+            isTyping: true,
+            timestamp: new Date().toISOString()
+          } : {
+            isTyping: false,
+            timestamp: new Date().toISOString()
+          }
+        });
+      } catch (err) {
+        console.error("Failed to update typing status:", err);
+      }
+    };
+
+    if (!lastTypingStateRef.current) {
+      lastTypingStateRef.current = true;
+      updateTypingStatus(true);
+    }
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      lastTypingStateRef.current = false;
+      updateTypingStatus(false);
+    }, 3000);
+  };
+
+  useEffect(() => {
+    const chatToClean = activeChatId;
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (lastTypingStateRef.current && chatToClean && profile?.uid) {
+        const chatRef = doc(db, 'chats', chatToClean);
+        updateDoc(chatRef, {
+          [`typing.${profile.uid}`]: {
+            isTyping: false,
+            timestamp: new Date().toISOString()
+          }
+        }).catch(console.error);
+      }
+    };
+  }, [activeChatId, profile]);
 
   const WRITE_SUGGESTIONS = [
     { text: 'Improve my tone', prompt: 'Improve the tone of this text: ' },
@@ -606,6 +774,36 @@ const ChatWindow = () => {
 
   // Modular message rendering to resolve JSX parsing complexity
   const renderMessageView = (msg, index) => {
+    if (msg.isGroupCreation) {
+      const chat = chats.find(c => c.id === activeChatId);
+      const creator = chat?.creator;
+
+      return (
+        <div style={{
+          width: '100%',
+          textAlign: 'center',
+          padding: '0 20px 24px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '4px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+            {creator?.avatar && (
+              <img 
+                src={creator.avatar} 
+                alt="" 
+                style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--divider)' }} 
+              />
+            )}
+            <p style={{ fontSize: '13.5px', color: 'var(--on-surface)', margin: 0, opacity: 0.9 }}>
+              <span style={{ fontWeight: 600 }}>{creator?.displayName || profile?.displayName || 'User'}</span> created the group chat.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     // Calculate context first
     const isMe = msg.role === 'user' && (msg.sender?.email === profile?.email || !msg.sender?.email);
     const isOtherUser = msg.role === 'user' && !isMe;
@@ -646,7 +844,8 @@ const ChatWindow = () => {
             autoFocus
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
-            className="w-full bg-transparent border-none outline-none text-[16.5px] leading-relaxed resize-none min-h-[85px] p-0 text-white placeholder:text-white/20"
+            className="w-full bg-transparent border-none outline-none text-[16.5px] leading-relaxed min-h-[85px] p-0 text-white placeholder:text-white/20"
+            style={{ resize: 'none' }}
             placeholder="Edit your message..."
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -657,19 +856,20 @@ const ChatWindow = () => {
               }
             }}
           />
-          <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-white/5">
+          <div className="flex gap-4 mt-4 pt-4 border-t border-white/10" style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
             <button 
               onClick={() => { setEditingId(null); setEditValue(''); }}
-              className="px-4 py-1.5 rounded-full text-[13px] font-medium text-white/40 hover:text-white hover:bg-white/5 transition-all"
+              className="rounded-full text-[15px] font-semibold transition-all shadow-sm hover:bg-white/90 hover:-translate-y-[1px] active:translate-y-0"
+              style={{ background: '#ffffff', color: '#000000', padding: '10px 24px' }}
             >
               Cancel
             </button>
             <button 
               onClick={() => handleSaveEdit(msg.id)}
-              className="px-5 py-1.5 rounded-full text-[13px] font-semibold text-white transition-all"
-              style={{ background: accentColor || 'var(--primary)' }}
+              className="rounded-full text-[15px] font-semibold text-white transition-all shadow-md hover:opacity-90 hover:-translate-y-[1px] active:translate-y-0"
+              style={{ background: accentColor || '#3b82f6', padding: '10px 28px' }}
             >
-              Save
+              Send
             </button>
           </div>
         </div>
@@ -799,7 +999,10 @@ const ChatWindow = () => {
                </p>
             </div>
           }
-          <MessageContent content={msg.content} isUser={msg.role === 'user'} />
+          {msg._typewriter && !msg.isPlaceholder
+            ? <TypewriterMessage content={msg.content} isUser={msg.role === 'user'} onDone={() => setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, _typewriter: false } : m))} />
+            : <MessageContent content={msg.content} isUser={msg.role === 'user'} />
+          }
         </>
       }
       </motion.div>
@@ -828,10 +1031,11 @@ const ChatWindow = () => {
       )}
     </div>
 
-     {!msg.isVoice && (
-        <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? (generatingId === msg.id ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
+      {!msg.isVoice && (
+        <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? ((generatingId === msg.id || msg.isPlaceholder) ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
          <div className={`flex gap-1 ${!isMe && isOtherUser ? 'ml-[44px]' : ''}`}>
           {chats.find(c => c.id === activeChatId)?.isGroup ? (
+            msg.role === 'ai' ? (
             <>
               <div className="relative">
                 {((chats.find(c => c.id === activeChatId)?.isGroup ? msg.reactions : null) || msgReactions[msg.id]) && (
@@ -857,7 +1061,8 @@ const ChatWindow = () => {
                 )}
                 {hoveredReactionMsgId === msg.id && (
                   <div 
-                    className="fixed inset-0 z-[15]" 
+                    className="fixed inset-0" 
+                    style={{ zIndex: 15 }}
                     onClick={(e) => { e.stopPropagation(); setHoveredReactionMsgId(null); }}
                   />
                 )}
@@ -867,11 +1072,12 @@ const ChatWindow = () => {
                       initial={{ opacity: 0, y: 5, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 5, scale: 0.95 }}
-                      className="absolute z-[20]"
+                      className="absolute"
                       style={{ 
                         bottom: 'calc(100% + 4px)', 
                         left: isMe ? 'auto' : '0',
-                        right: isMe ? '0' : 'auto'
+                        right: isMe ? '0' : 'auto',
+                        zIndex: 20
                       }}
                     >
                       <div style={{
@@ -975,6 +1181,7 @@ const ChatWindow = () => {
                 />
               )}
             </>
+            ) : null
           ) : (
             <>
               <ActionButton 
@@ -1012,7 +1219,7 @@ const ChatWindow = () => {
                   />
                 </>
               )}
-                  
+              {msg.role === 'ai' ? (
                   <div className="relative" ref={activeMsgMoreId === msg.id ? msgMoreRef : null}>
                     <ActionButton 
                       onClick={() => setActiveMsgMoreId(activeMsgMoreId === msg.id ? null : msg.id)} 
@@ -1027,7 +1234,7 @@ const ChatWindow = () => {
                       initial={{ opacity: 0, scale: 0.95, y: 15 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                      className="absolute right-0 z-[100]"
+                      className="absolute right-0"
                       style={{
                         bottom: "calc(100% + 6px)",
                         top: "auto", 
@@ -1038,6 +1245,7 @@ const ChatWindow = () => {
                         padding: '6px',
                         boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none',
                         display: 'flex',
+                        zIndex: 100,
                         flexDirection: 'column',
                         gap: 2,
                       }}
@@ -1084,6 +1292,13 @@ const ChatWindow = () => {
                   )}
                 </AnimatePresence>
                 </div>
+              ) : (
+                <ActionButton 
+                  onClick={() => { setEditingId(msg.id); setEditValue(msg.content); }} 
+                  label="Edit" 
+                  icon={<Edit2 size={14} />} 
+                />
+              )}
             </>
           )}
          </div>
@@ -1241,18 +1456,28 @@ const ChatWindow = () => {
   const handleSend = async (e, overrideInput, isVoice = false) => {
     if (e) e.preventDefault();
     const textToSend = overrideInput || input;
-    if (!textToSend.trim() || isLoading) return;
+    
+    const currentChat = chats.find(c => c.id === activeChatId);
+    const isGroup = currentChat?.isGroup;
+    const isGeneratingRemote = isGroup && currentChat?.isGenerating;
+    if (!textToSend.trim() || isLoading || isGeneratingRemote) return;
 
     // Snapshot history immediately to isolate this request from parallel messages
     const historySnapshot = [...messages]; 
     
     setIsLoading(true);
     
-    // Sync generating status for group chats
-    const currentChat = chats.find(c => c.id === activeChatId);
-    const isGroup = currentChat?.isGroup;
+    // Sync generating status with timestamp for group chats and reset typing status
     if (isGroup) {
-      updateDoc(doc(db, 'chats', activeChatId), { isGenerating: true }).catch(console.error);
+      updateDoc(doc(db, 'chats', activeChatId), { 
+        isGenerating: true,
+        generatingTimestamp: new Date().toISOString(),
+        [`typing.${profile?.uid || 'unknown'}`]: {
+          isTyping: false,
+          timestamp: new Date().toISOString()
+        }
+      }).catch(console.error);
+      lastTypingStateRef.current = false;
     }
 
     const words = textToSend.split(' ').length;
@@ -1380,13 +1605,32 @@ const ChatWindow = () => {
       setMessages(prev => [...prev, aiPlaceholder]);
       
       currentResponseRef.current = "";
+      let lastStreamSync = 0;
+      const STREAM_INTERVAL = 250; // ms between Firestore streaming writes
+
       const onUpdate = (text) => {
         currentResponseRef.current = text;
         setMessages(prev => prev.map(m => m.id === aiMessageId ? { ...m, content: text } : m));
+
+        // Throttle-stream the growing content to Firestore so other group members see it live
+        if (isGroup) {
+          const now = Date.now();
+          if (now - lastStreamSync > STREAM_INTERVAL) {
+            lastStreamSync = now;
+            updateDoc(doc(db, 'chats', activeChatId), {
+              [`streamContent.${aiMessageId}`]: text
+            }).catch(console.error);
+          }
+        }
       };
 
       const aiResponse = await getGeminiResponse(finalPrompt, historySnapshot, personalization, abortControllerRef.current.signal, onUpdate, aiModel);
       
+      // Always update local state with final response to clear placeholder status
+      setMessages(prev => prev.map(m => 
+        m.id === aiMessageId ? { ...m, content: aiResponse, isPlaceholder: false, _typewriter: true } : m
+      ));
+
       if (isGroup) {
         try {
           const chatRef = doc(db, 'chats', activeChatId);
@@ -1396,7 +1640,11 @@ const ChatWindow = () => {
             const updatedMsgs = currentMsgs.map(m => 
               m.id === aiMessageId ? { ...m, content: aiResponse, isPlaceholder: false } : m
             );
-            await updateDoc(chatRef, { messages: updatedMsgs });
+            // Save final message + clear the streaming temp field
+            await updateDoc(chatRef, { 
+              messages: updatedMsgs,
+              [`streamContent.${aiMessageId}`]: null
+            });
           }
         } catch (err) {
           console.error("Failed to sync AI response to group:", err);
@@ -1405,9 +1653,15 @@ const ChatWindow = () => {
     } catch (error) {
       if (error.name === 'AbortError') {
         console.log('Generation stopped by user');
+        const partialText = currentResponseRef.current || "Response stopped.";
+        
+        // Always update local state
+        setMessages(prev => prev.map(m => 
+          m.id === aiMessageId ? { ...m, content: partialText, isPlaceholder: false, isStopped: true } : m
+        ));
+
         if (isGroup) {
           try {
-            const partialText = currentResponseRef.current || "Response stopped.";
             const chatRef = doc(db, 'chats', activeChatId);
             const docSnap = await getDoc(chatRef);
             if (docSnap.exists()) {
@@ -1629,6 +1883,7 @@ const ChatWindow = () => {
         isOpen={isPeopleModalOpen} 
         onClose={() => setIsPeopleModalOpen(false)} 
         onAddPeople={() => { setGroupLinkChatId(activeChatId); setIsGroupLinkModalOpen(true); setIsPeopleModalOpen(false); }}
+        activeChat={chats.find(c => c.id === activeChatId)}
       />
       <DeleteGroupModal 
         isOpen={isDeleteConfirmOpen} 
@@ -1662,313 +1917,520 @@ const ChatWindow = () => {
           opacity: 1 !important;
         }
       `}</style>
-      <header style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 20px', height: 56, position: 'sticky', top: 0, zIndex: 10,
-        background: 'var(--bg-primary)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--divider)',
-      }}>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+      {isMobile && !chats.find(c => c.id === activeChatId)?.isGroup ? (
+        <header style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 16px', height: 60, position: 'sticky', top: 0, zIndex: 80,
+          background: 'var(--bg-primary)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          borderBottom: '1px solid var(--divider)',
+        }}>
+          {/* Left: Stylish staggered hamburger icon */}
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              width: '40px', height: '40px', borderRadius: '50%', color: 'var(--on-surface)',
+              transition: 'background 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            {isSidebarOpen ? (
+              <X size={22} strokeWidth={2.5} />
+            ) : (
+              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none">
+                <line x1="4" y1="8" x2="20" y2="8" />
+                <line x1="4" y1="16" x2="13" y2="16" />
+              </svg>
+            )}
+          </button>
+
+          {/* Right side buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* New Chat Icon */}
             <button 
-              className="hamburger-button"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              onClick={() => {
+                createNewChat();
+                if (isSidebarOpen) setIsSidebarOpen(false);
+              }}
               style={{
-                display: 'none', // CSS will show this on mobile/narrow screens
-                alignItems: 'center', justifyContent: 'center',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: 'transparent', border: 'none', cursor: 'pointer',
-                padding: '8px', borderRadius: 10, color: 'var(--on-surface)',
-                transition: 'background 0.15s',
-                marginRight: 4
+                width: '40px', height: '40px', borderRadius: '50%', color: 'var(--on-surface)',
+                transition: 'background 0.2s',
               }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
-              {isSidebarOpen ? <X size={22} strokeWidth={2} /> : <Menu size={22} strokeWidth={2} />}
-            </button>
-          <div className="relative" ref={groupChatMenuRef}>
-            <button 
-              onClick={() => setIsGroupChatMenuOpen(!isGroupChatMenuOpen)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', cursor: 'pointer',
-                padding: '8px 4px', borderRadius: 12, color: 'var(--on-surface)',
-                visibility: isSidebarOpen && isMobile ? 'hidden' : 'visible',
-                transition: 'background 0.15s'
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              {chats.find(c => c.id === activeChatId)?.isGroup ? (
-                <>
-                  <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: '-0.2px' }}>
-                    {chats.find(c => c.id === activeChatId)?.title || 'Group Chat'}
-                  </span>
-                  <ChevronDown size={15} style={{ color: 'var(--on-surface-muted)', marginTop: 1 }} />
-                </>
-              ) : (
-                <>
-                  <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>Kyra</span>
-                  <ChevronDown size={15} style={{ color: 'var(--on-surface-muted)', marginTop: 1 }} />
-                </>
-              )}
+              <SquarePen size={22} strokeWidth={2.2} />
             </button>
 
-            <AnimatePresence>
-              {isGroupChatMenuOpen && chats.find(c => c.id === activeChatId)?.isGroup && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  transition={{ duration: 0.2 }}
-                  style={{
-                    position: 'absolute', top: '100%', left: 0, marginTop: 8,
-                    width: 240, background: 'var(--surface-1)', borderRadius: 18,
-                    border: '1px solid var(--divider)', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-                    padding: 6, zIndex: 100, overflow: 'hidden'
-                  }}
-                >
-                  <button 
-                    onClick={() => { setIsPeopleModalOpen(true); setIsGroupChatMenuOpen(false); }}
-                    className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
-                  >
-                    <UserPlus size={18} className="text-on-surface-muted" />
-                    <span className="text-[14px] font-medium text-on-surface">People</span>
-                  </button>
-                  {chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid && (
-                    <button 
-                      onClick={() => { setGroupLinkChatId(activeChatId); setIsGroupLinkModalOpen(true); setIsGroupChatMenuOpen(false); }}
-                      className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
-                    >
-                      <Paperclip size={18} className="text-on-surface-muted" />
-                      <span className="text-[14px] font-medium text-on-surface">Manage group link</span>
-                    </button>
-                  )}
-                  <button className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
-                    <Edit2 size={18} className="text-on-surface-muted" />
-                    <span className="text-[14px] font-medium text-on-surface" onClick={() => { 
-                      const chat = chats.find(c => c.id === activeChatId);
-                      setTempGroupName(chat?.title || '');
-                      setIsRenameModalOpen(true); 
-                      setIsGroupChatMenuOpen(false); 
-                    }}>Rename group</span>
-                  </button>
-                  <button className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
-                    <Settings size={18} className="text-on-surface-muted" />
-                    <span className="text-[14px] font-medium text-on-surface">Customized Kyra</span>
-                  </button>
-                  <button 
-                    className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
-                    onClick={() => { setIsReportModalOpen(true); setIsGroupChatMenuOpen(false); }}
-                  >
-                    <AlertTriangle size={18} style={{ color: '#ef4444' }} />
-                    <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Report</span>
-                  </button>
-                  {chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid ? (
-                    <button 
-                      className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
-                      onClick={() => { setIsDeleteConfirmOpen(true); setIsGroupChatMenuOpen(false); }}
-                    >
-                      <Trash2 size={18} style={{ color: '#ef4444' }} />
-                      <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Delete group</span>
-                    </button>
-                  ) : (
-                    <button 
-                      className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
-                      onClick={() => { setIsExitConfirmOpen(true); setIsGroupChatMenuOpen(false); }}
-                    >
-                      <LogOut size={18} style={{ color: '#ef4444' }} />
-                      <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Exit group</span>
-                    </button>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {chats.find(c => c.id === activeChatId)?.isGroup ? (
-            <div 
-              onClick={() => setIsPeopleModalOpen(true)}
-              style={{ 
-                width: '32px', height: '32px', borderRadius: '50%', 
-                background: 'var(--hover-overlay-2)', overflow: 'hidden',
-                border: '1px solid var(--divider)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              {profile?.avatar ? (
-                <img src={profile.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <User size={18} style={{ color: 'var(--on-surface-subtle)' }} />
-              )}
-            </div>
-          ) : (
-            messages.length === 0 ? (
+            {/* Options Vertical Kebab Icon */}
+            <div className="relative" ref={headerMoreRef}>
               <button 
-                onClick={() => setIsTemporary(!isTemporary)}
+                onClick={() => setIsHeaderMoreOpen(!isHeaderMoreOpen)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 14px', borderRadius: 12,
-                  background: isTemporary ? 'var(--on-surface)' : 'transparent',
-                  color: isTemporary ? 'var(--bg-primary)' : 'var(--on-surface-muted)',
-                  border: isTemporary ? 'none' : '1px solid var(--divider)',
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  width: '40px', height: '40px', borderRadius: '50%', color: 'var(--on-surface)',
+                  transition: 'background 0.2s',
                 }}
-                onMouseEnter={e => { if(!isTemporary) e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                onMouseLeave={e => { if(!isTemporary) e.currentTarget.style.background = 'transparent'; }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
-                <MessageSquareDashed size={18} />
-                {!isMobile && <span>Temporary chat</span>}
-                {isTemporary && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--bg-primary)', marginLeft: 2 }} />}
+                <MoreVertical size={22} strokeWidth={2.2} />
               </button>
-            ) : (
-              <div className="flex items-center gap-1">
-                <button 
-                  onClick={() => setIsShareModalOpen(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-hover-overlay transition-colors text-[14px] font-medium text-on-surface"
-                >
-                  <Share size={16} />
-                  <span>Share</span>
-                </button>
-                <div className="relative" ref={headerMoreRef}>
-                  <button 
-                    onClick={() => setIsHeaderMoreOpen(!isHeaderMoreOpen)}
-                    className={`p-2 rounded-lg transition-colors flex items-center justify-center ${isHeaderMoreOpen ? 'bg-hover-overlay text-on-surface' : 'text-on-surface-muted hover:text-on-surface hover:bg-hover-overlay'}`}
+
+              <AnimatePresence>
+                {isHeaderMoreOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className="absolute"
+                    style={{ 
+                      right: 0,
+                      top: '100%',
+                      marginTop: '8px',
+                      minWidth: '230px',
+                      background: 'var(--surface-1)',
+                      border: '1px solid var(--divider)',
+                      borderRadius: '22px',
+                      padding: '6px',
+                      boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                      transformOrigin: 'top right',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                      zIndex: 100,
+                    }}
                   >
-                    <MoreHorizontal size={18} />
-                  </button>
-                  
-                  <AnimatePresence>
-                    {isHeaderMoreOpen && (
-                      <motion.div 
-                        initial={{ opacity: 0, scale: 0.95, y: -5 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: -5 }}
-                        transition={{ duration: 0.15, ease: 'easeOut' }}
-                        className="absolute top-full mt-2 z-[100]"
-                        style={{ 
-                          right: 0,
-                          minWidth: '230px',
-                          background: 'var(--surface-1)',
-                          borderRadius: '20px',
-                          padding: '6px',
-                          boxShadow: resolvedTheme === 'dark' ? '0 30px 60px -12px rgba(0,0,0,0.3)' : 'none',
-                          border: '1px solid var(--divider)',
-                          transformOrigin: 'top right',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 2,
-                        }}
-                      >
+                    <button 
+                      onClick={() => { setIsShareModalOpen(true); setIsHeaderMoreOpen(false); }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                        border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                        fontFamily: 'inherit', transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <Share2 size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                      <span style={{ whiteSpace: 'nowrap' }}>Share chat</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (!showLoggedIn) {
+                          setAuthOpen(true);
+                        } else {
+                          setGroupChatTargetId(activeChatId);
+                          setIsGroupChatModalOpen(true); 
+                        }
+                        setIsHeaderMoreOpen(false); 
+                      }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                        border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                        fontFamily: 'inherit', transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <UserPlus size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                      <span style={{ whiteSpace: 'nowrap' }}>Start a group chat</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const chat = chats.find(c => c.id === activeChatId);
+                        if (chat) {
+                          setChats(prev => {
+                            const updated = prev.map(c => c.id === chat.id ? { ...c, pinned: !c.pinned } : c);
+                            return [...updated.filter(c => c.pinned), ...updated.filter(c => !c.pinned)];
+                          });
+                        }
+                        setIsHeaderMoreOpen(false);
+                      }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                        border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                        fontFamily: 'inherit', transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <Pin size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                      <span style={{ whiteSpace: 'nowrap' }}>{chats.find(c => c.id === activeChatId)?.pinned ? 'Unpin chat' : 'Pin chat'}</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const chat = chats.find(c => c.id === activeChatId);
+                        if (chat) { archiveChat(chat.id); createNewChat(); }
+                        setIsHeaderMoreOpen(false);
+                      }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                        border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                        fontFamily: 'inherit', transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <Archive size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                      <span style={{ whiteSpace: 'nowrap' }}>Archive</span>
+                    </button>
+                    <div style={{ height: 1, background: 'var(--divider)', margin: '2px 4px' }} />
+                    <button 
+                      onClick={() => {
+                        const chat = chats.find(c => c.id === activeChatId);
+                        setDeleteConfirm({ open: true, id: activeChatId, name: chat?.title || 'this chat' });
+                        setIsHeaderMoreOpen(false);
+                      }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                        border: 'none', color: '#ef4444', fontSize: 13.5,
+                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                        fontFamily: 'inherit', transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <Trash2 size={16} style={{ color: '#ef4444', flexShrink: 0 }} strokeWidth={1.5} />
+                      <span style={{ whiteSpace: 'nowrap' }}>Delete</span>
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </header>
+      ) : (
+        <header style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 20px', height: 56, position: 'sticky', top: 0, zIndex: 10,
+          background: 'var(--bg-primary)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--divider)',
+        }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+              <button 
+                className="hamburger-button"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                style={{
+                  display: 'none', // CSS will show this on mobile/narrow screens
+                  alignItems: 'center', justifyContent: 'center',
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  padding: '8px', borderRadius: 10, color: 'var(--on-surface)',
+                  transition: 'background 0.15s',
+                  marginRight: 4
+                }}
+              >
+                {isSidebarOpen ? (
+                  <X size={22} strokeWidth={2.5} />
+                ) : (
+                  <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none">
+                    <line x1="4" y1="8" x2="20" y2="8" />
+                    <line x1="4" y1="16" x2="13" y2="16" />
+                  </svg>
+                )}
+              </button>
+            <div className="relative" ref={groupChatMenuRef}>
+              <button 
+                onClick={() => setIsGroupChatMenuOpen(!isGroupChatMenuOpen)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', cursor: 'pointer',
+                  padding: '8px 4px', borderRadius: 12, color: 'var(--on-surface)',
+                  visibility: isSidebarOpen && isMobile ? 'hidden' : 'visible',
+                  transition: 'background 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                {chats.find(c => c.id === activeChatId)?.isGroup ? (
+                  <>
+                    <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: '-0.2px' }}>
+                      {chats.find(c => c.id === activeChatId)?.title || 'Group Chat'}
+                    </span>
+                    <ChevronDown size={15} style={{ color: 'var(--on-surface-muted)', marginTop: 1 }} />
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>Kyra</span>
+                    <ChevronDown size={15} style={{ color: 'var(--on-surface-muted)', marginTop: 1 }} />
+                  </>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {isGroupChatMenuOpen && chats.find(c => c.id === activeChatId)?.isGroup && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    transition={{ duration: 0.2 }}
+                    style={{
+                      position: 'absolute', top: '100%', left: 0, marginTop: 8,
+                      width: 240, background: 'var(--surface-1)', borderRadius: 18,
+                      border: '1px solid var(--divider)', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                      padding: 6, zIndex: 100, overflow: 'hidden'
+                    }}
+                  >
+                    <button 
+                      onClick={() => { setIsPeopleModalOpen(true); setIsGroupChatMenuOpen(false); }}
+                      className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                    >
+                      <UserPlus size={18} className="text-on-surface-muted" />
+                      <span className="text-[14px] font-medium text-on-surface">People</span>
+                    </button>
+                    {chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid && (
                       <button 
-                        onClick={() => { setIsShareModalOpen(true); setIsHeaderMoreOpen(false); }}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                          padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                          border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                          fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                          fontFamily: 'inherit', transition: 'background 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        onClick={() => { setGroupLinkChatId(activeChatId); setIsGroupLinkModalOpen(true); setIsGroupChatMenuOpen(false); }}
+                        className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
                       >
-                        <Share2 size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                        <span style={{ whiteSpace: 'nowrap' }}>Share chat</span>
+                        <Paperclip size={18} className="text-on-surface-muted" />
+                        <span className="text-[14px] font-medium text-on-surface">Manage group link</span>
                       </button>
+                    )}
+                    <button className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
+                      <Edit2 size={18} className="text-on-surface-muted" />
+                      <span className="text-[14px] font-medium text-on-surface" onClick={() => { 
+                        const chat = chats.find(c => c.id === activeChatId);
+                        setTempGroupName(chat?.title || '');
+                        setIsRenameModalOpen(true); 
+                        setIsGroupChatMenuOpen(false); 
+                      }}>Rename group</span>
+                    </button>
+                    <button className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
+                      <Settings size={18} className="text-on-surface-muted" />
+                      <span className="text-[14px] font-medium text-on-surface">Customized Kyra</span>
+                    </button>
+                    <button 
+                      className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                      onClick={() => { setIsReportModalOpen(true); setIsGroupChatMenuOpen(false); }}
+                    >
+                      <AlertTriangle size={18} style={{ color: '#ef4444' }} />
+                      <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Report</span>
+                    </button>
+                    {chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid ? (
                       <button 
-                        onClick={() => { 
-                          if (!showLoggedIn) {
-                            setAuthOpen(true);
-                          } else {
-                            setGroupChatTargetId(activeChatId);
-                            setIsGroupChatModalOpen(true); 
-                          }
-                          setIsHeaderMoreOpen(false); 
-                        }}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                          padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                          border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                          fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                          fontFamily: 'inherit', transition: 'background 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                        onClick={() => { setIsDeleteConfirmOpen(true); setIsGroupChatMenuOpen(false); }}
                       >
-                        <UserPlus size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                        <span style={{ whiteSpace: 'nowrap' }}>Start a group chat</span>
+                        <Trash2 size={18} style={{ color: '#ef4444' }} />
+                        <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Delete group</span>
                       </button>
+                    ) : (
                       <button 
-                        onClick={() => {
-                          const chat = chats.find(c => c.id === activeChatId);
-                          if (chat) {
-                            setChats(prev => {
-                              const updated = prev.map(c => c.id === chat.id ? { ...c, pinned: !c.pinned } : c);
-                              return [...updated.filter(c => c.pinned), ...updated.filter(c => !c.pinned)];
-                            });
-                          }
-                          setIsHeaderMoreOpen(false);
-                        }}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                          padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                          border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                          fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                          fontFamily: 'inherit', transition: 'background 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                        onClick={() => { setIsExitConfirmOpen(true); setIsGroupChatMenuOpen(false); }}
                       >
-                        <Pin size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                        <span style={{ whiteSpace: 'nowrap' }}>{chats.find(c => c.id === activeChatId)?.pinned ? 'Unpin chat' : 'Pin chat'}</span>
+                        <LogOut size={18} style={{ color: '#ef4444' }} />
+                        <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Exit group</span>
                       </button>
-                      <button 
-                        onClick={() => {
-                          const chat = chats.find(c => c.id === activeChatId);
-                          if (chat) { archiveChat(chat.id); createNewChat(); }
-                          setIsHeaderMoreOpen(false);
-                        }}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                          padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                          border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                          fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                          fontFamily: 'inherit', transition: 'background 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <Archive size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                        <span style={{ whiteSpace: 'nowrap' }}>Archive</span>
-                      </button>
-                      <div style={{ height: 1, background: 'var(--divider)', margin: '2px 4px' }} />
-                      <button 
-                        onClick={() => {
-                          const chat = chats.find(c => c.id === activeChatId);
-                          setDeleteConfirm({ open: true, id: activeChatId, name: chat?.title || 'this chat' });
-                          setIsHeaderMoreOpen(false);
-                        }}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                          padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                          border: 'none', color: '#ef4444', fontSize: 13.5,
-                          fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                          fontFamily: 'inherit', transition: 'background 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <Trash2 size={16} style={{ color: '#ef4444', flexShrink: 0 }} strokeWidth={1.5} />
-                        <span style={{ whiteSpace: 'nowrap' }}>Delete</span>
-                      </button>
-                    </motion.div>
-                  )}
-                  </AnimatePresence>
-                </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {chats.find(c => c.id === activeChatId)?.isGroup ? (
+              <div 
+                onClick={() => setIsPeopleModalOpen(true)}
+                style={{ 
+                  width: '32px', height: '32px', borderRadius: '50%', 
+                  background: 'var(--hover-overlay-2)', overflow: 'hidden',
+                  border: '1px solid var(--divider)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+              >
+                {profile?.avatar ? (
+                  <img src={profile.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <User size={18} style={{ color: 'var(--on-surface-subtle)' }} />
+                )}
               </div>
-            )
-          )}
-        </div>
-      </header>
+            ) : (
+              messages.length === 0 ? (
+                <button 
+                  onClick={() => setIsTemporary(!isTemporary)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 14px', borderRadius: 12,
+                    background: isTemporary ? 'var(--on-surface)' : 'transparent',
+                    color: isTemporary ? 'var(--bg-primary)' : 'var(--on-surface-muted)',
+                    border: isTemporary ? 'none' : '1px solid var(--divider)',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { if(!isTemporary) e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                  onMouseLeave={e => { if(!isTemporary) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <MessageSquareDashed size={18} />
+                  {!isMobile && <span>Temporary chat</span>}
+                  {isTemporary && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--bg-primary)', marginLeft: 2 }} />}
+                </button>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => setIsShareModalOpen(true)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-hover-overlay transition-colors text-[14px] font-medium text-on-surface"
+                  >
+                    <Share size={16} />
+                    <span>Share</span>
+                  </button>
+                  <div className="relative" ref={headerMoreRef}>
+                    <button 
+                      onClick={() => setIsHeaderMoreOpen(!isHeaderMoreOpen)}
+                      className={`p-2 rounded-lg transition-colors flex items-center justify-center ${isHeaderMoreOpen ? 'bg-hover-overlay text-on-surface' : 'text-on-surface-muted hover:text-on-surface hover:bg-hover-overlay'}`}
+                    >
+                      <MoreHorizontal size={18} />
+                    </button>
+                    
+                    <AnimatePresence>
+                      {isHeaderMoreOpen && (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                          transition={{ duration: 0.15, ease: 'easeOut' }}
+                          className="absolute top-full mt-2"
+                          style={{ 
+                            right: 0,
+                            minWidth: '230px',
+                            background: 'var(--surface-1)',
+                            borderRadius: '20px',
+                            padding: '6px',
+                            boxShadow: resolvedTheme === 'dark' ? '0 30px 60px -12px rgba(0,0,0,0.3)' : 'none',
+                            border: '1px solid var(--divider)',
+                            transformOrigin: 'top right',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 2,
+                            zIndex: 100,
+                          }}
+                        >
+                        <button 
+                          onClick={() => { setIsShareModalOpen(true); setIsHeaderMoreOpen(false); }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                            border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                            fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                            fontFamily: 'inherit', transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <Share2 size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                          <span style={{ whiteSpace: 'nowrap' }}>Share chat</span>
+                        </button>
+                        <button 
+                          onClick={() => { 
+                            if (!showLoggedIn) {
+                              setAuthOpen(true);
+                            } else {
+                              setGroupChatTargetId(activeChatId);
+                              setIsGroupChatModalOpen(true); 
+                            }
+                            setIsHeaderMoreOpen(false); 
+                          }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                            border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                            fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                            fontFamily: 'inherit', transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <UserPlus size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                          <span style={{ whiteSpace: 'nowrap' }}>Start a group chat</span>
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const chat = chats.find(c => c.id === activeChatId);
+                            if (chat) {
+                              setChats(prev => {
+                                const updated = prev.map(c => c.id === chat.id ? { ...c, pinned: !c.pinned } : c);
+                                return [...updated.filter(c => c.pinned), ...updated.filter(c => !c.pinned)];
+                              });
+                            }
+                            setIsHeaderMoreOpen(false);
+                          }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                            border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                            fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                            fontFamily: 'inherit', transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <Pin size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                          <span style={{ whiteSpace: 'nowrap' }}>{chats.find(c => c.id === activeChatId)?.pinned ? 'Unpin chat' : 'Pin chat'}</span>
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const chat = chats.find(c => c.id === activeChatId);
+                            if (chat) { archiveChat(chat.id); createNewChat(); }
+                            setIsHeaderMoreOpen(false);
+                          }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                            border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                            fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                            fontFamily: 'inherit', transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <Archive size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                          <span style={{ whiteSpace: 'nowrap' }}>Archive</span>
+                        </button>
+                        <div style={{ height: 1, background: 'var(--divider)', margin: '2px 4px' }} />
+                        <button 
+                          onClick={() => {
+                            const chat = chats.find(c => c.id === activeChatId);
+                            setDeleteConfirm({ open: true, id: activeChatId, name: chat?.title || 'this chat' });
+                            setIsHeaderMoreOpen(false);
+                          }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                            border: 'none', color: '#ef4444', fontSize: 13.5,
+                            fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                            fontFamily: 'inherit', transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <Trash2 size={16} style={{ color: '#ef4444', flexShrink: 0 }} strokeWidth={1.5} />
+                          <span style={{ whiteSpace: 'nowrap' }}>Delete</span>
+                        </button>
+                      </motion.div>
+                    )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        </header>
+      )}
 
       <main className="flex-1 relative bg-primary flex flex-col" style={{ overflow: 'hidden' }}>
         <div 
@@ -1987,38 +2449,36 @@ const ChatWindow = () => {
                     <p className="text-base max-w-2xl" style={{ color: 'var(--on-surface-muted)' }}>This chat won't appear in your chat history, and won't be used to train our models.</p>
                   </div>
                 ) : (
-                  <h1 className="text-[32px] md:text-[56px] font-bold tracking-tight leading-tight" style={{ color: 'var(--on-surface)', marginBottom: isMobile ? '32px' : '60px' }}>{greeting}</h1>
+                  !isMobile && <h1 className="text-[32px] md:text-[56px] font-bold tracking-tight leading-tight" style={{ color: 'var(--on-surface)', marginBottom: '60px' }}>{greeting}</h1>
                 )}
 
 
+                {isMobile && <div className="flex-1" />}
+                
                 {isMobile && (
-                  <div className={`flex flex-col items-start gap-1 mt-0 w-full max-w-3xl mx-auto px-0 mb-8`}>
+                  <div className={`flex flex-col items-start gap-2 mt-0 w-full max-w-3xl mx-auto px-2 mb-4`}>
                     {activeCategory !== 'write' && (
                       <button 
                         onClick={() => setInput("Create an image of ")} 
-                        className="w-full px-2 py-4 rounded-xl hover:bg-hover-overlay text-[16px] flex items-center gap-4 transition-all group/btn font-semibold active:scale-95"
-                        style={{ backgroundColor: 'transparent' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--hover-overlay)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
+                        style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
                       >
-                        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-hover-overlay group-hover/btn:bg-primary transition-colors">
-                          <Image size={22} style={{ color: accentColor }} />
-                        </div>
+                        <Image size={22} style={{ color: accentColor }} />
                         <span>Create an image</span>
                       </button>
                     )}
 
-                    <div className={`relative ${activeCategory === 'write' ? 'w-full' : ''}`} style={{ minHeight: 48 }} ref={activeCategory === 'write' ? categoryRef : null}>
+                    <div className={`w-full flex flex-col`} ref={activeCategory === 'write' ? categoryRef : null}>
                       {activeCategory === 'write' ? (
-                        <div className="absolute top-0 left-0 w-full flex flex-col animate-fade-in z-[20]" style={{ background: 'var(--bg-primary)' }}>
+                        <div className="w-full flex flex-col animate-fade-in pb-2 gap-2">
                           {WRITE_SUGGESTIONS.map((s, idx) => (
                             <button 
                               key={idx}
                               onClick={() => { setInput(s.prompt); setActiveCategory(null); }}
-                              className="flex items-center gap-4 px-2 py-4 border-b border-divider hover:bg-hover-overlay transition-all text-[15px] font-medium text-left bg-transparent w-full first:border-t"
+                              className="flex items-center gap-4 py-3 text-[15px] font-medium text-left bg-transparent w-full"
                               style={{ color: 'var(--on-surface)' }}
                             >
-                              <PenLine size={18} style={{ color: accentColor }} />
+                              <PenLine size={20} style={{ color: accentColor }} />
                               <span>{s.text}</span>
                             </button>
                           ))}
@@ -2026,14 +2486,10 @@ const ChatWindow = () => {
                       ) : (
                         <button 
                           onClick={() => setActiveCategory('write')}
-                          className="w-full px-2 py-4 rounded-xl hover:bg-hover-overlay text-[16px] flex items-center gap-4 transition-all group/btn font-semibold active:scale-95"
-                          style={{ backgroundColor: 'transparent' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--hover-overlay)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                          className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
+                          style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
                         >
-                          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-hover-overlay group-hover/btn:bg-primary transition-colors">
-                            <PenTool size={22} style={{ color: accentColor }} />
-                          </div>
+                          <PenTool size={22} style={{ color: accentColor }} />
                           <span>Write or edit</span>
                         </button>
                       )}
@@ -2042,14 +2498,10 @@ const ChatWindow = () => {
                     {activeCategory !== 'write' && (
                       <button 
                         onClick={() => setInput("Search for ")}
-                        className="w-full px-2 py-4 rounded-xl hover:bg-hover-overlay text-[16px] flex items-center gap-4 transition-all group/btn font-semibold active:scale-95"
-                        style={{ backgroundColor: 'transparent' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--hover-overlay)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
+                        style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
                       >
-                        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-hover-overlay group-hover/btn:bg-primary transition-colors">
-                          <Globe size={22} style={{ color: accentColor }} />
-                        </div>
+                        <Globe size={22} style={{ color: accentColor }} />
                         <span>Look something up</span>
                       </button>
                     )}
@@ -2057,36 +2509,38 @@ const ChatWindow = () => {
                   </div>
                 )}
 
-                {isMobile && <div className="flex-1" />}
                 <div className={`w-full ${isMobile ? 'mt-auto' : 'max-w-[840px] relative group'} px-0`}>
-                  <div className="w-full relative flex items-center p-2 border border-divider shadow-2xl transition-all duration-300" 
+                  <div className={`w-full relative flex ${isMobile ? 'flex-col gap-2' : 'items-center'} border border-divider shadow-2xl transition-all duration-300`} 
                     style={{ 
                       background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
                       borderRadius: isMobile ? '24px' : '32px', 
-                      padding: isMobile ? '2px 4px 2px 8px' : '4px 6px 4px 16px',
+                      padding: isMobile ? '8px 8px' : '4px 6px 4px 16px',
                       borderColor: isTemporary ? 'transparent' : 'var(--divider)'
                     }}>
-                    <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefLanding}>
-                      <button 
-                        type="button"
-                        className="w-10 h-10 flex items-center justify-center rounded-full transition-all"
-                        style={{ 
-                          color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                          backgroundColor: 'transparent'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                        onClick={(e) => { e.stopPropagation(); setShowAttachmentMenuLanding(!showAttachmentMenuLanding); }}
-                      >
-                        <Plus size={22} />
-                      </button>
-                      <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                        Attach
-                      </div>
-                      <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
-                    </div>
                     
-                    <form onSubmit={handleSend} className="flex-1 flex items-center gap-3">
+                    {!isMobile && (
+                      <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefLanding}>
+                        <button 
+                          type="button"
+                          className="w-10 h-10 flex items-center justify-center rounded-full transition-all"
+                          style={{ 
+                            color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                            backgroundColor: 'transparent'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)'}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          onClick={(e) => { e.stopPropagation(); setShowAttachmentMenuLanding(!showAttachmentMenuLanding); }}
+                        >
+                          <Plus size={22} />
+                        </button>
+                        <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                          Attach
+                        </div>
+                        <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
+                      </div>
+                    )}
+                    
+                    <form onSubmit={handleSend} className={`w-full flex ${isMobile ? 'flex-col gap-2' : 'flex-1 items-center gap-3'}`}>
                       {isListening && isVoiceMessageMode ? (
                         <div className="flex-1 flex items-center pr-1 pl-4 h-12 animate-in fade-in duration-200">
                           <div className="flex-1 flex items-center h-full" style={{ gap: 3, padding: '0 8px' }}>
@@ -2134,20 +2588,40 @@ const ChatWindow = () => {
                         </div>
                       ) : (
                         <>
-                          <input 
-                            ref={inputRef}
-                            type="text" 
-                            value={input} 
-                            onChange={(e) => setInput(e.target.value)} 
-                            placeholder={isLoading ? "Kyra is thinking..." : "Ask anything..."} 
-                            style={{ 
-                              background: 'transparent', border: 'none', outline: 'none', 
-                              color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' 
-                            }}
-                            className="w-full bg-transparent border-none outline-none px-4 text-[16px] py-3 temp-placeholder"
-                          />
-                          <div className="relative ml-4">
-                            <div className="relative">
+                          <div className={`w-full ${isMobile ? 'pt-1 px-3' : 'flex-1'}`}>
+                            <input 
+                              ref={inputRef}
+                              type="text" 
+                              value={input} 
+                              onChange={(e) => { const val = e.target.value; setInput(val); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                              placeholder={isSendDisabled ? "Please wait for response to complete..." : (isLoading ? "Kyra is thinking..." : "Ask anything...")} 
+                              style={{ 
+                                background: 'transparent', border: 'none', outline: 'none', 
+                                color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' 
+                              }}
+                              className={`w-full bg-transparent border-none outline-none ${isMobile ? 'text-[16px] py-2' : 'px-4 text-[16px] py-3'} temp-placeholder`}
+                            />
+                          </div>
+                          
+                          <div className={`flex items-center ${isMobile ? 'justify-between w-full' : 'gap-3 ml-auto flex-shrink-0'}`}>
+                            
+                            {isMobile && (
+                              <div className="relative group/tooltip flex items-center justify-center pl-1" ref={attachmentRefLanding}>
+                                <button 
+                                  type="button"
+                                  className="w-10 h-10 flex items-center justify-center rounded-full transition-all bg-hover-overlay"
+                                  style={{ 
+                                    color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                                  }}
+                                  onClick={(e) => { e.stopPropagation(); setShowAttachmentMenuLanding(!showAttachmentMenuLanding); }}
+                                >
+                                  <Plus size={22} />
+                                </button>
+                                <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
+                              </div>
+                            )}
+
+                            <div className={`relative ${isMobile ? 'absolute left-1/2 -translate-x-1/2' : 'ml-4'}`}>
                               <button 
                                 type="button"
                                 onClick={() => setShowModelSwitcherLanding(!showModelSwitcherLanding)}
@@ -2165,83 +2639,91 @@ const ChatWindow = () => {
                                 {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
                                 <ChevronDown size={14} className={showModelSwitcherLanding ? 'rotate-180 transition-transform' : 'transition-transform'} />
                               </button>
+                              
+                              <AnimatePresence>
+                                {showModelSwitcherLanding && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    style={{
+                                      position: 'absolute', top: '100%', left: 0, marginTop: '8px',
+                                      width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
+                                      border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
+                                      boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
+                                    }}
+                                  >
+                                    {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
+                                      <button
+                                        key={m}
+                                        onClick={() => { setAiModel(m); setShowModelSwitcherLanding(false); }}
+                                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-hover-overlay transition-all text-left group"
+                                      >
+                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-hover-overlay group-hover:bg-primary transition-colors">
+                                          {m === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
+                                          {m === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
+                                          {m === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
+                                          {m === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
+                                        </div>
+                                        <span className={`text-[14px] font-medium ${aiModel === m ? 'text-on-surface' : 'text-on-surface-muted'}`}>{m}</span>
+                                      </button>
+                                    ))}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </div>
                             
-                            <AnimatePresence>
-                              {showModelSwitcherLanding && (
-                                <motion.div
-                                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                  style={{
-                                    position: 'absolute', top: '100%', left: 0, marginTop: '8px',
-                                    width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
-                                    border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
-                                    boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
+                            <div className="flex items-center gap-2 pr-1 ml-auto flex-shrink-0">
+                              <div className="relative group/tooltip flex items-center justify-center">
+                                <button type="button" onClick={() => { setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening(); }} className={`w-10 h-10 flex items-center justify-center transition-all duration-300 rounded-full bg-hover-overlay ${isListening && !isVoiceMessageMode ? 'animate-pulse bg-red-500/20 text-red-500' : ''}`}
+                                  style={{ 
+                                    color: isListening 
+                                      ? '#ef4444' 
+                                      : (isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)') : 'var(--on-surface-muted)') 
                                   }}
                                 >
-                                  {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
-                                    <button
-                                      key={m}
-                                      onClick={() => { setAiModel(m); setShowModelSwitcherLanding(false); }}
-                                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-hover-overlay transition-all text-left group"
-                                    >
-                                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-hover-overlay group-hover:bg-primary transition-colors">
-                                        {m === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
-                                        {m === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
-                                        {m === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
-                                        {m === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                                      </div>
-                                      <span className={`text-[14px] font-medium ${aiModel === m ? 'text-on-surface' : 'text-on-surface-muted'}`}>{m}</span>
-                                    </button>
-                                  ))}
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </div>
-                          
-                          <div className="flex items-center gap-3 pr-1 ml-auto flex-shrink-0">
-                            <div className="relative group/tooltip flex items-center justify-center">
-                              <button type="button" onClick={() => { setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening(); }} className={`w-10 h-10 flex items-center justify-center transition-all duration-300 rounded-full ${isListening && !isVoiceMessageMode ? 'animate-pulse bg-red-500/20 text-red-500' : ''}`}
-                                style={{ 
-                                  color: isListening 
-                                    ? '#ef4444' 
-                                    : (isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)') : 'var(--on-surface-muted)') 
-                                }}
-                              >
-                                <Mic size={20} className={isListening && !isVoiceMessageMode ? 'scale-110' : ''} />
-                              </button>
-                              <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                                Voice
+                                  <Mic size={20} className={isListening && !isVoiceMessageMode ? 'scale-110' : ''} />
+                                </button>
+                                <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                                  Voice
+                                </div>
                               </div>
-                            </div>
-                            
-                            {isLoading ? (
-                              <button onClick={handleStop} type="button" className="w-10 h-10 rounded-full flex items-center justify-center bg-hover-overlay text-on-surface"><Square size={16} fill="currentColor" /></button>
-                            ) : (
-                              <button 
-                                type={input.trim() ? "submit" : "button"}
-                                onClick={(e) => {
-                                  if (!input.trim()) {
-                                    e.preventDefault();
-                                    if (isListening && isVoiceMessageMode) {
-                                      recognitionRef.current?.stop();
-                                    } else {
-                                      setInput('');
-                                      setIsVoiceMessageMode(true); voiceModeRef.current = true;
-                                      toggleListening();
+                              
+                              {isLoading ? (
+                                <button onClick={handleStop} type="button" className="w-10 h-10 rounded-full flex items-center justify-center bg-hover-overlay text-on-surface"><Square size={16} fill="currentColor" /></button>
+                              ) : (
+                                <button 
+                                  type={input.trim() ? "submit" : "button"}
+                                  disabled={isSendDisabled}
+                                  onClick={(e) => {
+                                    if (isSendDisabled) {
+                                      e.preventDefault();
+                                      return;
                                     }
-                                  }
-                                }}
-                                className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300"
-                                style={{ 
-                                   background: accentColor,
-                                   color: '#ffffff',
-                                 }}
-                              >
-                                {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
-                              </button>
-                            )}
+                                    if (!input.trim()) {
+                                      e.preventDefault();
+                                      if (isListening && isVoiceMessageMode) {
+                                        recognitionRef.current?.stop();
+                                      } else {
+                                        setInput('');
+                                        setIsVoiceMessageMode(true); voiceModeRef.current = true;
+                                        toggleListening();
+                                      }
+                                    }
+                                  }}
+                                  className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300"
+                                  style={{ 
+                                     background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor,
+                                     color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff',
+                                     cursor: isSendDisabled ? 'not-allowed' : 'pointer',
+                                     opacity: isSendDisabled ? 0.6 : 1
+                                   }}
+                                  title={isSendDisabled ? "Please wait for current response to complete" : ""}
+                                >
+                                  {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </>
                       )}
@@ -2271,7 +2753,7 @@ const ChatWindow = () => {
                     
                     <div className={`relative ${activeCategory === 'write' ? 'w-full' : ''}`} style={{ minHeight: 48 }} ref={activeCategory === 'write' ? categoryRef : null}>
                       {activeCategory === 'write' ? (
-                        <div className="absolute top-0 left-0 w-full flex flex-col animate-fade-in z-[20]" style={{ background: 'var(--bg-primary)' }}>
+                        <div className="absolute top-0 left-0 w-full flex flex-col animate-fade-in z-[20]" style={{ background: 'var(--bg-primary)', zIndex: 20 }}>
                           {WRITE_SUGGESTIONS.map((s, idx) => (
                             <button 
                               key={idx}
@@ -2329,7 +2811,7 @@ const ChatWindow = () => {
           )}
 
           {/* Messages View */}
-          {messages.length > 0 && (
+          {(messages.length > 0 || chats.find(c => c.id === activeChatId)?.isGroup) && (
             <div
               className="mx-auto w-full flex flex-col"
               style={{
@@ -2337,50 +2819,6 @@ const ChatWindow = () => {
                 padding: '55px 20px 20px',
               }}
             >
-            {chats.find(c => c.id === activeChatId)?.isGroup && (
-                <div style={{
-                  width: '100%',
-                  textAlign: 'center',
-                  padding: '0 20px 48px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: resolvedTheme === 'dark' ? '#ffffff' : 'var(--on-surface-subtle)', opacity: 0.5, marginBottom: '4px', letterSpacing: '0.02em' }}>
-                    {(() => {
-                      const d = new Date(chats.find(c => c.id === activeChatId)?.timestamp || Date.now());
-                      const now = new Date();
-                      const yesterday = new Date(now);
-                      yesterday.setDate(now.getDate() - 1);
-                      const time = d.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-                      if (d.toDateString() === now.toDateString()) return `Today ${time}`;
-                      if (d.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
-                      return d.toLocaleString('en-US', { weekday: 'long', hour: 'numeric', minute: '2-digit', hour12: true }).replace('at ', '');
-                    })()}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                    {(() => {
-                      const chat = chats.find(c => c.id === activeChatId);
-                      const creator = chat?.creator;
-                      return (
-                        <>
-                          {creator?.avatar && (
-                            <img 
-                              src={creator.avatar} 
-                              alt="" 
-                              style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--divider)' }} 
-                            />
-                          )}
-                          <p style={{ fontSize: '13.5px', color: 'var(--on-surface)', margin: 0, opacity: 0.9 }}>
-                            <span style={{ fontWeight: 600 }}>{creator?.displayName || profile?.displayName || 'User'}</span> created the group chat.
-                          </p>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
             {(() => {
               const getTime = (m) => {
                 if (m.timestamp) {
@@ -2396,98 +2834,133 @@ const ChatWindow = () => {
                 return 0;
               };
 
-              const sortedMessages = [...messages].sort((a, b) => getTime(a) - getTime(b));
+              const chat = chats.find(c => c.id === activeChatId);
+              const allMessages = [...messages];
+              
+              if (chat?.isGroup) {
+                const groupCreationTime = chat.createdAt || chat.timestamp || Date.now();
+                allMessages.push({
+                  id: 'group-creation-header',
+                  role: 'system',
+                  timestamp: groupCreationTime,
+                  isGroupCreation: true
+                });
+              }
+
+              const sortedMessages = allMessages.sort((a, b) => getTime(a) - getTime(b));
 
               return sortedMessages.map((msg, index) => {
-                const prevMsg = index > 0 ? sortedMessages[index - 1] : null;
-                const msgTime = getTime(msg);
-                const prevTime = prevMsg ? getTime(prevMsg) : 0;
-                
-                const msgDate = new Date(msgTime || Date.now()).toDateString();
-                const prevDate = prevTime ? new Date(prevTime).toDateString() : null;
-                const showDateHeader = msgDate !== prevDate;
-
                 return (
-                <React.Fragment key={msg.id}>
-                  {showDateHeader && (
-                    <div className="w-full flex justify-center mt-20 mb-14 animate-fade-in relative">
-                      <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                        <div className="w-full border-t border-divider opacity-[0.03]"></div>
-                      </div>
-                      <div className="relative px-4 py-1">
-                        <span className="text-[8px] font-semibold text-on-surface-subtle uppercase tracking-[0.2em] opacity-30">
-                          {formatDateLabel(msgTime || Date.now())}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  <div className={`w-full flex flex-col gap-4 mb-16 group/msg ${msg.role === 'ai' ? 'mt-8' : ''}`}>
-                    {renderMessageView(msg, index)}
+                  <React.Fragment key={msg.id}>
+                    <div className={`w-full flex flex-col gap-4 mb-16 group/msg ${msg.role === 'ai' ? 'mt-8' : ''}`}>
+                      {renderMessageView(msg, index)}
                     </div>
                   </React.Fragment>
                 );
               })
             })()}
-          </div>
-        )}
 
-            {(isLoading || chats.find(c => c.id === activeChatId)?.isGenerating) && (
-              <div className="flex justify-start animate-fade-in">
-                <div className="px-0 py-4 flex flex-col gap-2">
-                  <div className="flex gap-1.5 items-center">
-                    <span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce" style={{ animationDuration: '1s' }}></span>
-                    <span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce" style={{ animationDelay: '0.2s', animationDuration: '1s' }}></span>
-                    <span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full animate-bounce" style={{ animationDelay: '0.4s', animationDuration: '1s' }}></span>
+            {/* User typing indicators (Aligned inside messages container) */}
+            {chats.find(c => c.id === activeChatId)?.isGroup && (() => {
+              const currentChat = chats.find(c => c.id === activeChatId);
+              const typingData = currentChat?.typing || {};
+              const typingUsers = Object.entries(typingData)
+                .filter(([uid, val]) => {
+                  if (uid === profile?.uid) return false;
+                  if (!val.isTyping) return false;
+                  const lastActive = new Date(val.timestamp).getTime();
+                  return (Date.now() - lastActive) < 8000;
+                })
+                .map(([uid, val]) => val);
+
+              if (typingUsers.length === 0) return null;
+
+              return (
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', marginTop: '12px', marginBottom: '16px', paddingLeft: '4px' }} className="animate-fade-in">
+                  {/* Avatars stack on bottom-left of the bubble */}
+                  <div style={{ display: 'flex', alignItems: 'center', marginLeft: '0px' }}>
+                    {typingUsers.slice(0, 3).map((u, i) => (
+                      <div key={i} style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        border: '1.5px solid var(--surface-1)',
+                        background: 'var(--surface-3)',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginLeft: i > 0 ? '-8px' : '0px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                        flexShrink: 0
+                      }}>
+                        {u.avatar ? (
+                          <img src={u.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 750, color: 'var(--on-surface-muted)' }}>
+                            {(u.displayName || 'U')[0].toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  {chats.find(c => c.id === activeChatId)?.isGroup && !isLoading && (
-                    <span className="text-[10px] text-on-surface-subtle/50 font-medium tracking-wide">Kyra is thinking...</span>
-                  )}
+                  
+                  {/* Content Column (Name on top, Chat bubble underneath) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--on-surface-subtle)', fontWeight: 550, opacity: 0.7, paddingLeft: '4px' }}>
+                      {typingUsers.map(u => u.displayName?.split(' ')[0] || 'Someone').join(', ')} 
+                      {typingUsers.length === 1 ? ' is typing' : ' are typing'}
+                    </span>
+                    
+                    {/* Bouncing dots bubble */}
+                    <div style={{
+                      padding: '10px 16px',
+                      borderRadius: '16px 16px 16px 4px',
+                      background: 'var(--surface-2)',
+                      border: '1px solid var(--divider)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: 'var(--shadow-sm)'
+                    }}>
+                      <div style={{ display: 'flex', gap: '4.5px', alignItems: 'center' }}>
+                        <span className="typing-dot" style={{ width: '5.5px', height: '5.5px', backgroundColor: 'var(--accent-color, #a855f7)', borderRadius: '50%', animationDelay: '0s' }}></span>
+                        <span className="typing-dot" style={{ width: '5.5px', height: '5.5px', backgroundColor: 'var(--accent-color, #a855f7)', borderRadius: '50%', animationDelay: '0.2s' }}></span>
+                        <span className="typing-dot" style={{ width: '5.5px', height: '5.5px', backgroundColor: 'var(--accent-color, #a855f7)', borderRadius: '50%', animationDelay: '0.4s' }}></span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
-        {/* Group Chat Intro - Only visible to admin in group chats */}
-        {chats.find(c => c.id === activeChatId)?.isGroup && chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid && (
-          <div style={{
-            width: '100%',
-            textAlign: 'center',
-            padding: '32px 20px 16px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'transparent'
-          }}>
-            <p style={{ fontSize: '13.5px', color: 'var(--on-surface)', margin: 0 }}>
-              <span style={{ fontWeight: 700, color: 'var(--on-surface)' }}>
-                {(chats.find(c => c.id === activeChatId)?.creator?.displayName || profile?.displayName || 'User').toUpperCase()}
-              </span>
-              {' '}started the group chat with a group link.
-            </p>
-            <p style={{ fontSize: '13px', color: 'var(--on-surface-muted)', margin: 0 }}>
-              Your personal Kyra memory is never used in group chats.
-            </p>
-            <button
-              onClick={() => { setGroupLinkChatId(activeChatId); setIsGroupLinkModalOpen(true); }}
-              style={{
-                marginTop: '8px',
-                padding: '9px 22px',
-                borderRadius: '999px',
-                background: 'var(--on-surface)',
-                color: 'var(--bg-primary)',
-                fontSize: '13.5px',
-                fontWeight: 700,
-                border: 'none',
-                cursor: 'pointer',
-                transition: 'opacity 0.2s'
-              }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-            >
-              Invite with link
-            </button>
+            {/* AI thinking indicators — hide if streaming content is already visible in a bubble */}
+            {(() => {
+              const currentChat = chats.find(c => c.id === activeChatId);
+              const isRemoteGenerating = !isLoading && currentChat?.isGenerating;
+              // If remote streaming has already started, an AI placeholder will have content — don't show dots
+              const streamingAlreadyVisible = isRemoteGenerating && messages.some(m => m.role === 'ai' && m.isPlaceholder && m.content);
+              if (!isLoading && !currentChat?.isGenerating) return null;
+              if (streamingAlreadyVisible) return null;
+              return (
+                <div className="flex justify-start animate-fade-in" style={{ paddingLeft: '4px', marginTop: '12px', marginBottom: '16px' }}>
+                  <div className="px-0 py-2 flex flex-col gap-2">
+                    <div className="flex gap-1.5 items-center">
+                      <span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full typing-dot" style={{ animationDelay: '0s' }}></span>
+                      <span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full typing-dot" style={{ animationDelay: '0.2s' }}></span>
+                      <span className="w-1.5 h-1.5 bg-on-surface-subtle rounded-full typing-dot" style={{ animationDelay: '0.4s' }}></span>
+                    </div>
+                    {currentChat?.isGroup && !isLoading && (
+                      <span className="text-[10.5px] text-on-surface-subtle/50 tracking-wider thinking-shimmer">Kyra is thinking...</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
+
+
 
         <div ref={messagesEndRef} className="h-4" />
       </div>
@@ -2500,7 +2973,7 @@ const ChatWindow = () => {
             {showScrollButton && (
               <button
                 onClick={() => scrollToBottom(true)}
-                className="absolute left-1/2 -translate-x-1/2 z-[100]"
+                className="absolute left-1/2 -translate-x-1/2"
                 style={{ 
                   bottom: 'calc(100% + 24px)', 
                   width: '42px',
@@ -2514,7 +2987,8 @@ const ChatWindow = () => {
                   border: 'none',
                   boxShadow: `0 8px 24px ${accentColor}55`,
                   cursor: 'pointer',
-                  transition: 'transform 0.2s ease, opacity 0.2s ease'
+                  transition: 'transform 0.2s ease, opacity 0.2s ease',
+                  zIndex: 100
                 }}
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}
@@ -2559,33 +3033,38 @@ const ChatWindow = () => {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div style={{ 
-              width: '100%', display: 'flex', alignItems: 'center', 
+            <div className={`w-full relative flex ${isMobile ? 'flex-col gap-2' : 'items-center'} transition-all duration-300`}
+              style={{ 
+              width: '100%', 
               background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
-              borderRadius: replyingToMsg ? '0 0 26px 26px' : '26px', padding: '4px 6px 4px 16px', border: '1px solid var(--divider)',
+              borderRadius: replyingToMsg ? (isMobile ? '0 0 24px 24px' : '0 0 26px 26px') : (isMobile ? '24px' : '26px'), 
+              padding: isMobile ? '8px 8px' : '4px 6px 4px 16px', border: '1px solid var(--divider)',
               borderTop: replyingToMsg ? 'none' : '1px solid var(--divider)',
               transition: 'all 0.3s ease'
-            }}>                <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefFooter}>
-                  <button 
-                    type="button"
-                    onMouseEnter={() => setHoveredPlus(true)} 
-                    onMouseLeave={() => setHoveredPlus(false)} 
-                    onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }} 
-                    className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
-                    style={{
-                      color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                      backgroundColor: hoveredPlus ? (isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)') : 'transparent'
-                    }}
-                  >
-                    <Plus size={20} />
-                  </button>
-                  <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                    Attach
+            }}>                
+                {!isMobile && (
+                  <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefFooter}>
+                    <button 
+                      type="button"
+                      onMouseEnter={() => setHoveredPlus(true)} 
+                      onMouseLeave={() => setHoveredPlus(false)} 
+                      onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }} 
+                      className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
+                      style={{
+                        color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                        backgroundColor: hoveredPlus ? (isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)') : 'transparent'
+                      }}
+                    >
+                      <Plus size={20} />
+                    </button>
+                    <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                      Attach
+                    </div>
+                    <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
                   </div>
-                  <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
-                </div>
+                )}
 
-              <form onSubmit={handleSend} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: isSmallMobile ? '8px' : '16px' }}>
+              <form onSubmit={handleSend} className={`w-full flex ${isMobile ? 'flex-col gap-2' : 'flex-1 items-center gap-3'}`} style={{ flex: isMobile ? 'none' : 1 }}>
                 {isListening && isVoiceMessageMode ? (
                   <div className="flex-1 flex items-center pr-1 pl-4 h-[48px] animate-in fade-in duration-200">
                      <div className="flex-1 flex items-center h-full mr-4 relative overflow-hidden">
@@ -2637,138 +3116,167 @@ const ChatWindow = () => {
                   </div>
                 ) : (
                   <>
-                    <input 
-                      ref={footerInputRef}
-                      type="text" 
-                      value={input} 
-                      onChange={(e) => { setInput(e.target.value); if(e.target.value.endsWith('/')) setShowAttachmentMenu(true); }} 
-                      placeholder={isLoading ? "Kyra is thinking..." : "Ask anything..."} 
-                      className="temp-placeholder"
-                      style={{ 
-                        flex: 1, background: 'transparent', border: 'none', outline: 'none', 
-                        color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16, padding: isSmallMobile ? '12px 8px' : '12px 14px'
-                      }} 
-                    />
-                    <div className="relative">
-                      <button 
-                        type="button"
-                        onClick={() => setShowModelSwitcher(!showModelSwitcher)}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
-                        style={{
-                          backgroundColor: isTemporary ? 'transparent' : 'var(--hover-overlay)',
-                          borderColor: isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)') : 'var(--divider)',
-                          color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)'
-                        }}
-                      >
-                        {aiModel === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
-                        {aiModel === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
-                        {aiModel === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
-                        {aiModel === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                        {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
-                        <ChevronDown size={14} className={showModelSwitcher ? 'rotate-180 transition-transform' : 'transition-transform'} />
-                      </button>
-                      
-                      <AnimatePresence>
-                        {showModelSwitcher && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                            style={{
-                              position: 'absolute', bottom: '100%', left: 0, marginBottom: '8px',
-                              width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
-                              border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
-                              boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
-                            }}
-                          >
-                            {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
-                              <button
-                                key={m}
-                                onClick={() => { setAiModel(m); setShowModelSwitcher(false); }}
-                                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-hover-overlay transition-all text-left group"
-                              >
-                                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-hover-overlay group-hover:bg-primary transition-colors">
-                                  {m === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
-                                  {m === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
-                                  {m === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
-                                  {m === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                                </div>
-                                <span className={`text-[14px] font-medium ${aiModel === m ? 'text-on-surface' : 'text-on-surface-muted'}`}>{m}</span>
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                    <div className={`w-full ${isMobile ? 'pt-1 px-3' : 'flex-1'}`}>
+                      <input 
+                        ref={footerInputRef}
+                        type="text" 
+                        value={input} 
+                        onChange={(e) => { const val = e.target.value; setInput(val); if(val.endsWith('/')) setShowAttachmentMenu(true); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                        placeholder={isSendDisabled ? "Please wait for response to complete..." : (isLoading ? "Kyra is thinking..." : "Ask anything...")} 
+                        className={`w-full bg-transparent border-none outline-none ${isMobile ? 'text-[16px] py-2' : 'temp-placeholder'}`}
+                        style={{ 
+                          background: 'transparent', border: 'none', outline: 'none', 
+                          color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16, padding: isMobile ? '0' : (isSmallMobile ? '12px 8px' : '12px 14px')
+                        }} 
+                      />
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: isSmallMobile ? 6 : 10, paddingRight: 4 }}>
-                         {!isLoading && (
-                           <div className="relative group/tooltip flex items-center justify-center">
-                             <button 
-                               type="button" 
-                               onClick={() => { setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening(); }}
-                               className={`w-10 h-10 flex items-center justify-center transition-all duration-300 rounded-full ${isListening && !isVoiceMessageMode ? 'animate-pulse bg-red-500/10' : ''}`}
-                               style={{ 
-                                 color: isListening && !isVoiceMessageMode
-                                   ? '#ef4444' 
-                                   : (isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)') : 'var(--on-surface-muted)') 
-                               }}
-                             >
-                               <Mic size={20} className={isListening && !isVoiceMessageMode ? 'scale-110' : ''} />
-                             </button>
-                             <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                               Voice
-                             </div>
-                           </div>
-                         )}
-
-                         {isLoading ? (
-                            <div className="relative group/tooltip flex items-center justify-center">
-                              <button 
-                                type="button"
-                                onClick={handleStop}
-                                className="group/stop relative flex items-center justify-center transition-all duration-300 active:scale-90"
-                                style={{ 
-                                  width: 40, height: 40, borderRadius: '50%', 
-                                  background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)', 
-                                  color: accentColor, 
-                                  border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                                  cursor: 'pointer' 
-                                }}
-                              >
-                                <Square size={14} fill={accentColor} className="group-hover/stop:scale-110 transition-transform" />
-                              </button>
-                              <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                                Stop answering
-                              </div>
-                            </div>
-                          ) : (
+                    
+                    <div className={`flex items-center ${isMobile ? 'justify-between w-full' : 'gap-3 ml-auto flex-shrink-0'}`}>
+                      
+                      {isMobile && (
+                        <div className="relative group/tooltip flex items-center justify-center pl-1" ref={attachmentRefFooter}>
                           <button 
-                            type={input.trim() ? "submit" : "button"}
-                            onClick={(e) => {
-                              if (!input.trim()) {
-                                e.preventDefault();
-                                if (isListening && isVoiceMessageMode) {
-                                  recognitionRef.current?.stop();
-                                } else {
-                                  setInput('');
-                                  setIsVoiceMessageMode(true);
-                                  toggleListening();
-                                }
-                              }
-                            }}
+                            type="button"
+                            className="w-10 h-10 flex items-center justify-center rounded-full transition-all bg-hover-overlay"
                             style={{ 
-                              width: 40, height: 40, borderRadius: '50%', 
-                              background: accentColor, 
-                              color: '#ffffff', 
-                              border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                              transition: 'all 0.3s ease', cursor: 'pointer' 
+                              color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
                             }}
+                            onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }}
                           >
-                            {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
+                            <Plus size={22} />
                           </button>
-                        )}
+                          <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
+                        </div>
+                      )}
+
+                      <div className={`relative ${isMobile ? 'absolute left-1/2 -translate-x-1/2' : 'ml-4'}`}>
+                        <button 
+                          type="button"
+                          onClick={() => setShowModelSwitcher(!showModelSwitcher)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
+                          style={{
+                            backgroundColor: isTemporary ? 'transparent' : 'var(--hover-overlay)',
+                            borderColor: isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)') : 'var(--divider)',
+                            color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)'
+                          }}
+                        >
+                          {aiModel === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
+                          {aiModel === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
+                          {aiModel === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
+                          {aiModel === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
+                          {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
+                          <ChevronDown size={14} className={showModelSwitcher ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                        </button>
+                        
+                        <AnimatePresence>
+                          {showModelSwitcher && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                              style={{
+                                position: 'absolute', bottom: '100%', left: 0, marginBottom: '8px',
+                                width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
+                                border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
+                                boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
+                              }}
+                            >
+                              {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
+                                <button
+                                  key={m}
+                                  onClick={() => { setAiModel(m); setShowModelSwitcher(false); }}
+                                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-hover-overlay transition-all text-left group"
+                                >
+                                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-hover-overlay group-hover:bg-primary transition-colors">
+                                    {m === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
+                                    {m === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
+                                    {m === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
+                                    {m === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
+                                  </div>
+                                  <span className={`text-[14px] font-medium ${aiModel === m ? 'text-on-surface' : 'text-on-surface-muted'}`}>{m}</span>
+                                </button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
+
+                      <div className="flex items-center gap-2 pr-1 ml-auto flex-shrink-0">
+                           {!isLoading && (
+                             <div className="relative group/tooltip flex items-center justify-center">
+                               <button 
+                                 type="button" 
+                                 onClick={() => { setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening(); }}
+                                 className={`w-10 h-10 flex items-center justify-center transition-all duration-300 rounded-full ${isListening && !isVoiceMessageMode ? 'animate-pulse bg-red-500/10' : 'bg-hover-overlay'}`}
+                                 style={{ 
+                                   color: isListening && !isVoiceMessageMode
+                                     ? '#ef4444' 
+                                     : (isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)') : 'var(--on-surface-muted)') 
+                                 }}
+                               >
+                                 <Mic size={20} className={isListening && !isVoiceMessageMode ? 'scale-110' : ''} />
+                               </button>
+                               <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                                 Voice
+                               </div>
+                             </div>
+                           )}
+
+                           {isLoading ? (
+                              <div className="relative group/tooltip flex items-center justify-center">
+                                <button 
+                                  type="button"
+                                  onClick={handleStop}
+                                  className="group/stop relative flex items-center justify-center transition-all duration-300 active:scale-90"
+                                  style={{ 
+                                    width: 40, height: 40, borderRadius: '50%', 
+                                    background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)', 
+                                    color: accentColor, 
+                                    border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                    cursor: 'pointer' 
+                                  }}
+                                >
+                                  <Square size={14} fill={accentColor} className="group-hover/stop:scale-110 transition-transform" />
+                                </button>
+                                <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                                  Stop answering
+                                </div>
+                              </div>
+                            ) : (
+                            <button 
+                              type={input.trim() ? "submit" : "button"}
+                              disabled={isSendDisabled}
+                              onClick={(e) => {
+                                if (isSendDisabled) {
+                                  e.preventDefault();
+                                  return;
+                                }
+                                if (!input.trim()) {
+                                  e.preventDefault();
+                                  if (isListening && isVoiceMessageMode) {
+                                    recognitionRef.current?.stop();
+                                  } else {
+                                    setInput('');
+                                    setIsVoiceMessageMode(true);
+                                    toggleListening();
+                                  }
+                                }
+                              }}
+                              style={{ 
+                                width: 40, height: 40, borderRadius: '50%', 
+                                background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor, 
+                                color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff', 
+                                border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                                transition: 'all 0.3s ease', cursor: isSendDisabled ? 'not-allowed' : 'pointer',
+                                opacity: isSendDisabled ? 0.6 : 1
+                              }}
+                              title={isSendDisabled ? "Please wait for current response to complete" : ""}
+                            >
+                              {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
+                            </button>
+                          )}
+                        </div>
+                    </div>
                   </>
                 )}
               </form>
@@ -3349,8 +3857,9 @@ const ShareModal = ({ isOpen, onClose, chatId }) => {
   );
 };
 
-const PeopleModal = ({ isOpen, onClose, onAddPeople }) => {
+const PeopleModal = ({ isOpen, onClose, onAddPeople, activeChat }) => {
   const { resolvedTheme, profile } = useAppContext();
+  const isAdmin = activeChat?.creator?.uid === profile?.uid;
   
   if (!isOpen) return null;
 
@@ -3426,7 +3935,7 @@ const PeopleModal = ({ isOpen, onClose, onAddPeople }) => {
                 {profile?.displayName || 'User'}
               </div>
               <div style={{ fontSize: '12.5px', color: 'var(--on-surface-muted)', marginTop: '0px' }}>
-                You · {profile?.email || 'user@example.com'} · admin
+                You · {profile?.email || 'user@example.com'} · {isAdmin ? 'admin' : 'member'}
               </div>
             </div>
           </div>

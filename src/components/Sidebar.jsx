@@ -82,7 +82,9 @@ const Sidebar = () => {
         setOpenMenuIndex(null);
       }
       if (profileRef.current && !profileRef.current.contains(e.target)) {
-        setProfileMenuOpen(false);
+        if (!e.target.closest('.profile-trigger')) {
+          setProfileMenuOpen(false);
+        }
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -158,7 +160,8 @@ const Sidebar = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90]"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            style={{ zIndex: 190 }}
           />
         )}
       </AnimatePresence>
@@ -166,15 +169,16 @@ const Sidebar = () => {
       <motion.div
         initial={false}
         animate={{ 
-          width: isMobile ? (isSidebarOpen ? 'min(80vw, 300px)' : '0px') : (isSidebarOpen ? '280px' : '68px'),
+          width: isMobile ? (isSidebarOpen ? '100vw' : '0px') : (isSidebarOpen ? '280px' : '68px'),
           x: isMobile && !isSidebarOpen ? '-100%' : 0,
         }}
         transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-        className={`sidebar-root ${isSidebarOpen ? 'is-open' : ''} relative h-screen bg-sidebar-bg border-r border-divider flex flex-col z-40 shadow-2xl ${isMobile ? 'fixed left-0 top-0 h-full z-[100] border-none' : ''}`}
+        className={`sidebar-root ${isSidebarOpen ? 'is-open' : ''} relative h-screen bg-sidebar-bg border-r border-divider flex flex-col z-40 shadow-2xl ${isMobile ? 'fixed left-0 top-0 h-full z-[200] border-none' : ''}`}
         style={{
           boxShadow: isMobile && isSidebarOpen ? '0 0 50px rgba(0,0,0,0.5)' : 'none',
           pointerEvents: isMobile && !isSidebarOpen ? 'none' : 'auto',
-          overflow: 'visible'
+          overflow: 'visible',
+          zIndex: isMobile ? 200 : undefined
         }}
       >
         {/* Top Header / Logo Area */}
@@ -183,10 +187,16 @@ const Sidebar = () => {
             <div className="flex items-center gap-3">
               <div className="relative group/logo">
             <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              onClick={() => {
+                if (isMobile) {
+                  setIsSidebarOpen(false);
+                } else {
+                  setIsSidebarOpen(!isSidebarOpen);
+                }
+              }}
               onMouseEnter={() => setIsLogoHovered(true)}
               onMouseLeave={() => setIsLogoHovered(false)}
-              className={`h-10 rounded-xl flex items-center ${isSidebarOpen ? 'justify-start w-auto' : 'justify-center w-10'} transition-all duration-200 ${!isSidebarOpen ? 'hover:bg-white/10 cursor-pointer' : ''}`}
+              className={`h-10 rounded-xl flex items-center ${isSidebarOpen ? 'justify-start w-auto' : 'justify-center w-10'} transition-all duration-200 ${(!isSidebarOpen || isMobile) ? 'hover:bg-white/10 cursor-pointer' : ''}`}
               style={{ paddingLeft: isSidebarOpen ? '12px' : '0px' }}
             >
               {!isSidebarOpen ? (
@@ -257,31 +267,51 @@ const Sidebar = () => {
             </button>
           </div>
           </div>
-          {isSidebarOpen && isMobile && (
-            <button 
-              onClick={() => setIsSidebarOpen(false)}
-              className="p-2 hover:bg-white/10 rounded-lg text-on-surface"
-            >
-              <X size={20} />
-            </button>
-          )}
-
-          {isSidebarOpen && !isMobile && (
-            <div className="relative group/tooltip">
-              <button 
-                onClick={() => setIsSidebarOpen(false)}
-                style={{ padding: 8, borderRadius: 8, color: 'var(--on-surface)', background: 'transparent', border: 'none', cursor: 'pointer', transition: 'all 0.15s' }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-              >
-                <PanelLeftClose size={20} />
-              </button>
-              <div 
-                style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }}
-                className="tooltip-label absolute opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50"
-              >
-                Close sidebar
-              </div>
+          {isSidebarOpen && (
+            <div className="flex items-center gap-3">
+              {!isMobile ? (
+                <div className="relative group/tooltip">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsSidebarOpen(false);
+                    }}
+                    className="w-8 h-8 rounded-lg hover:bg-hover-overlay flex items-center justify-center text-on-surface transition-colors"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <PanelLeftClose size={20} />
+                  </button>
+                  <div 
+                    className="tooltip-label absolute top-full right-0 mt-2 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50 text-xs"
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    Close sidebar
+                  </div>
+                </div>
+              ) : mounted && showLoggedIn ? (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsSidebarOpen(false);
+                    router.push('/profile');
+                  }}
+                  className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-xs shadow-sm cursor-pointer profile-trigger"
+                  style={{ overflow: 'hidden', width: '32px', height: '32px' }}
+                >
+                  {profile.avatar
+                    ? <img src={profile.avatar} alt="avatar" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : (profile.displayName || 'U').trim().split(' ').filter(Boolean).slice(0,2).map(w => w[0].toUpperCase()).join('')
+                  }
+                </div>
+              ) : (
+                <button 
+                  onClick={() => setAuthOpen(true)}
+                  className="w-8 h-8 rounded-full bg-hover-overlay flex items-center justify-center text-on-surface shadow-sm"
+                  style={{ width: '32px', height: '32px' }}
+                >
+                  <User size={16} />
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -355,7 +385,11 @@ const Sidebar = () => {
                 onClick={(e) => {
                   e.stopPropagation();
                   const rect = e.currentTarget.getBoundingClientRect();
-                  setMoreMenuPos({ top: rect.top, left: rect.right + 12 });
+                  if (isMobile) {
+                    setMoreMenuPos({ top: rect.bottom + 8, left: 16, width: window.innerWidth - 32 });
+                  } else {
+                    setMoreMenuPos({ top: rect.top, left: rect.right + 12, width: 220 });
+                  }
                   setIsMoreMenuOpen(!isMoreMenuOpen);
                 }}
                 style={{
@@ -391,10 +425,11 @@ const Sidebar = () => {
                   animate={{ opacity: 1, x: 0, scale: 1 }}
                   exit={{ opacity: 0, x: -10, scale: 0.95 }}
                   transition={{ duration: 0.2 }}
-                  className="fixed z-[9999] shadow-2xl"
+                  className="fixed shadow-2xl"
                   style={{
                     top: moreMenuPos.top,
                     left: moreMenuPos.left,
+                    width: moreMenuPos.width || 220,
                     boxShadow: '0 20px 50px rgba(0,0,0,0.25)',
                     background: 'var(--surface-1)',
                     border: '1px solid var(--divider)',
@@ -404,6 +439,7 @@ const Sidebar = () => {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 2,
+                    zIndex: 9999,
                   }}
                   onClick={e => e.stopPropagation()}
                 >
@@ -566,10 +602,13 @@ const Sidebar = () => {
                           className="transition-all ml-2 shrink-0 cursor-pointer flex items-center justify-center"
                           style={{ 
                             width: '28px', height: '28px',
-                            opacity: (chat.isGroup || hoveredChat === i || openMenuIndex === i) ? 1 : 0 
+                            opacity: (chat.isGroup || (!isMobile && hoveredChat === i) || openMenuIndex === i) ? 1 : 0,
+                            display: (!chat.isGroup && isMobile) ? 'none' : 'flex'
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (isMobile) return;
+                            
                             const rect = e.currentTarget.getBoundingClientRect();
                             const spaceBelow = window.innerHeight - rect.bottom;
                             const menuHeight = 220;
@@ -651,7 +690,7 @@ const Sidebar = () => {
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: menuPos.isBottom ? 4 : -4 }}
                             transition={{ duration: 0.12 }}
-                            className="fixed z-[999999] shadow-2xl"
+                            className="fixed shadow-2xl"
                             style={{
                               background: resolvedTheme === 'dark' ? '#1c1c1e' : '#ffffff',
                               border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
@@ -665,7 +704,8 @@ const Sidebar = () => {
                               top: menuPos.isBottom ? 'auto' : menuPos.top,
                               bottom: menuPos.isBottom ? menuPos.bottom : 'auto',
                               left: menuPos.left,
-                              width: isMobile && isSidebarOpen ? 'calc(100vw - 32px)' : 'auto'
+                              width: isMobile && isSidebarOpen ? 'calc(100vw - 32px)' : 'auto',
+                              zIndex: 999999
                             }}
                           >
                             {(chat.isGroup ? [
@@ -750,17 +790,27 @@ const Sidebar = () => {
         </div>
 
         {/* Bottom Profile Area */}
-        <div className="px-3 mt-auto mb-2" ref={profileRef}>
+        <div className="px-3 mt-auto mb-2" style={{ display: isMobile ? 'none' : 'block' }}>
           {mounted && showLoggedIn ? (
             <div
               style={{ display: 'flex', alignItems: 'center', borderRadius: 20, transition: 'background 0.15s', cursor: 'pointer' }}
-              className={isSidebarOpen ? 'justify-between p-3' : 'relative group/tooltip justify-center p-2.5'}
+              className={`${isSidebarOpen ? 'justify-between p-3' : 'relative group/tooltip justify-center p-2.5'} profile-trigger`}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                setProfileMenuPos({ bottom: window.innerHeight - rect.top + 8, left: rect.left, width: rect.width });
-                setProfileMenuOpen(prev => !prev);
+                e.stopPropagation();
+                if (isMobile) {
+                  setIsSidebarOpen(false);
+                  router.push('/profile');
+                } else {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setProfileMenuPos({
+                    bottom: window.innerHeight - rect.top + 8,
+                    left: rect.left,
+                    width: rect.width
+                  });
+                  setProfileMenuOpen(!profileMenuOpen);
+                }
               }}
             >
               <div className="flex items-center gap-3">
@@ -882,9 +932,11 @@ const Sidebar = () => {
         <div
           style={{
             position: 'fixed',
-            bottom: profileMenuPos.bottom,
-            left: profileMenuPos.left,
-            width: Math.max(profileMenuPos.width, 260),
+            bottom: profileMenuPos.bottom !== undefined ? profileMenuPos.bottom : 'auto',
+            top: profileMenuPos.top !== undefined ? profileMenuPos.top : 'auto',
+            left: profileMenuPos.left !== undefined ? profileMenuPos.left : 'auto',
+            right: profileMenuPos.right !== undefined ? profileMenuPos.right : 'auto',
+            width: Math.max(profileMenuPos.width || 0, 260),
             zIndex: 999998,
             background: 'var(--surface-1)',
             borderRadius: '16px',
@@ -923,9 +975,31 @@ const Sidebar = () => {
           {/* Menu Items Group 1 */}
           {[
             { icon: <Sparkles size={15} />, label: 'Upgrade plan', action: () => { setProfileMenuOpen(false); router.push('/upgrade'); } },
-            { icon: <Palette size={15} />, label: 'Personalization', action: () => { setProfileMenuOpen(false); router.push('/settings?tab=personalization'); } },
+            { 
+              icon: <Palette size={15} />, 
+              label: 'Personalization', 
+              action: () => { 
+                setProfileMenuOpen(false); 
+                if (isMobile) {
+                  router.push('/profile?view=personalization');
+                } else {
+                  router.push('/settings?tab=personalization');
+                }
+              } 
+            },
             { icon: <UserCircle size={15} />, label: 'Profile', action: () => { setProfileMenuOpen(false); router.push('/profile'); } },
-            { icon: <Settings size={15} />, label: 'Settings', action: () => { setProfileMenuOpen(false); router.push('/settings?tab=general'); } },
+            { 
+              icon: <Settings size={15} />, 
+              label: 'Settings', 
+              action: () => { 
+                setProfileMenuOpen(false); 
+                if (isMobile) {
+                  router.push('/profile');
+                } else {
+                  router.push('/settings?tab=general');
+                }
+              } 
+            },
           ].map((item, j) => (
             <button
               key={j}

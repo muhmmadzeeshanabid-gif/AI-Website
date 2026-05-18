@@ -89,7 +89,7 @@ const SearchModal = ({ onClose }) => {
           borderBottom: '1px solid var(--divider)',
           display: 'flex', alignItems: 'center', gap: 16,
         }}>
-          <Search size={20} style={{ color: 'var(--on-surface-muted)' }} />
+          <Search size={20} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} />
           <input
             ref={inputRef}
             type="text"
@@ -99,6 +99,7 @@ const SearchModal = ({ onClose }) => {
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
               color: 'var(--on-surface)', fontSize: 17, fontFamily: 'inherit',
+              minWidth: 0,
             }}
           />
           <button 
@@ -106,6 +107,7 @@ const SearchModal = ({ onClose }) => {
             style={{ 
               background: 'transparent', border: 'none', color: 'var(--on-surface-muted)',
               cursor: 'pointer', padding: 4, borderRadius: '50%',
+              flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
