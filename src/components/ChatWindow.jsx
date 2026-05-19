@@ -1382,6 +1382,13 @@ const ChatWindow = () => {
   useEffect(() => scrollToBottom(), [messages]);
 
   useEffect(() => {
+    isAtBottomRef.current = true;
+    scrollToBottom(true);
+    const timer = setTimeout(() => scrollToBottom(true), 50);
+    return () => clearTimeout(timer);
+  }, [activeChatId]);
+
+  useEffect(() => {
     if (activeChatId && messages.length > 0 && !isTemporary) {
       setChats(prev => prev.map(chat =>
         chat.id === activeChatId ? { ...chat, messages } : chat
@@ -1511,7 +1518,7 @@ const ChatWindow = () => {
     // Clear reply state
     if (replyingToMsg) setReplyingToMsg(null);
 
-    // If it's a voice message, just show the bubble ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â don't call AI
+    // If it's a voice message, just show the bubble — don't call AI
     if (isVoice) {
       if (isFirstMessage && !isTemporary) {
         const newChatId = Date.now().toString();
@@ -1519,7 +1526,6 @@ const ChatWindow = () => {
         setChats(prev => [newChat, ...prev.filter(c => c.messages.length > 0)]);
         setActiveChatId(newChatId);
         localStorage.setItem('aura-active-chat-id', newChatId);
-        if (typeof window !== 'undefined') window.history.pushState(null, '', `/c/${newChatId}`);
       }
       setMessages(prev => [...prev, userMessage]);
       if (!overrideInput) setInput('');
@@ -1537,7 +1543,6 @@ const ChatWindow = () => {
       setChats(prev => [newChat, ...prev.filter(c => c.messages.length > 0)]);
       setActiveChatId(newChatId);
       localStorage.setItem('aura-active-chat-id', newChatId);
-      if (typeof window !== 'undefined') window.history.pushState(null, '', `/c/${newChatId}`);
     }
 
     if (!overrideInput) setInput('');
@@ -1931,17 +1936,18 @@ const ChatWindow = () => {
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              width: '40px', height: '40px', borderRadius: '50%', color: 'var(--on-surface)',
+              background: resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+              border: 'none', cursor: 'pointer',
+              width: '44px', height: '44px', borderRadius: '50%', color: 'var(--on-surface)',
               transition: 'background 0.2s',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            onMouseEnter={e => e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}
+            onMouseLeave={e => e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'}
           >
             {isSidebarOpen ? (
-              <X size={22} strokeWidth={2.5} />
+              <X size={20} strokeWidth={2.5} />
             ) : (
-              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none">
+              <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none">
                 <line x1="4" y1="8" x2="20" y2="8" />
                 <line x1="4" y1="16" x2="13" y2="16" />
               </svg>
@@ -1950,170 +1956,202 @@ const ChatWindow = () => {
 
           {/* Right side buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {/* New Chat Icon */}
-            <button 
-              onClick={() => {
-                createNewChat();
-                if (isSidebarOpen) setIsSidebarOpen(false);
-              }}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'transparent', border: 'none', cursor: 'pointer',
-                width: '40px', height: '40px', borderRadius: '50%', color: 'var(--on-surface)',
-                transition: 'background 0.2s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              <SquarePen size={22} strokeWidth={2.2} />
-            </button>
-
-            {/* Options Vertical Kebab Icon */}
-            <div className="relative" ref={headerMoreRef}>
+            {!activeChatId || !chats.some(c => c.id === activeChatId && c.messages && c.messages.length > 0) ? (
+              /* Temporary Chat Toggle Icon for new/empty chats */
               <button 
-                onClick={() => setIsHeaderMoreOpen(!isHeaderMoreOpen)}
+                onClick={() => setIsTemporary(!isTemporary)}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'transparent', border: 'none', cursor: 'pointer',
-                  width: '40px', height: '40px', borderRadius: '50%', color: 'var(--on-surface)',
-                  transition: 'background 0.2s',
+                  background: isTemporary 
+                    ? 'var(--on-surface)' 
+                    : (resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'),
+                  border: 'none', cursor: 'pointer',
+                  width: '44px', height: '44px', borderRadius: '50%',
+                  color: isTemporary ? 'var(--bg-primary)' : 'var(--on-surface)',
+                  transition: 'all 0.2s',
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                onMouseEnter={e => { if(!isTemporary) e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'; }}
+                onMouseLeave={e => { if(!isTemporary) e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'; }}
               >
-                <MoreVertical size={22} strokeWidth={2.2} />
+                <MessageSquareDashed size={20} strokeWidth={2.2} />
               </button>
+            ) : (
+              /* Original icons for existing chats inside a pill/capsule background container */
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                background: resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+                borderRadius: '999px',
+                padding: '0 8px',
+                height: '44px',
+                gap: '4px'
+              }}>
+                {/* New Chat Icon */}
+                <button 
+                  onClick={() => {
+                    createNewChat();
+                    if (isSidebarOpen) setIsSidebarOpen(false);
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    width: '36px', height: '36px', borderRadius: '50%', color: 'var(--on-surface)',
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <SquarePen size={20} strokeWidth={2.2} />
+                </button>
 
-              <AnimatePresence>
-                {isHeaderMoreOpen && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95, y: -5 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -5 }}
-                    transition={{ duration: 0.15, ease: 'easeOut' }}
-                    className="absolute"
-                    style={{ 
-                      right: 0,
-                      top: '100%',
-                      marginTop: '8px',
-                      minWidth: '230px',
-                      background: 'var(--surface-1)',
-                      border: '1px solid var(--divider)',
-                      borderRadius: '22px',
-                      padding: '6px',
-                      boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-                      transformOrigin: 'top right',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 2,
-                      zIndex: 100,
+                {/* Options Vertical Kebab Icon */}
+                <div className="relative" ref={headerMoreRef} style={{ display: 'flex', alignItems: 'center' }}>
+                  <button 
+                    onClick={() => setIsHeaderMoreOpen(!isHeaderMoreOpen)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: 'transparent', border: 'none', cursor: 'pointer',
+                      width: '36px', height: '36px', borderRadius: '50%', color: 'var(--on-surface)',
+                      transition: 'background 0.2s',
                     }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <button 
-                      onClick={() => { setIsShareModalOpen(true); setIsHeaderMoreOpen(false); }}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                        border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                        fontFamily: 'inherit', transition: 'background 0.15s'
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <Share2 size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                      <span style={{ whiteSpace: 'nowrap' }}>Share chat</span>
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (!showLoggedIn) {
-                          setAuthOpen(true);
-                        } else {
-                          setGroupChatTargetId(activeChatId);
-                          setIsGroupChatModalOpen(true); 
-                        }
-                        setIsHeaderMoreOpen(false); 
-                      }}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                        border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                        fontFamily: 'inherit', transition: 'background 0.15s'
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <UserPlus size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                      <span style={{ whiteSpace: 'nowrap' }}>Start a group chat</span>
-                    </button>
-                    <button 
-                      onClick={() => {
-                        const chat = chats.find(c => c.id === activeChatId);
-                        if (chat) {
-                          setChats(prev => {
-                            const updated = prev.map(c => c.id === chat.id ? { ...c, pinned: !c.pinned } : c);
-                            return [...updated.filter(c => c.pinned), ...updated.filter(c => !c.pinned)];
-                          });
-                        }
-                        setIsHeaderMoreOpen(false);
-                      }}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                        border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                        fontFamily: 'inherit', transition: 'background 0.15s'
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <Pin size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                      <span style={{ whiteSpace: 'nowrap' }}>{chats.find(c => c.id === activeChatId)?.pinned ? 'Unpin chat' : 'Pin chat'}</span>
-                    </button>
-                    <button 
-                      onClick={() => {
-                        const chat = chats.find(c => c.id === activeChatId);
-                        if (chat) { archiveChat(chat.id); createNewChat(); }
-                        setIsHeaderMoreOpen(false);
-                      }}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                        border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                        fontFamily: 'inherit', transition: 'background 0.15s'
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <Archive size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                      <span style={{ whiteSpace: 'nowrap' }}>Archive</span>
-                    </button>
-                    <div style={{ height: 1, background: 'var(--divider)', margin: '2px 4px' }} />
-                    <button 
-                      onClick={() => {
-                        const chat = chats.find(c => c.id === activeChatId);
-                        setDeleteConfirm({ open: true, id: activeChatId, name: chat?.title || 'this chat' });
-                        setIsHeaderMoreOpen(false);
-                      }}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                        border: 'none', color: '#ef4444', fontSize: 13.5,
-                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                        fontFamily: 'inherit', transition: 'background 0.15s'
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <Trash2 size={16} style={{ color: '#ef4444', flexShrink: 0 }} strokeWidth={1.5} />
-                      <span style={{ whiteSpace: 'nowrap' }}>Delete</span>
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                    <MoreVertical size={20} strokeWidth={2.2} />
+                  </button>
+
+                  <AnimatePresence>
+                    {isHeaderMoreOpen && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        className="absolute"
+                        style={{ 
+                          right: -8,
+                          top: '100%',
+                          marginTop: '12px',
+                          minWidth: '230px',
+                          background: 'var(--surface-1)',
+                          border: '1px solid var(--divider)',
+                          borderRadius: '22px',
+                          padding: '6px',
+                          boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                          transformOrigin: 'top right',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 2,
+                          zIndex: 100,
+                        }}
+                      >
+                        <button 
+                          onClick={() => { setIsShareModalOpen(true); setIsHeaderMoreOpen(false); }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                            border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                            fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                            fontFamily: 'inherit', transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <Share2 size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                          <span style={{ whiteSpace: 'nowrap' }}>Share chat</span>
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (!showLoggedIn) {
+                              setAuthOpen(true);
+                            } else {
+                              setGroupChatTargetId(activeChatId);
+                              setIsGroupChatModalOpen(true); 
+                            }
+                            setIsHeaderMoreOpen(false); 
+                          }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                            border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                            fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                            fontFamily: 'inherit', transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <UserPlus size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                          <span style={{ whiteSpace: 'nowrap' }}>Start a group chat</span>
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const chat = chats.find(c => c.id === activeChatId);
+                            if (chat) {
+                              setChats(prev => {
+                                const updated = prev.map(c => c.id === chat.id ? { ...c, pinned: !c.pinned } : c);
+                                return [...updated.filter(c => c.pinned), ...updated.filter(c => !c.pinned)];
+                              });
+                            }
+                            setIsHeaderMoreOpen(false);
+                          }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                            border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                            fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                            fontFamily: 'inherit', transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <Pin size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                          <span style={{ whiteSpace: 'nowrap' }}>{chats.find(c => c.id === activeChatId)?.pinned ? 'Unpin chat' : 'Pin chat'}</span>
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const chat = chats.find(c => c.id === activeChatId);
+                            if (chat) { archiveChat(chat.id); createNewChat(); }
+                            setIsHeaderMoreOpen(false);
+                          }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                            border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                            fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                            fontFamily: 'inherit', transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <Archive size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                          <span style={{ whiteSpace: 'nowrap' }}>Archive</span>
+                        </button>
+                        <div style={{ height: 1, background: 'var(--divider)', margin: '2px 4px' }} />
+                        <button 
+                          onClick={() => {
+                            const chat = chats.find(c => c.id === activeChatId);
+                            setDeleteConfirm({ open: true, id: activeChatId, name: chat?.title || 'this chat' });
+                            setIsHeaderMoreOpen(false);
+                          }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                            border: 'none', color: '#ef4444', fontSize: 13.5,
+                            fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                            fontFamily: 'inherit', transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <Trash2 size={16} style={{ color: '#ef4444', flexShrink: 0 }} strokeWidth={1.5} />
+                          <span style={{ whiteSpace: 'nowrap' }}>Delete</span>
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            )}
           </div>
         </header>
       ) : (

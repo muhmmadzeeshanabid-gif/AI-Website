@@ -3,10 +3,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { auth, googleProvider, db } from '@/lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove, deleteDoc, collection, query, where, orderBy, limit, enableNetwork } from 'firebase/firestore';
+import { usePathname, useRouter } from 'next/navigation';
+
 
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
+  const pathname = usePathname();
+  const router = useRouter();
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'dark';
     return localStorage.getItem('aura-theme') || 'dark';
@@ -363,6 +367,39 @@ export const AppProvider = ({ children }) => {
     document.documentElement.style.setProperty('--chat-bubble-user', accentColor);
     document.documentElement.setAttribute('data-theme', theme);
     document.documentElement.setAttribute('data-chat-theme', chatTheme);
+
+    // Initialize activeChatId from pathname or localStorage on client mount
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.startsWith('/c/')) {
+        const pathId = path.split('/c/')[1];
+        if (pathId) {
+          setActiveChatId(pathId);
+          const savedChats = localStorage.getItem('aura-chats');
+          if (savedChats) {
+            try {
+              const parsed = JSON.parse(savedChats);
+              const chat = parsed.find(c => c.id === pathId);
+              if (chat) setMessages(chat.messages || []);
+            } catch (e) {}
+          }
+        }
+      } else {
+        const savedId = localStorage.getItem('aura-active-chat-id');
+        if (savedId) {
+          setActiveChatId(savedId);
+          const savedChats = localStorage.getItem('aura-chats');
+          if (savedChats) {
+            try {
+              const parsed = JSON.parse(savedChats);
+              const chat = parsed.find(c => c.id === savedId);
+              if (chat) setMessages(chat.messages || []);
+            } catch (e) {}
+          }
+        }
+      }
+    }
+
     setIsInitializing(false);
 
     let isFirstCall = true;
@@ -421,18 +458,30 @@ export const AppProvider = ({ children }) => {
     if (!isInitializing) {
       if (activeChatId) {
         localStorage.setItem('aura-active-chat-id', activeChatId);
-        if (typeof window !== 'undefined') {
-          const targetPath = `/c/${activeChatId}`;
-          if (window.location.pathname !== targetPath) window.history.pushState(null, '', targetPath);
+        const chatExists = chats.some(c => c.id === activeChatId);
+
+        if (chatExists) {
+          if (pathname === '/') {
+            router.push(`/c/${activeChatId}`);
+          } else if (pathname.startsWith('/c/')) {
+            const pathId = pathname.split('/c/')[1];
+            if (pathId !== activeChatId) {
+              router.push(`/c/${activeChatId}`);
+            }
+          }
+        } else {
+          if (pathname.startsWith('/c/')) {
+            router.push('/');
+          }
         }
       } else {
         localStorage.removeItem('aura-active-chat-id');
-        if (typeof window !== 'undefined' && window.location.pathname.startsWith('/c/')) {
-          window.history.pushState(null, '', '/');
+        if (pathname.startsWith('/c/')) {
+          router.push('/');
         }
       }
     }
-  }, [activeChatId, isInitializing]);
+  }, [activeChatId, isInitializing, chats, pathname, router]);
 
   const setAccentColor = (color) => {
     setAccentColorState(color);
@@ -535,8 +584,36 @@ export const AppProvider = ({ children }) => {
     const newId = Date.now().toString();
     setActiveChatId(newId);
     setMessages([]);
-    if (typeof window !== 'undefined') window.history.pushState(null, '', `/`);
-  }, [setActiveChatId, setMessages]);
+    router.push('/');
+  }, [setActiveChatId, setMessages, router]);
+
+  const lastPathnameRef = useRef(pathname);
+
+  useEffect(() => {
+    if (isInitializing) {
+      lastPathnameRef.current = pathname;
+      return;
+    }
+
+    if (pathname !== lastPathnameRef.current) {
+      lastPathnameRef.current = pathname;
+
+      if (pathname === '/') {
+        // If pathname is '/' but activeChatId points to an existing chat, reset to a new chat
+        const isExistingChat = chats.some(c => c.id === activeChatId);
+        if (isExistingChat) {
+          createNewChat();
+        }
+      } else if (pathname.startsWith('/c/')) {
+        const pathId = pathname.split('/c/')[1];
+        if (pathId && pathId !== activeChatId) {
+          setActiveChatId(pathId);
+          const foundChat = chats.find(c => c.id === pathId);
+          setMessages(foundChat ? (foundChat.messages || []) : []);
+        }
+      }
+    }
+  }, [pathname, chats, activeChatId, isInitializing, createNewChat, setActiveChatId, setMessages]);
 
   const deleteChat = useCallback(async (id) => {
     const chatToDelete = chats.find(c => c.id === id);

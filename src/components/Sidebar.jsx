@@ -121,9 +121,9 @@ const Sidebar = () => {
   };
 
 
-  const handleRename = (i) => {
-    setRenameValue(chats[i].title);
-    setRenamingIndex(i);
+  const handleRename = (chatId, title) => {
+    setRenameValue(title);
+    setRenamingIndex(chatId);
     setOpenMenuIndex(null);
     setTimeout(() => {
       if (renameInputRef.current) {
@@ -133,9 +133,10 @@ const Sidebar = () => {
     }, 50);
   };
 
-  const saveRename = (i) => {
+  const saveRename = (chatId) => {
     if (renameValue.trim()) {
-      setChats(prev => prev.map((c, idx) => idx === i ? { ...c, title: renameValue.trim() } : c));
+      setChats(prev => prev.map(c => c.id === chatId ? { ...c, title: renameValue.trim() } : c));
+      renameChat(chatId, renameValue.trim());
     }
     setRenamingIndex(null);
   };
@@ -327,6 +328,7 @@ const Sidebar = () => {
                 closeArchivedChat(); 
                 setAppView('chat'); 
                 router.push('/'); 
+                if (isMobile) setIsSidebarOpen(false);
               }}
               style={{
                 display: 'flex', alignItems: 'center', background: 'transparent', border: 'none',
@@ -355,7 +357,10 @@ const Sidebar = () => {
           
           <div className="relative group/tooltip w-full flex justify-center">
             <button
-              onClick={() => { router.push('/search'); }}
+              onClick={() => { 
+                router.push('/search'); 
+                if (isMobile) setIsSidebarOpen(false);
+              }}
               style={{
                 display: 'flex', alignItems: 'center', background: 'transparent', border: 'none',
                 borderRadius: 12, cursor: 'pointer', transition: 'all 0.15s', color: 'var(--on-surface)',
@@ -444,7 +449,11 @@ const Sidebar = () => {
                   onClick={e => e.stopPropagation()}
                 >
                   <button 
-                    onClick={() => { setAppView('images'); setIsMoreMenuOpen(false); }}
+                    onClick={() => { 
+                      setAppView('images'); 
+                      setIsMoreMenuOpen(false); 
+                      if (isMobile) setIsSidebarOpen(false);
+                    }}
                     style={{
                       width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                       padding: '10px 14px', borderRadius: 12, background: 'transparent',
@@ -544,10 +553,10 @@ const Sidebar = () => {
                 >
                   {mounted && showLoggedIn && sortedChats.map((chat, i) => (
                     <div
-                      key={i}
+                      key={chat.id}
                       className="relative"
-                      ref={openMenuIndex === i ? menuRef : null}
-                      onMouseEnter={() => setHoveredChat(i)}
+                      ref={openMenuIndex === chat.id ? menuRef : null}
+                      onMouseEnter={() => setHoveredChat(chat.id)}
                       onMouseLeave={() => setHoveredChat(null)}
                     >
                       <div
@@ -558,17 +567,22 @@ const Sidebar = () => {
                           paddingLeft: '14px',
                           paddingRight: '12px',
                           marginBottom: '3px',
-                          backgroundColor: hoveredChat === i || openMenuIndex === i || activeChatId === chat.id ? 'var(--chat-item-active)' : 'transparent',
+                          backgroundColor: hoveredChat === chat.id || openMenuIndex === chat.id || activeChatId === chat.id ? 'var(--chat-item-active)' : 'transparent',
+                          cursor: 'pointer',
                         }}
-                        onClick={() => { switchChat(chat.id); closeArchivedChat(); }}
+                        onClick={() => { 
+                          switchChat(chat.id); 
+                          closeArchivedChat(); 
+                          if (isMobile) setIsSidebarOpen(false);
+                        }}
                       >
-                        {renamingIndex === i ? (
+                        {renamingIndex === chat.id ? (
                           <input
                             ref={renameInputRef}
                             value={renameValue}
                             onChange={e => setRenameValue(e.target.value)}
-                            onBlur={() => saveRename(i)}
-                            onKeyDown={e => { if (e.key === 'Enter') saveRename(i); if (e.key === 'Escape') setRenamingIndex(null); }}
+                            onBlur={() => saveRename(chat.id)}
+                            onKeyDown={e => { if (e.key === 'Enter') saveRename(chat.id); if (e.key === 'Escape') setRenamingIndex(null); }}
                             onClick={e => e.stopPropagation()}
                             style={{
                               flex: 1,
@@ -587,7 +601,11 @@ const Sidebar = () => {
                         ) : (
                           <div 
                             className="flex-1 flex items-center gap-3 overflow-hidden"
-                            onClick={() => { router.push(`/c/${chat.id}`); closeArchivedChat(); }}
+                            onClick={() => { 
+                              router.push(`/c/${chat.id}`); 
+                              closeArchivedChat(); 
+                              if (isMobile) setIsSidebarOpen(false);
+                            }}
                           >
                             <span
                               className="truncate text-[14.5px] block text-left leading-snug flex-1 cursor-pointer"
@@ -602,7 +620,7 @@ const Sidebar = () => {
                           className="transition-all ml-2 shrink-0 cursor-pointer flex items-center justify-center"
                           style={{ 
                             width: '28px', height: '28px',
-                            opacity: (chat.isGroup || (!isMobile && hoveredChat === i) || openMenuIndex === i) ? 1 : 0,
+                            opacity: (chat.isGroup || (!isMobile && hoveredChat === chat.id) || openMenuIndex === chat.id) ? 1 : 0,
                             display: (!chat.isGroup && isMobile) ? 'none' : 'flex'
                           }}
                           onClick={(e) => {
@@ -630,10 +648,10 @@ const Sidebar = () => {
                                 setMenuPos({ top: rect.top, left: rect.right + 8, isBottom: false });
                               }
                             }
-                            setOpenMenuIndex(openMenuIndex === i ? null : i);
+                            setOpenMenuIndex(openMenuIndex === chat.id ? null : chat.id);
                           }}
                         >
-                          {chat.isGroup && hoveredChat !== i && openMenuIndex !== i ? (
+                          {chat.isGroup && hoveredChat !== chat.id && openMenuIndex !== chat.id ? (
                               chat.participants && chat.participants.length > 0 ? (
                                 <div style={{ display: 'flex', position: 'relative', width: '32px', height: '32px', alignItems: 'center' }}>
                                   {chat.participants.slice(0, 2).map((p, idx) => (
@@ -683,7 +701,7 @@ const Sidebar = () => {
                       </div>
                       
                       <AnimatePresence>
-                        {openMenuIndex === i && (
+                        {openMenuIndex === chat.id && (
                           <motion.div
                             ref={menuRef}
                             initial={{ opacity: 0, scale: 0.95, y: menuPos.isBottom ? 4 : -4 }}
@@ -709,13 +727,13 @@ const Sidebar = () => {
                             }}
                           >
                             {(chat.isGroup ? [
-                              { icon: <Pencil size={16} />, label: 'Rename', action: () => handleRename(i) },
+                              { icon: <Pencil size={16} />, label: 'Rename', action: () => handleRename(chat.id, chat.title) },
                               { icon: <Pin size={16} />, label: chat.pinned ? 'Unpin chat' : 'Pin chat', action: () => handlePin(chat) },
                               { icon: <Link size={16} />, label: isMobile ? 'Group link' : 'Add people via link', action: () => { setGroupLinkChatId(chat.id); setIsGroupLinkModalOpen(true); setOpenMenuIndex(null); } },
                             ] : [
                               { icon: <Share2 size={16} />, label: 'Share', action: () => { setShareChatId(chat.id); setIsShareModalOpen(true); setOpenMenuIndex(null); } },
                               { icon: <Users size={16} />, label: 'Start a group chat', action: () => { setGroupChatTargetId(chat.id); setIsGroupChatModalOpen(true); setOpenMenuIndex(null); } },
-                              { icon: <Pencil size={16} />, label: 'Rename', action: () => handleRename(i) },
+                              { icon: <Pencil size={16} />, label: 'Rename', action: () => handleRename(chat.id, chat.title) },
                               { icon: <Pin size={16} />, label: chat.pinned ? 'Unpin chat' : 'Pin chat', action: () => handlePin(chat) },
                               { icon: <Archive size={16} />, label: 'Archive', action: () => { archiveChat(chat.id); setOpenMenuIndex(null); } },
                             ]).filter(item => {
@@ -835,7 +853,10 @@ const Sidebar = () => {
               </div>
                 {isSidebarOpen && (
                   <button 
-                    onClick={() => { router.push('/upgrade'); }}
+                    onClick={() => { 
+                      router.push('/upgrade'); 
+                      if (isMobile) setIsSidebarOpen(false);
+                    }}
                     style={{
                       padding: '5px 14px', borderRadius: 999,
                       background: 'var(--hover-overlay-2)', border: '1px solid var(--divider)',
@@ -865,7 +886,10 @@ const Sidebar = () => {
               ].map((item, i) => (
                 <button
                   key={i}
-                  onClick={item.action}
+                  onClick={() => {
+                    item.action();
+                    if (isMobile) setIsSidebarOpen(false);
+                  }}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                     padding: '10px 12px', background: 'transparent', border: 'none',
@@ -1003,7 +1027,11 @@ const Sidebar = () => {
           ].map((item, j) => (
             <button
               key={j}
-              onClick={() => item.action ? item.action() : setProfileMenuOpen(false)}
+              onClick={() => {
+                if (item.action) item.action();
+                else setProfileMenuOpen(false);
+                if (isMobile) setIsSidebarOpen(false);
+              }}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                 padding: '11px 16px', background: 'transparent', border: 'none',
@@ -1024,7 +1052,10 @@ const Sidebar = () => {
           {/* Help */}
           <NextLink
             href="/help"
-            onClick={() => setProfileMenuOpen(false)}
+            onClick={() => {
+              setProfileMenuOpen(false);
+              if (isMobile) setIsSidebarOpen(false);
+            }}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '11px 16px', background: 'transparent', border: 'none',
@@ -1044,7 +1075,11 @@ const Sidebar = () => {
 
           {/* Log out */}
           <button
-            onClick={() => { setProfileMenuOpen(false); router.push('/logout'); }}
+            onClick={() => { 
+              setProfileMenuOpen(false); 
+              router.push('/logout'); 
+              if (isMobile) setIsSidebarOpen(false);
+            }}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 12,
               padding: '11px 16px', background: 'transparent', border: 'none',

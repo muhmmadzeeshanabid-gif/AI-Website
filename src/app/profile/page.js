@@ -309,20 +309,25 @@ export default function ProfilePage() {
   const [isContactSheetOpen, setIsContactSheetOpen] = useState(false);
   const [draftContactName, setDraftContactName] = useState('');
   const [draftContactRelation, setDraftContactRelation] = useState('');
+  const [countryCode, setCountryCode] = useState('+1');
   const [draftContactPhone, setDraftContactPhone] = useState('');
   const [draftContactEmail, setDraftContactEmail] = useState('');
   const [showContactToast, setShowContactToast] = useState(false);
   const [contactToastMessage, setContactToastMessage] = useState('');
+  const [isContactConfirmed, setIsContactConfirmed] = useState(false);
 
   const openContactDrawer = (isEdit = false) => {
+    setIsContactConfirmed(false);
     if (isEdit && trustedContact) {
       setDraftContactName(trustedContact.name);
       setDraftContactRelation(trustedContact.relationship);
+      setCountryCode(trustedContact.countryCode || '+1');
       setDraftContactPhone(trustedContact.phone || '');
       setDraftContactEmail(trustedContact.email || '');
     } else {
       setDraftContactName('');
       setDraftContactRelation('');
+      setCountryCode('+1');
       setDraftContactPhone('');
       setDraftContactEmail('');
     }
@@ -330,11 +335,12 @@ export default function ProfilePage() {
   };
 
   const handleContactSubmit = () => {
-    if (!draftContactName.trim() || !draftContactRelation.trim()) return;
+    if (!draftContactName.trim() || (!draftContactEmail.trim() && !draftContactPhone.trim())) return;
     const isEditing = !!trustedContact;
     setTrustedContact({
       name: draftContactName,
-      relationship: draftContactRelation,
+      relationship: 'Friend',
+      countryCode: countryCode,
       phone: draftContactPhone,
       email: draftContactEmail
     });
@@ -481,7 +487,9 @@ export default function ProfilePage() {
   const [isParentalLearnMoreOpen, setIsParentalLearnMoreOpen] = useState(false);
   const [isAddFamilyOpen, setIsAddFamilyOpen] = useState(false);
   const [memberEmail, setMemberEmail] = useState('');
-  const [memberType, setMemberType] = useState('Teen'); // 'Parent' | 'Teen'
+  const [memberPhone, setMemberPhone] = useState('');
+  const [memberType, setMemberType] = useState('Parent'); // 'Parent' | 'Child'
+  const [inviteMethod, setInviteMethod] = useState('Email'); // 'Email' | 'Phone'
   const [familyMembers, setFamilyMembers] = useState([
     { email: 'sarah.teen@example.com', role: 'Teen', status: 'Pending' }
   ]);
@@ -492,6 +500,20 @@ export default function ProfilePage() {
     setParentalToastMessage(msg);
     setShowParentalToast(true);
     setTimeout(() => setShowParentalToast(false), 2500);
+  };
+
+  // Data Controls Sub-States
+  const [improveModel, setImproveModel] = useState(true);
+  const [includeAudio, setIncludeAudio] = useState(false);
+  const [showDataToast, setShowDataToast] = useState(false);
+  const [dataToastMessage, setDataToastMessage] = useState('');
+  const [isClearHistoryOpen, setIsClearHistoryOpen] = useState(false);
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
+
+  const triggerDataToast = (msg) => {
+    setDataToastMessage(msg);
+    setShowDataToast(true);
+    setTimeout(() => setShowDataToast(false), 2500);
   };
 
   // Theme resolution helper state
@@ -660,14 +682,13 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showSaveToast && (
           <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            initial={{ opacity: 0, y: -50, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, scale: 0.9, x: '-50%' }}
             style={{
               position: 'fixed',
               top: '32px',
               left: '50%',
-              x: '-50%',
               background: 'var(--accent-theme)',
               color: '#ffffff',
               padding: '12px 24px',
@@ -678,7 +699,8 @@ export default function ProfilePage() {
               alignItems: 'center',
               gap: '8px',
               fontSize: '14px',
-              fontWeight: 600
+              fontWeight: 600,
+              whiteSpace: 'nowrap'
             }}
           >
             <Check size={16} strokeWidth={3} />
@@ -691,14 +713,13 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showBugToast && (
           <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            initial={{ opacity: 0, y: -50, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, scale: 0.9, x: '-50%' }}
             style={{
               position: 'fixed',
               top: '32px',
               left: '50%',
-              x: '-50%',
               background: 'var(--accent-theme)',
               color: '#ffffff',
               padding: '12px 24px',
@@ -709,7 +730,8 @@ export default function ProfilePage() {
               alignItems: 'center',
               gap: '8px',
               fontSize: '14px',
-              fontWeight: 600
+              fontWeight: 600,
+              whiteSpace: 'nowrap'
             }}
           >
             <Check size={16} strokeWidth={3} />
@@ -722,14 +744,13 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showContactToast && (
           <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            initial={{ opacity: 0, y: -50, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, scale: 0.9, x: '-50%' }}
             style={{
               position: 'fixed',
               top: '32px',
               left: '50%',
-              x: '-50%',
               background: 'var(--accent-theme)',
               color: '#ffffff',
               padding: '12px 24px',
@@ -740,7 +761,8 @@ export default function ProfilePage() {
               alignItems: 'center',
               gap: '8px',
               fontSize: '14px',
-              fontWeight: 600
+              fontWeight: 600,
+              whiteSpace: 'nowrap'
             }}
           >
             <Check size={16} strokeWidth={3} />
@@ -753,14 +775,13 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showMemoriesToast && (
           <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            initial={{ opacity: 0, y: -50, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, scale: 0.9, x: '-50%' }}
             style={{
               position: 'fixed',
               top: '32px',
               left: '50%',
-              x: '-50%',
               background: 'var(--accent-theme)',
               color: '#ffffff',
               padding: '12px 24px',
@@ -771,7 +792,8 @@ export default function ProfilePage() {
               alignItems: 'center',
               gap: '8px',
               fontSize: '14px',
-              fontWeight: 600
+              fontWeight: 600,
+              whiteSpace: 'nowrap'
             }}
           >
             <Check size={16} strokeWidth={3} />
@@ -784,14 +806,13 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showEmailToast && (
           <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            initial={{ opacity: 0, y: -50, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, scale: 0.9, x: '-50%' }}
             style={{
               position: 'fixed',
               top: '32px',
               left: '50%',
-              x: '-50%',
               background: 'var(--accent-theme)',
               color: '#ffffff',
               padding: '12px 24px',
@@ -802,7 +823,8 @@ export default function ProfilePage() {
               alignItems: 'center',
               gap: '8px',
               fontSize: '14px',
-              fontWeight: 600
+              fontWeight: 600,
+              whiteSpace: 'nowrap'
             }}
           >
             <Check size={16} strokeWidth={3} />
@@ -815,14 +837,13 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showSecurityToast && (
           <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            initial={{ opacity: 0, y: -50, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, scale: 0.9, x: '-50%' }}
             style={{
               position: 'fixed',
               top: '32px',
               left: '50%',
-              x: '-50%',
               background: 'var(--accent-theme)',
               color: '#ffffff',
               padding: '12px 24px',
@@ -833,7 +854,8 @@ export default function ProfilePage() {
               alignItems: 'center',
               gap: '8px',
               fontSize: '14px',
-              fontWeight: 600
+              fontWeight: 600,
+              whiteSpace: 'nowrap'
             }}
           >
             <Check size={16} strokeWidth={3} />
@@ -994,7 +1016,7 @@ export default function ProfilePage() {
                     onClick={() => setCurrentView('personalization')}
                     style={{
                       display: 'flex',
-                      alignItems: 'center',
+                      alignItems: 'center',  
                       gap: '16px',
                       padding: '16px 20px',
                       cursor: 'pointer',
@@ -1163,26 +1185,7 @@ export default function ProfilePage() {
                     </span>
                   </div>
 
-                  {/* Security Option Row */}
-                  <div 
-                    onClick={() => setCurrentView('security')}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '16px',
-                      padding: '16px 20px',
-                      cursor: 'pointer',
-                      transition: 'background 0.2s',
-                      borderBottom: `1px solid ${themeStyles.divider}`
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = themeStyles.hoverOverlay}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <Lock size={20} style={{ color: themeStyles.text }} />
-                    <span style={{ fontSize: '15px', fontWeight: 500, color: themeStyles.text }}>
-                      Security
-                    </span>
-                  </div>
+
 
                   {/* Email Option Row */}
                   <div 
@@ -1473,6 +1476,7 @@ export default function ProfilePage() {
 
                   {/* Data controls */}
                   <div 
+                    onClick={() => setCurrentView('data_controls')}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -3982,6 +3986,364 @@ export default function ProfilePage() {
 
             </div>
           </motion.div>
+        ) : currentView === 'data_controls' ? (
+          /* ── SUB-VIEW: DATA CONTROLS VIEW ───────────────────────────────── */
+          <motion.div
+            key="data-controls-view"
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 30 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            style={{ width: '100%', position: 'relative' }}
+          >
+            {/* Header with Centered Title & Left Back Arrow */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              maxWidth: '480px',
+              margin: '0 auto',
+              position: 'relative',
+              height: '40px',
+              marginBottom: '32px'
+            }}>
+              {/* Back Button */}
+              <button 
+                onClick={() => setCurrentView('main')}
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: themeStyles.backBtnBg,
+                  color: themeStyles.text,
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'opacity 0.2s, background-color 0.2s',
+                  position: 'absolute',
+                  left: 0
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = themeStyles.backBtnBg}
+              >
+                <ArrowLeft size={20} />
+              </button>
+
+              {/* Centered Title */}
+              <h2 style={{
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '20px',
+                fontWeight: 700,
+                color: themeStyles.text,
+                margin: '0 auto',
+                textAlign: 'center'
+              }}>
+                Data controls
+              </h2>
+              
+              {/* Invisible spacer to maintain center alignment */}
+              <div style={{ width: '36px' }} />
+            </div>
+
+            {/* Content Container */}
+            <div style={{
+              width: '100%',
+              maxWidth: '480px',
+              margin: '0 auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px'
+            }}>
+
+              {/* SECTION 1: Improve the model for everyone */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  padding: '18px 24px',
+                  background: isDark ? '#1c1c1e' : '#ffffff',
+                  border: isDark ? 'none' : '1px solid rgba(0,0,0,0.1)',
+                  borderRadius: '20px',
+                  boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.04)'
+                }}>
+                  <span style={{ fontSize: '15.5px', fontWeight: 600, color: themeStyles.text, maxWidth: '75%' }}>
+                    Improve the model for everyone
+                  </span>
+                  
+                  {/* Switch */}
+                  <div
+                    onClick={() => {
+                      const nextState = !improveModel;
+                      setImproveModel(nextState);
+                      triggerDataToast(nextState ? 'Model improvement enabled' : 'Model improvement disabled');
+                    }}
+                    style={{
+                      width: '52px',
+                      height: '32px',
+                      borderRadius: '16px',
+                      backgroundColor: improveModel ? '#ffffff' : '#3c3c3e',
+                      padding: '3px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: improveModel ? 'flex-end' : 'flex-start',
+                      transition: 'background-color 0.2s ease',
+                    }}
+                  >
+                    <motion.div
+                      layout
+                      style={{
+                        width: '26px',
+                        height: '26px',
+                        borderRadius: '50%',
+                        backgroundColor: improveModel ? '#000000' : '#a1a1aa',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                      }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                  </div>
+                </div>
+
+                <p style={{
+                  fontSize: '13px',
+                  color: themeStyles.subtext,
+                  padding: '0 16px',
+                  lineHeight: '1.45',
+                  margin: '4px 0 0 0'
+                }}>
+                  Allow your content to be used to improve our models for you and other users. We take steps to protect your privacy. <span style={{ textDecoration: 'underline', cursor: 'pointer', color: 'var(--accent-theme)' }}>Learn more</span>
+                </p>
+              </div>
+
+              {/* SECTION 2: Export Data */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+                <div 
+                  onClick={() => triggerDataToast('Data export requested. You will receive an email shortly.')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    padding: '18px 24px',
+                    background: isDark ? '#1c1c1e' : '#ffffff',
+                    border: isDark ? 'none' : '1px solid rgba(0,0,0,0.1)',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, background-color 0.2s',
+                    boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.04)'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.background = isDark ? '#2c2c2e' : '#f2f2f7';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.background = isDark ? '#1c1c1e' : '#ffffff';
+                  }}
+                >
+                  <span style={{ fontSize: '15.5px', fontWeight: 600, color: themeStyles.text }}>
+                    Export Data
+                  </span>
+                  <ChevronRight size={16} style={{ color: themeStyles.subtext }} />
+                </div>
+              </div>
+
+              {/* SECTION 3: Delete OpenAI account */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+                <div 
+                  onClick={() => setIsDeleteAccountOpen(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    padding: '18px 24px',
+                    background: isDark ? '#1c1c1e' : '#ffffff',
+                    border: isDark ? 'none' : '1px solid rgba(0,0,0,0.1)',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, background-color 0.2s',
+                    boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.04)'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.background = isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.04)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.background = isDark ? '#1c1c1e' : '#ffffff';
+                  }}
+                >
+                  <span style={{ fontSize: '15.5px', fontWeight: 600, color: '#ef4444' }}>
+                    Delete Kyra account
+                  </span>
+                  <ChevronRight size={16} style={{ color: '#ef4444' }} />
+                </div>
+              </div>
+
+              {/* SECTION 4: Voice */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+                <span style={{ 
+                  fontSize: '13.5px', 
+                  fontWeight: 600, 
+                  color: themeStyles.subtext, 
+                  paddingLeft: '16px'
+                }}>
+                  Voice
+                </span>
+
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  padding: '18px 24px',
+                  background: isDark ? '#1c1c1e' : '#ffffff',
+                  border: isDark ? 'none' : '1px solid rgba(0,0,0,0.1)',
+                  borderRadius: '20px',
+                  boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.04)'
+                }}>
+                  <span style={{ fontSize: '15.5px', fontWeight: 600, color: themeStyles.text, maxWidth: '75%' }}>
+                    Include your audio recordings
+                  </span>
+                  
+                  {/* Switch */}
+                  <div
+                    onClick={() => {
+                      const nextState = !includeAudio;
+                      setIncludeAudio(nextState);
+                      triggerDataToast(nextState ? 'Audio recording inclusion enabled' : 'Audio recording inclusion disabled');
+                    }}
+                    style={{
+                      width: '52px',
+                      height: '32px',
+                      borderRadius: '16px',
+                      backgroundColor: includeAudio ? '#ffffff' : '#3c3c3e',
+                      padding: '3px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: includeAudio ? 'flex-end' : 'flex-start',
+                      transition: 'background-color 0.2s ease',
+                    }}
+                  >
+                    <motion.div
+                      layout
+                      style={{
+                        width: '26px',
+                        height: '26px',
+                        borderRadius: '50%',
+                        backgroundColor: includeAudio ? '#000000' : '#a1a1aa',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                      }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                  </div>
+                </div>
+
+                <p style={{
+                  fontSize: '13px',
+                  color: themeStyles.subtext,
+                  padding: '0 16px',
+                  lineHeight: '1.45',
+                  margin: '4px 0 0 0'
+                }}>
+                  Include your audio recordings from Voice to train our models. Transcripts and other files are covered by Improve the model for everyone. <span style={{ textDecoration: 'underline', cursor: 'pointer', color: 'var(--accent-theme)' }}>Learn more</span>
+                </p>
+              </div>
+
+              {/* SECTION 5: Chat history */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+                <span style={{ 
+                  fontSize: '13.5px', 
+                  fontWeight: 600, 
+                  color: themeStyles.subtext, 
+                  paddingLeft: '16px'
+                }}>
+                  Chat history
+                </span>
+
+                <div style={{
+                  background: isDark ? '#1c1c1e' : '#ffffff',
+                  border: isDark ? 'none' : '1px solid rgba(0,0,0,0.1)',
+                  borderRadius: '20px',
+                  overflow: 'hidden',
+                  boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.04)'
+                }}>
+                  {/* Row 1: View archived chats */}
+                  <div 
+                    onClick={() => triggerDataToast('Opening archived chats...')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      padding: '18px 24px',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s',
+                      borderBottom: `1px solid ${themeStyles.divider}`
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = isDark ? '#2c2c2e' : '#f2f2f7'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <span style={{ fontSize: '15.5px', fontWeight: 600, color: themeStyles.text }}>
+                      View archived chats
+                    </span>
+                    <ChevronRight size={16} style={{ color: themeStyles.subtext }} />
+                  </div>
+
+                  {/* Row 2: Archive chat history */}
+                  <div 
+                    onClick={() => triggerDataToast('All chat history has been archived.')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      padding: '18px 24px',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s',
+                      borderBottom: `1px solid ${themeStyles.divider}`
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = isDark ? '#2c2c2e' : '#f2f2f7'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <span style={{ fontSize: '15.5px', fontWeight: 600, color: themeStyles.text }}>
+                      Archive chat history
+                    </span>
+                    <ChevronRight size={16} style={{ color: themeStyles.subtext }} />
+                  </div>
+
+                  {/* Row 3: Clear chat history */}
+                  <div 
+                    onClick={() => setIsClearHistoryOpen(true)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      padding: '18px 24px',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.04)'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <span style={{ fontSize: '15.5px', fontWeight: 600, color: '#ef4444' }}>
+                      Clear chat history
+                    </span>
+                    <ChevronRight size={16} style={{ color: '#ef4444' }} />
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </motion.div>
         ) : currentView === 'general' ? (
           /* ── SUB-VIEW: GENERAL VIEW ──────────────────────────────────────── */
           <motion.div
@@ -4281,7 +4643,7 @@ export default function ProfilePage() {
                             borderBottom: isLast ? 'none' : `1px solid ${themeStyles.divider}`
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', textAlign: 'left' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', textAlign: 'left', minWidth: 0, flex: 1 }}>
                             <div style={{
                               width: '38px',
                               height: '38px',
@@ -4292,12 +4654,19 @@ export default function ProfilePage() {
                               alignItems: 'center',
                               justifyContent: 'center',
                               fontWeight: 700,
-                              fontSize: '14px'
+                              fontSize: '14px',
+                              flexShrink: 0
                             }}>
                               {member.role === 'Teen' ? 'T' : 'P'}
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span style={{ fontSize: '15px', fontWeight: 600, color: themeStyles.text }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                              <span style={{ 
+                                fontSize: '15px', 
+                                fontWeight: 600, 
+                                color: themeStyles.text,
+                                wordBreak: 'break-all',
+                                overflowWrap: 'anywhere'
+                              }}>
                                 {member.email}
                               </span>
                               <span style={{ fontSize: '12px', color: themeStyles.subtext, marginTop: '2px' }}>
@@ -4337,7 +4706,9 @@ export default function ProfilePage() {
               <div 
                 onClick={() => {
                   setMemberEmail('');
-                  setMemberType('Teen');
+                  setMemberPhone('');
+                  setMemberType('Parent');
+                  setInviteMethod('Email');
                   setIsAddFamilyOpen(true);
                 }}
                 style={{
@@ -5156,208 +5527,168 @@ export default function ProfilePage() {
         )}
       </AnimatePresence>
 
-      {/* Dynamic Slide-Up Sheet for "Add/Edit Trusted Contact" */}
+      {/* Dynamic Full-Screen Modal for "Add/Edit Trusted Contact" */}
       <AnimatePresence>
         {isContactSheetOpen && (
-          <>
-            {/* Backdrop blur overlay */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsContactSheetOpen(false)}
-              style={{
-                position: 'fixed',
-                inset: 0,
-                background: 'rgba(0, 0, 0, 0.4)',
-                backdropFilter: 'blur(8px)',
-                zIndex: 99999
-              }}
-            />
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: '#000000',
+              zIndex: 100000,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '16px 20px',
+              fontFamily: 'Inter, -apple-system, sans-serif'
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', marginTop: '8px' }}>
+              <button
+                onClick={() => setIsContactSheetOpen(false)}
+                style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#1c1c1e', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', color: '#fff', cursor: 'pointer' }}
+              >
+                <ArrowLeft size={22} />
+              </button>
+              <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#fff', margin: 0 }}>Invite a trusted contact</h3>
+              <button
+                disabled={!draftContactName.trim() || (!draftContactEmail.trim() && !draftContactPhone.trim()) || !isContactConfirmed}
+                onClick={handleContactSubmit}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '999px',
+                  background: (!draftContactName.trim() || (!draftContactEmail.trim() && !draftContactPhone.trim()) || !isContactConfirmed) ? '#1c1c1e' : 'rgba(255,255,255,0.15)',
+                  color: (!draftContactName.trim() || (!draftContactEmail.trim() && !draftContactPhone.trim()) || !isContactConfirmed) ? 'rgba(255,255,255,0.4)' : '#fff',
+                  border: 'none',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: (!draftContactName.trim() || (!draftContactEmail.trim() && !draftContactPhone.trim()) || !isContactConfirmed) ? 'default' : 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Save
+              </button>
+            </div>
 
-            {/* Bottom Drawer Sheet */}
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              style={{
-                position: 'fixed',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                background: themeStyles.drawerBg,
-                borderTop: `1px solid ${themeStyles.drawerBorder}`,
-                borderTopLeftRadius: '24px',
-                borderTopRightRadius: '24px',
-                padding: '24px 20px 32px 20px',
-                maxHeight: '85vh',
-                overflowY: 'auto',
-                zIndex: 100000,
-                boxShadow: '0 -8px 32px rgba(0,0,0,0.25)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '20px'
-              }}
-            >
-              {/* Drag Indicator Handle */}
-              <div style={{
-                width: '36px',
-                height: '4px',
-                background: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)',
-                borderRadius: '999px',
-                margin: '0 auto 8px auto'
-              }} />
+            {/* Paragraph */}
+            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '15px', lineHeight: '1.5', marginBottom: '32px' }}>
+              Choose a friend, family member, or another trusted adult who is readily available to offer support. We'll invite them to be your trusted contact, and they can choose whether to participate. <span style={{ textDecoration: 'underline', color: '#fff', cursor: 'pointer' }}>Learn more</span>
+            </p>
 
-              {/* Title Header */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                <h3 style={{
-                  fontFamily: 'Outfit, sans-serif',
-                  fontSize: '20px',
-                  fontWeight: 800,
-                  color: themeStyles.text,
-                  margin: 0
-                }}>
-                  {trustedContact ? 'Edit trusted contact' : 'Add trusted contact'}
-                </h3>
+            {/* Add from your contacts button */}
+            <button style={{ width: '100%', padding: '20px 24px', borderRadius: '24px', background: '#333333', color: '#fff', fontSize: '16px', fontWeight: 500, textAlign: 'left', border: 'none', marginBottom: '32px', cursor: 'pointer' }}>
+              Add from your contacts
+            </button>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Name */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '15px', color: '#fff', paddingLeft: '4px' }}>Name</label>
+                <input
+                  type="text"
+                  value={draftContactName}
+                  onChange={e => setDraftContactName(e.target.value)}
+                  placeholder="Full name"
+                  style={{ width: '100%', padding: '20px 24px', borderRadius: '24px', background: '#333333', border: 'none', color: '#fff', fontSize: '16px', outline: 'none' }}
+                />
               </div>
 
-              {/* Form Input fields */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* Full name input */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: themeStyles.subtext }}>Full name</label>
-                  <input
-                    type="text"
-                    value={draftContactName}
-                    onChange={e => setDraftContactName(e.target.value)}
-                    placeholder="Enter full name"
-                    style={{
-                      width: '100%',
-                      padding: '14px 18px',
-                      borderRadius: '14px',
-                      background: isDark ? '#1c1c1e' : '#f2f2f7',
-                      border: 'none',
-                      color: themeStyles.text,
-                      fontSize: '15px',
-                      outline: 'none',
-                      fontFamily: 'inherit'
-                    }}
-                  />
-                </div>
+              {/* Email */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '15px', color: '#fff', paddingLeft: '4px' }}>Email</label>
+                <input
+                  type="email"
+                  value={draftContactEmail}
+                  onChange={e => setDraftContactEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  style={{ width: '100%', padding: '20px 24px', borderRadius: '24px', background: '#333333', border: 'none', color: '#fff', fontSize: '16px', outline: 'none' }}
+                />
+              </div>
 
-                {/* Relationship input */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: themeStyles.subtext }}>Relationship</label>
-                  <input
-                    type="text"
-                    value={draftContactRelation}
-                    onChange={e => setDraftContactRelation(e.target.value)}
-                    placeholder="e.g. Spouse, Parent, Friend"
-                    style={{
-                      width: '100%',
-                      padding: '14px 18px',
-                      borderRadius: '14px',
-                      background: isDark ? '#1c1c1e' : '#f2f2f7',
-                      border: 'none',
-                      color: themeStyles.text,
-                      fontSize: '15px',
-                      outline: 'none',
-                      fontFamily: 'inherit'
-                    }}
-                  />
-                </div>
-
-                {/* Phone input */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: themeStyles.subtext }}>Phone (optional)</label>
+              {/* Phone */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '15px', color: '#fff', paddingLeft: '4px' }}>Phone number</label>
+                <div style={{ display: 'flex', background: '#333333', borderRadius: '24px', overflow: 'hidden', position: 'relative' }}>
+                  {/* Country Code Picker */}
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <select
+                      value={countryCode}
+                      onChange={(e) => setCountryCode(e.target.value)}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer',
+                        appearance: 'none',
+                        zIndex: 10
+                      }}
+                    >
+                      <option value="+1">United States (+1)</option>
+                      <option value="+44">United Kingdom (+44)</option>
+                      <option value="+91">India (+91)</option>
+                      <option value="+92">Pakistan (+92)</option>
+                      <option value="+61">Australia (+61)</option>
+                      <option value="+81">Japan (+81)</option>
+                      <option value="+49">Germany (+49)</option>
+                      <option value="+33">France (+33)</option>
+                      <option value="+86">China (+86)</option>
+                      <option value="+55">Brazil (+55)</option>
+                      <option value="+971">UAE (+971)</option>
+                      <option value="+966">Saudi Arabia (+966)</option>
+                      <option value="+1">Canada (+1)</option>
+                    </select>
+                    <div style={{ padding: '20px 8px 20px 24px', color: '#fff', fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      {countryCode}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5, marginTop: '2px' }}><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                  </div>
+                  
+                  {/* Phone Input */}
                   <input
                     type="tel"
                     value={draftContactPhone}
                     onChange={e => setDraftContactPhone(e.target.value)}
-                    placeholder="e.g. +1 (555) 019-2834"
-                    style={{
-                      width: '100%',
-                      padding: '14px 18px',
-                      borderRadius: '14px',
-                      background: isDark ? '#1c1c1e' : '#f2f2f7',
-                      border: 'none',
-                      color: themeStyles.text,
-                      fontSize: '15px',
-                      outline: 'none',
-                      fontFamily: 'inherit'
-                    }}
-                  />
-                </div>
-
-                {/* Email input */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: themeStyles.subtext }}>Email (optional)</label>
-                  <input
-                    type="email"
-                    value={draftContactEmail}
-                    onChange={e => setDraftContactEmail(e.target.value)}
-                    placeholder="e.g. contact@example.com"
-                    style={{
-                      width: '100%',
-                      padding: '14px 18px',
-                      borderRadius: '14px',
-                      background: isDark ? '#1c1c1e' : '#f2f2f7',
-                      border: 'none',
-                      color: themeStyles.text,
-                      fontSize: '15px',
-                      outline: 'none',
-                      fontFamily: 'inherit'
-                    }}
+                    placeholder="(201) 555-0123"
+                    style={{ flex: 1, padding: '20px', paddingLeft: '8px', background: 'transparent', border: 'none', color: '#fff', fontSize: '16px', outline: 'none' }}
                   />
                 </div>
               </div>
+            </div>
 
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
-                <button
-                  disabled={!draftContactName.trim() || !draftContactRelation.trim()}
-                  onClick={handleContactSubmit}
-                  style={{
-                    width: '100%',
-                    padding: '14px',
-                    borderRadius: '999px',
-                    background: (!draftContactName.trim() || !draftContactRelation.trim()) ? (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)') : 'var(--accent-theme)',
-                    color: (!draftContactName.trim() || !draftContactRelation.trim()) ? themeStyles.subtext : '#ffffff',
-                    border: 'none',
-                    fontSize: '15px',
-                    fontWeight: 700,
-                    cursor: (!draftContactName.trim() || !draftContactRelation.trim()) ? 'default' : 'pointer',
-                    transition: 'all 0.2s',
-                    fontFamily: 'inherit'
-                  }}
-                >
-                  Save contact
-                </button>
-
-                <button
-                  onClick={() => setIsContactSheetOpen(false)}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: 'transparent',
-                    border: 'none',
-                    color: themeStyles.cancelBtnText,
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'opacity 0.2s',
-                    fontFamily: 'inherit'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = '0.75'}
-                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-                >
-                  Cancel
-                </button>
+            {/* Info Box */}
+            <div 
+              onClick={() => setIsContactConfirmed(!isContactConfirmed)}
+              style={{ background: '#333333', borderRadius: '24px', padding: '24px', marginTop: '32px', marginBottom: '40px', cursor: 'pointer', display: 'flex', gap: '16px', alignItems: 'flex-start' }}
+            >
+              <div style={{ 
+                width: '24px', 
+                height: '24px', 
+                borderRadius: '50%', 
+                border: isContactConfirmed ? 'none' : '2px solid rgba(255,255,255,0.3)', 
+                background: isContactConfirmed ? '#fff' : 'transparent', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                flexShrink: 0,
+                marginTop: '2px'
+              }}>
+                {isContactConfirmed && <Check size={14} color="#000" strokeWidth={3} />}
               </div>
-
-            </motion.div>
-          </>
+              <div style={{ flex: 1 }}>
+                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>
+                  I confirm this person and I are 18 or older. If this person agrees to be my trusted contact, I understand and agree that OpenAI may notify them in the future if I discuss suicide with Kyra in a way that indicates a serious safety concern.
+                </p>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -6545,14 +6876,13 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showLanguageToast && (
           <motion.div
-            initial={{ opacity: 0, y: 30, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            initial={{ opacity: 0, y: 30, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: 20, scale: 0.9, x: '-50%' }}
             style={{
               position: 'fixed',
               bottom: '24px',
               left: '50%',
-              transform: 'translateX(-50%)',
               background: '#323232',
               color: '#ffffff',
               padding: '12px 24px',
@@ -6562,7 +6892,8 @@ export default function ProfilePage() {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              pointerEvents: 'none'
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap'
             }}
           >
             <Check size={16} style={{ color: '#4ade80' }} />
@@ -6676,12 +7007,208 @@ export default function ProfilePage() {
       {/* ── PARENTAL CONTROLS: ADD FAMILY MEMBER MODAL ────────────────── */}
       <AnimatePresence>
         {isAddFamilyOpen && (
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: '#000000',
+              zIndex: 100000,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '16px 20px',
+              fontFamily: 'Inter, -apple-system, sans-serif'
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px', marginTop: '8px' }}>
+              <button
+                onClick={() => setIsAddFamilyOpen(false)}
+                style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#1c1c1e', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', color: '#fff', cursor: 'pointer' }}
+              >
+                <ArrowLeft size={22} />
+              </button>
+              <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#fff', margin: 0 }}>Invite family member</h3>
+              <button
+                disabled={inviteMethod === 'Email' ? !memberEmail.trim() : !memberPhone.trim()}
+                onClick={() => {
+                  const contactInfo = inviteMethod === 'Email' ? memberEmail.trim() : memberPhone.trim();
+                  if (!contactInfo) return;
+                  if (inviteMethod === 'Email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactInfo)) {
+                    triggerParentalToast('Please enter a valid email address');
+                    return;
+                  }
+                  if (familyMembers.some(m => m.email.toLowerCase() === contactInfo.toLowerCase())) {
+                    triggerParentalToast('This person is already in your family group');
+                    return;
+                  }
+                  setFamilyMembers([...familyMembers, { email: contactInfo, role: memberType === 'Parent' ? 'Parent' : 'Teen', status: 'Pending' }]);
+                  setIsAddFamilyOpen(false);
+                  triggerParentalToast(`Invitation sent to ${contactInfo}`);
+                }}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '999px',
+                  background: 'transparent',
+                  color: (inviteMethod === 'Email' ? !memberEmail.trim() : !memberPhone.trim()) ? 'rgba(255,255,255,0.3)' : '#fff',
+                  border: 'none',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: (inviteMethod === 'Email' ? !memberEmail.trim() : !memberPhone.trim()) ? 'default' : 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Send
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              {/* Invite By */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <span style={{ fontSize: '15px', color: 'rgba(255,255,255,0.7)', marginLeft: '4px' }}>Invite by</span>
+                <div style={{ background: '#333333', borderRadius: '24px', overflow: 'hidden' }}>
+                  {/* Email option */}
+                  <div 
+                    onClick={() => setInviteMethod('Email')}
+                    style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    <span style={{ fontSize: '16px', color: '#fff' }}>Email</span>
+                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', border: inviteMethod === 'Email' ? '6px solid #fff' : '2px solid rgba(255,255,255,0.5)', background: 'transparent' }} />
+                  </div>
+                  {/* Phone option */}
+                  <div 
+                    onClick={() => setInviteMethod('Phone')}
+                    style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                  >
+                    <span style={{ fontSize: '16px', color: '#fff' }}>Phone</span>
+                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', border: inviteMethod === 'Phone' ? '6px solid #fff' : '2px solid rgba(255,255,255,0.5)', background: 'transparent' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Email / Phone Input */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <span style={{ fontSize: '15px', color: 'rgba(255,255,255,0.7)', marginLeft: '4px' }}>{inviteMethod}</span>
+                <input
+                  type={inviteMethod === 'Email' ? 'email' : 'tel'}
+                  placeholder={inviteMethod === 'Email' ? 'name@email.com' : 'Phone number'}
+                  value={inviteMethod === 'Email' ? memberEmail : memberPhone}
+                  onChange={(e) => inviteMethod === 'Email' ? setMemberEmail(e.target.value) : setMemberPhone(e.target.value)}
+                  style={{ width: '100%', padding: '20px 24px', borderRadius: '24px', background: '#333333', border: 'none', color: '#fff', fontSize: '16px', outline: 'none' }}
+                />
+                <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', lineHeight: '1.4', padding: '0 4px' }}>
+                  If your family member is new to ChatGPT, they will be asked to create an account.
+                </span>
+              </div>
+
+              {/* This person is */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <span style={{ fontSize: '15px', color: 'rgba(255,255,255,0.7)', marginLeft: '4px' }}>This person is</span>
+                <div style={{ background: '#333333', borderRadius: '24px', overflow: 'hidden' }}>
+                  {/* Parent option */}
+                  <div 
+                    onClick={() => setMemberType('Parent')}
+                    style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    <span style={{ fontSize: '16px', color: '#fff' }}>My parent or guardian</span>
+                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', border: memberType === 'Parent' ? '6px solid #fff' : '2px solid rgba(255,255,255,0.5)', background: 'transparent' }} />
+                  </div>
+                  {/* Child option */}
+                  <div 
+                    onClick={() => setMemberType('Child')}
+                    style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                  >
+                    <span style={{ fontSize: '16px', color: '#fff' }}>My child</span>
+                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', border: memberType === 'Child' ? '6px solid #fff' : '2px solid rgba(255,255,255,0.5)', background: 'transparent' }} />
+                  </div>
+                </div>
+                <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', lineHeight: '1.4', padding: '0 4px' }}>
+                  Your parent or guardian will be able to adjust certain features, set time limits, and add safeguards to help guide your experience. We won't share details of your conversations with ChatGPT, except in certain rare safety circumstances. You can unlink accounts anytime. <span style={{ color: '#fff', textDecoration: 'underline', cursor: 'pointer' }}>Learn more</span>
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── PARENTAL CONTROLS: TOAST NOTIFICATION ───────────────────────── */}
+      <AnimatePresence>
+        {showParentalToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: 20, scale: 0.9, x: '-50%' }}
+            style={{
+              position: 'fixed',
+              bottom: '24px',
+              left: '50%',
+              background: '#323232',
+              color: '#ffffff',
+              padding: '12px 24px',
+              borderRadius: '999px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+              zIndex: 999999,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <Check size={16} style={{ color: '#4ade80' }} />
+            <span style={{ fontSize: '14px', fontWeight: 500 }}>
+              {parentalToastMessage}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── DATA CONTROLS: TOAST NOTIFICATION ───────────────────────── */}
+      <AnimatePresence>
+        {showDataToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: 20, scale: 0.9, x: '-50%' }}
+            style={{
+              position: 'fixed',
+              bottom: '24px',
+              left: '50%',
+              background: '#323232',
+              color: '#ffffff',
+              padding: '12px 24px',
+              borderRadius: '999px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+              zIndex: 999999,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <Check size={16} style={{ color: '#4ade80' }} />
+            <span style={{ fontSize: '14px', fontWeight: 500 }}>
+              {dataToastMessage}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── DATA CONTROLS: CLEAR HISTORY CONFIRMATION DIALOG ───────────────── */}
+      <AnimatePresence>
+        {isClearHistoryOpen && (
           <>
+            {/* Backdrop Blur Overlay */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsAddFamilyOpen(false)}
+              onClick={() => setIsClearHistoryOpen(false)}
               style={{
                 position: 'fixed',
                 inset: 0,
@@ -6692,6 +7219,7 @@ export default function ProfilePage() {
               }}
             />
 
+            {/* Dialog Container */}
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: '-40%', x: '-50%' }}
               animate={{ opacity: 1, scale: 1, y: '-50%', x: '-50%' }}
@@ -6701,7 +7229,6 @@ export default function ProfilePage() {
                 position: 'fixed',
                 top: '50%',
                 left: '50%',
-                transform: 'translate(-50%, -50%)',
                 width: '90%',
                 maxWidth: '400px',
                 background: isDark ? '#1c1c1e' : '#ffffff',
@@ -6713,152 +7240,79 @@ export default function ProfilePage() {
                 color: themeStyles.text,
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '16px'
+                gap: '16px',
+                textAlign: 'left'
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{
-                  fontFamily: 'Outfit, sans-serif',
-                  fontSize: '20px',
-                  fontWeight: 700,
-                  margin: 0
-                }}>
-                  Add family member
-                </h3>
-                <button 
-                  onClick={() => setIsAddFamilyOpen(false)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: themeStyles.subtext,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: 0
-                  }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
+              <h3 style={{
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '19px',
+                fontWeight: 700,
+                margin: 0
+              }}>
+                Clear chat history
+              </h3>
 
-              {/* Role Toggle Selector */}
-              <div style={{ display: 'flex', gap: '12px' }}>
-                {/* Teen Option */}
-                <div 
-                  onClick={() => setMemberType('Teen')}
-                  style={{
-                    flex: 1,
-                    padding: '12px 14px',
-                    borderRadius: '16px',
-                    background: memberType === 'Teen' ? 'var(--accent-theme)' : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'),
-                    border: `1px solid ${memberType === 'Teen' ? 'var(--accent-theme)' : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)')}`,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    textAlign: 'left',
-                    color: memberType === 'Teen' ? '#ffffff' : themeStyles.text
-                  }}
-                >
-                  <span style={{ fontSize: '14.5px', fontWeight: 700, display: 'block' }}>Teen</span>
-                  <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px', display: 'block' }}>Age 13-17</span>
-                </div>
+              <p style={{
+                fontSize: '14.5px',
+                color: themeStyles.subtext,
+                lineHeight: '1.5',
+                margin: 0
+              }}>
+                Are you sure you want to clear all your chat history? This will permanently erase your chat sessions on all devices. This action cannot be undone.
+              </p>
 
-                {/* Parent Option */}
-                <div 
-                  onClick={() => setMemberType('Parent')}
-                  style={{
-                    flex: 1,
-                    padding: '12px 14px',
-                    borderRadius: '16px',
-                    background: memberType === 'Parent' ? 'var(--accent-theme)' : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'),
-                    border: `1px solid ${memberType === 'Parent' ? 'var(--accent-theme)' : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)')}`,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    textAlign: 'left',
-                    color: memberType === 'Parent' ? '#ffffff' : themeStyles.text
-                  }}
-                >
-                  <span style={{ fontSize: '14.5px', fontWeight: 700, display: 'block' }}>Parent</span>
-                  <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px', display: 'block' }}>Supervisor</span>
-                </div>
-              </div>
-
-              {/* Email Input Field */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: themeStyles.subtext }}>
-                  Family member's email
-                </span>
-                <input
-                  type="email"
-                  placeholder="e.g. teen@family.com"
-                  value={memberEmail}
-                  onChange={(e) => setMemberEmail(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '14px',
-                    background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-                    color: themeStyles.text,
-                    fontSize: '14.5px',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                    transition: 'border-color 0.2s'
-                  }}
-                  onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent-theme)'}
-                  onBlur={(e) => e.currentTarget.style.borderColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}
-                />
-              </div>
-
-              {/* Submit Invitation Action buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '4px' }}>
+              {/* Action Buttons Row */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                width: '100%',
+                gap: '12px',
+                marginTop: '8px'
+              }}>
+                {/* Cancel Button */}
                 <button
-                  onClick={() => setIsAddFamilyOpen(false)}
+                  onClick={() => setIsClearHistoryOpen(false)}
                   style={{
-                    padding: '10px 18px',
+                    padding: '10px 20px',
                     borderRadius: '999px',
                     background: 'transparent',
                     border: 'none',
                     color: themeStyles.subtext,
-                    fontSize: '14px',
+                    fontSize: '14.5px',
                     fontWeight: 600,
                     cursor: 'pointer',
-                    fontFamily: 'inherit'
+                    fontFamily: 'inherit',
+                    transition: 'opacity 0.2s'
                   }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = 0.8}
+                  onMouseLeave={e => e.currentTarget.style.opacity = 1}
                 >
                   Cancel
                 </button>
+
+                {/* Confirm Button */}
                 <button
                   onClick={() => {
-                    const trimmed = memberEmail.trim();
-                    if (!trimmed) {
-                      triggerParentalToast('Please enter an email address');
-                      return;
-                    }
-                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-                      triggerParentalToast('Please enter a valid email address');
-                      return;
-                    }
-                    if (familyMembers.some(m => m.email.toLowerCase() === trimmed.toLowerCase())) {
-                      triggerParentalToast('This email is already in your family group');
-                      return;
-                    }
-                    setFamilyMembers([...familyMembers, { email: trimmed, role: memberType, status: 'Pending' }]);
-                    setIsAddFamilyOpen(false);
-                    triggerParentalToast(`Invitation sent to ${trimmed}`);
+                    setIsClearHistoryOpen(false);
+                    triggerDataToast('Chat history cleared successfully');
                   }}
                   style={{
-                    padding: '10px 22px',
+                    padding: '10px 24px',
                     borderRadius: '999px',
-                    background: 'var(--accent-theme)',
-                    color: '#ffffff',
+                    background: '#ef4444',
                     border: 'none',
-                    fontSize: '14px',
+                    color: '#ffffff',
+                    fontSize: '14.5px',
                     fontWeight: 700,
                     cursor: 'pointer',
-                    fontFamily: 'inherit'
+                    fontFamily: 'inherit',
+                    transition: 'opacity 0.2s'
                   }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = 0.9}
+                  onMouseLeave={e => e.currentTarget.style.opacity = 1}
                 >
-                  Send Invite
+                  Clear
                 </button>
               </div>
             </motion.div>
@@ -6866,35 +7320,124 @@ export default function ProfilePage() {
         )}
       </AnimatePresence>
 
-      {/* ── PARENTAL CONTROLS: TOAST NOTIFICATION ───────────────────────── */}
+      {/* ── DATA CONTROLS: DELETE ACCOUNT CONFIRMATION DIALOG ───────────────── */}
       <AnimatePresence>
-        {showParentalToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 30, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            style={{
-              position: 'fixed',
-              bottom: '24px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: '#323232',
-              color: '#ffffff',
-              padding: '12px 24px',
-              borderRadius: '999px',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-              zIndex: 999999,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              pointerEvents: 'none'
-            }}
-          >
-            <Check size={16} style={{ color: '#4ade80' }} />
-            <span style={{ fontSize: '14px', fontWeight: 500 }}>
-              {parentalToastMessage}
-            </span>
-          </motion.div>
+        {isDeleteAccountOpen && (
+          <>
+            {/* Backdrop Blur Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeleteAccountOpen(false)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.65)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                zIndex: 99999
+              }}
+            />
+
+            {/* Dialog Container */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: '-40%', x: '-50%' }}
+              animate={{ opacity: 1, scale: 1, y: '-50%', x: '-50%' }}
+              exit={{ opacity: 0, scale: 0.9, y: '-40%', x: '-50%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 250 }}
+              style={{
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                width: '90%',
+                maxWidth: '400px',
+                background: isDark ? '#1c1c1e' : '#ffffff',
+                border: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.08)',
+                borderRadius: '24px',
+                padding: '24px',
+                zIndex: 100000,
+                boxShadow: isDark ? '0 12px 40px rgba(0,0,0,0.6)' : '0 12px 40px rgba(0,0,0,0.12)',
+                color: themeStyles.text,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                textAlign: 'left'
+              }}
+            >
+              <h3 style={{
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '19px',
+                fontWeight: 700,
+                margin: 0
+              }}>
+                Delete Kyra Account
+              </h3>
+
+              <p style={{
+                fontSize: '14.5px',
+                color: themeStyles.subtext,
+                lineHeight: '1.5',
+                margin: 0
+              }}>
+                Are you sure you want to delete your account? This will permanently delete your profile, subscription plans, custom instructions, and all conversations. This action is irreversible.
+              </p>
+
+              {/* Action Buttons Row */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                width: '100%',
+                gap: '12px',
+                marginTop: '8px'
+              }}>
+                {/* Cancel Button */}
+                <button
+                  onClick={() => setIsDeleteAccountOpen(false)}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '999px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: themeStyles.subtext,
+                    fontSize: '14.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    transition: 'opacity 0.2s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = 0.8}
+                  onMouseLeave={e => e.currentTarget.style.opacity = 1}
+                >
+                  Cancel
+                </button>
+
+                {/* Confirm Button */}
+                <button
+                  onClick={() => {
+                    setIsDeleteAccountOpen(false);
+                    triggerDataToast('Account deletion request queued');
+                  }}
+                  style={{
+                    padding: '10px 24px',
+                    borderRadius: '999px',
+                    background: '#ef4444',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontSize: '14.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    transition: 'opacity 0.2s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = 0.9}
+                  onMouseLeave={e => e.currentTarget.style.opacity = 1}
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>
