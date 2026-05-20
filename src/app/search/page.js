@@ -6,5 +6,5 @@ export default function SearchPage() {
     document.title = 'Search | Kyra';
   }, []);
   
-  return null;
+  return <div />;
 }

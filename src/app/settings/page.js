@@ -6,5 +6,5 @@ export default function SettingsPage() {
     document.title = 'Settings | Kyra';
   }, []);
   
-  return null;
+  return <div />;
 }

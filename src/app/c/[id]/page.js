@@ -23,5 +23,5 @@ export default function ChatPage() {
     }
   }, [id, chats]);
 
-  return null;
+  return <div />;
 }

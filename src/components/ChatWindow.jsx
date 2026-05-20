@@ -7,7 +7,8 @@ import {
   Check, Copy, ThumbsUp, ThumbsDown, Share, Share2, RefreshCcw, MoreHorizontal, MoreVertical,
   AlertTriangle, ChevronDown, Mic, Square, ArrowUp, Plus, AudioLines, X, Menu, SquarePen,
   ChevronRight, Paperclip, Image, Lightbulb, Monitor, BookOpen, PenTool, Telescope, Cpu, Zap, Brain,
-  ArrowDown, MessageSquareDashed, PenLine, Globe, RotateCw, UserPlus, Users, Pin, Archive, Trash2, Volume2, VolumeX, GitBranch, Settings, SmilePlus, Reply, Flag, ChevronLeft, LogOut
+  ArrowDown, MessageSquareDashed, PenLine, Globe, RotateCw, UserPlus, Users, Pin, Archive, Trash2, Volume2, VolumeX, GitBranch, Settings, SmilePlus, Reply, Flag, ChevronLeft, LogOut,
+  Code, Compass, FileText, LayoutGrid
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getGeminiResponse } from '@/utils/gemini';
@@ -1633,7 +1634,7 @@ const ChatWindow = () => {
       
       // Always update local state with final response to clear placeholder status
       setMessages(prev => prev.map(m => 
-        m.id === aiMessageId ? { ...m, content: aiResponse, isPlaceholder: false, _typewriter: true } : m
+        m.id === aiMessageId ? { ...m, content: aiResponse, isPlaceholder: false, _typewriter: false } : m
       ));
 
       if (isGroup) {
@@ -1923,7 +1924,60 @@ const ChatWindow = () => {
         }
       `}</style>
       {isMobile && !chats.find(c => c.id === activeChatId)?.isGroup ? (
-        <header style={{
+        !showLoggedIn ? (
+          <header style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '0 16px', height: 60, position: 'sticky', top: 0, zIndex: 80,
+            background: 'var(--bg-primary)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            borderBottom: '1px solid var(--divider)',
+          }}>
+            {/* Left: Hamburger menu */}
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'transparent',
+                border: 'none', cursor: 'pointer',
+                width: '44px', height: '44px', color: 'var(--on-surface)',
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none">
+                <line x1="4" y1="8" x2="20" y2="8" />
+                <line x1="4" y1="16" x2="13" y2="16" />
+              </svg>
+            </button>
+
+            {/* Center: App Title */}
+            <div style={{
+              fontSize: '18px',
+              fontWeight: '600',
+              color: 'var(--on-surface)',
+              fontFamily: 'inherit'
+            }}>
+              Kyra
+            </div>
+
+            {/* Right: Log In Button */}
+            <button 
+              onClick={() => setAuthOpen(true)}
+              style={{
+                background: 'var(--on-surface)',
+                color: 'var(--bg-primary)',
+                border: 'none',
+                padding: '6px 14px',
+                borderRadius: '999px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Log in
+            </button>
+          </header>
+        ) : (
+          <header style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0 16px', height: 60, position: 'sticky', top: 0, zIndex: 80,
           background: 'var(--bg-primary)',
@@ -2154,7 +2208,7 @@ const ChatWindow = () => {
             )}
           </div>
         </header>
-      ) : (
+      )) : (
         <header style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0 20px', height: 56, position: 'sticky', top: 0, zIndex: 10,
@@ -2491,9 +2545,134 @@ const ChatWindow = () => {
                 )}
 
 
-                {isMobile && <div className="flex-1" />}
+                {isMobile && showLoggedIn && <div className="flex-1" />}
                 
-                {isMobile && (
+                {isMobile && !showLoggedIn && (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flex: 1,
+                    width: '100%',
+                    marginTop: 'auto',
+                    marginBottom: 'auto',
+                    paddingBottom: '24px'
+                  }} className="animate-fade-in">
+                    <h1 style={{
+                      fontSize: '28px',
+                      fontWeight: '600',
+                      color: 'var(--on-surface)',
+                      textAlign: 'center',
+                      marginBottom: '28px',
+                      fontFamily: 'inherit'
+                    }}>
+                      What can I help with?
+                    </h1>
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '10px',
+                      justifyContent: 'center',
+                      width: '100%',
+                      maxWidth: '360px'
+                    }}>
+                      {/* Code chip */}
+                      <button
+                        onClick={() => setInput("Write code to ")}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '10px 18px',
+                          borderRadius: '999px',
+                          border: '1px solid var(--divider)',
+                          background: 'var(--surface-1)',
+                          color: 'var(--on-surface)',
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Code size={16} style={{ color: 'var(--on-surface-muted)' }} />
+                        <span>Code</span>
+                      </button>
+
+                      {/* Surprise me chip */}
+                      <button
+                        onClick={() => {
+                          const surprises = [
+                            "Tell me a fun random fact",
+                            "Suggest a cool programming project idea",
+                            "Write a short haiku about coding",
+                            "Give me a daily motivational quote"
+                          ];
+                          setInput(surprises[Math.floor(Math.random() * surprises.length)]);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '10px 18px',
+                          borderRadius: '999px',
+                          border: '1px solid var(--divider)',
+                          background: 'var(--surface-1)',
+                          color: 'var(--on-surface)',
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Compass size={16} style={{ color: 'var(--on-surface-muted)' }} />
+                        <span>Surprise me</span>
+                      </button>
+
+                      {/* Summarize text chip */}
+                      <button
+                        onClick={() => setInput("Summarize the following text: ")}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '10px 18px',
+                          borderRadius: '999px',
+                          border: '1px solid var(--divider)',
+                          background: 'var(--surface-1)',
+                          color: 'var(--on-surface)',
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <FileText size={16} style={{ color: 'var(--on-surface-muted)' }} />
+                        <span>Summarize text</span>
+                      </button>
+
+                      {/* More chip */}
+                      <button
+                        onClick={() => setActiveCategory('write')}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '10px 18px',
+                          borderRadius: '999px',
+                          border: '1px solid var(--divider)',
+                          background: 'var(--surface-1)',
+                          color: 'var(--on-surface)',
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <LayoutGrid size={16} style={{ color: 'var(--on-surface-muted)' }} />
+                        <span>More</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {isMobile && showLoggedIn && (
                   <div className={`flex flex-col items-start gap-2 mt-0 w-full max-w-3xl mx-auto px-2 mb-4`}>
                     {activeCategory !== 'write' && (
                       <button 
@@ -2547,7 +2726,90 @@ const ChatWindow = () => {
                   </div>
                 )}
 
-                <div className={`w-full ${isMobile ? 'mt-auto' : 'max-w-[840px] relative group'} px-0`}>
+                {isMobile && !showLoggedIn ? (
+                  <div className="w-full px-0 mt-auto">
+                    <div className="w-full relative flex items-center border border-divider shadow-2xl transition-all duration-300" 
+                      style={{ 
+                        background: 'var(--surface-1)', 
+                        borderRadius: '999px', 
+                        padding: '6px 6px 6px 14px',
+                        borderColor: 'var(--divider)',
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                      {/* Left: Plus button */}
+                      <button 
+                        type="button"
+                        className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
+                        style={{ 
+                          color: 'var(--on-surface-muted)',
+                          backgroundColor: 'var(--hover-overlay)',
+                          border: 'none',
+                          flexShrink: 0
+                        }}
+                        onClick={() => setAuthOpen(true)}
+                      >
+                        <Plus size={20} />
+                      </button>
+
+                      {/* Center: Input field */}
+                      <form onSubmit={handleSend} style={{ flex: 1, display: 'flex', alignItems: 'center', margin: 0, padding: 0 }}>
+                        <input 
+                          ref={inputRef}
+                          type="text" 
+                          value={input} 
+                          onChange={(e) => setInput(e.target.value)} 
+                          placeholder="Ask Kyra" 
+                          style={{ 
+                            background: 'transparent',
+                            border: 'none',
+                            outline: 'none', 
+                            color: 'var(--on-surface)',
+                            fontSize: '16px',
+                            padding: '8px 4px',
+                            width: '100%'
+                          }}
+                          className="temp-placeholder"
+                        />
+                      </form>
+
+                      {/* Right: Mic and Send buttons */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                        <button 
+                          type="button" 
+                          onClick={() => setAuthOpen(true)} 
+                          className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
+                          style={{ 
+                            color: 'var(--on-surface-muted)',
+                            background: 'transparent',
+                            border: 'none'
+                          }}
+                        >
+                          <Mic size={20} />
+                        </button>
+
+                        <button 
+                          onClick={(e) => {
+                            if (!input.trim()) return;
+                            handleSend(e);
+                          }}
+                          className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300"
+                          style={{ 
+                            background: input.trim() ? accentColor : 'var(--hover-overlay-2)',
+                            color: input.trim() ? '#ffffff' : 'var(--on-surface-subtle)',
+                            cursor: input.trim() ? 'pointer' : 'not-allowed',
+                            border: 'none'
+                          }}
+                        >
+                          <ArrowUp size={18} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={`w-full ${isMobile ? 'mt-auto' : 'max-w-[840px] relative group'} px-0`}>
                   <div className={`w-full relative flex ${isMobile ? 'flex-col gap-2' : 'items-center'} border border-divider shadow-2xl transition-all duration-300`} 
                     style={{ 
                       background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
@@ -2768,6 +3030,7 @@ const ChatWindow = () => {
                     </form>
                   </div>
                 </div>
+              )}
 
                 {!isMobile && (
                   <div className={`flex flex-wrap items-center justify-center gap-2 w-full max-w-3xl mx-auto px-4`} style={{ marginTop: '40px' }}>

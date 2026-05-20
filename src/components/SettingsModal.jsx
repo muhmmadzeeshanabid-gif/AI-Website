@@ -2,6 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { useAppContext } from '@/context/AppContext';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Settings, Bell, Palette, Grid, Database, Shield,
@@ -9,7 +10,7 @@ import {
   HelpCircle, Info, ChevronRight, Smartphone, Key, History, Type,
   Maximize, Image as ImageIcon, Trash2, Moon, Sun, Monitor, Bot, 
   Search as SearchIcon, AlertTriangle, Archive, Eye, EyeOff, MessageSquare, ChevronUp, Play, Pause,
-  ArrowLeft, LayoutGrid
+  ArrowLeft, LayoutGrid, Globe, FileText, Glasses, Circle
 } from 'lucide-react';
 
 const VOICES = [
@@ -75,9 +76,23 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
     archivedChats, unarchiveChat, archivePassword, setArchivePassword,
     openArchivedChat
   } = useAppContext();
+  const router = useRouter();
   const [activeTab, setActiveTab] = React.useState(initialTab);
   const [connectedApps, setConnectedApps] = React.useState(['github', 'spotify']);
   const [isBrowsingApps, setIsBrowsingApps] = React.useState(false);
+  const [isMobile, setIsMobile] = React.useState(false);
+  const [improveModel, setImproveModel] = React.useState(true);
+  const [currentMobileView, setCurrentMobileView] = React.useState('main');
+  const [isLanguagePopupOpen, setIsLanguagePopupOpen] = React.useState(false);
+  const [languageSearchQuery, setLanguageSearchQuery] = React.useState('');
+  const [tempSelectedLanguage, setTempSelectedLanguage] = React.useState('English (US)');
+  
+  React.useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   React.useEffect(() => {
     setIsBrowsingApps(false);
@@ -113,6 +128,567 @@ export default function SettingsModal({ onClose, initialTab = 'general' }) {
   // ─────────────────────
 
   if (typeof document === 'undefined') return null;
+
+  if (isMobile && !user) {
+    if (currentMobileView === 'about') {
+      return ReactDOM.createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999999,
+            background: 'var(--bg-primary, #000000)',
+            display: 'flex',
+            flexDirection: 'column',
+            color: 'var(--on-surface, #ffffff)',
+            padding: '16px 20px',
+            overflowY: 'auto'
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, height: 44, marginTop: 12 }}>
+            <button
+              onClick={() => setCurrentMobileView('main')}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                background: 'var(--surface-2, rgba(255,255,255,0.08))',
+                border: 'none',
+                color: 'var(--on-surface, #ffffff)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <span style={{ fontSize: 18, fontWeight: 600, flex: 1, textAlign: 'center', marginRight: 40 }}>About</span>
+          </div>
+
+          {/* About List Card */}
+          <div style={{ 
+            background: 'var(--surface-1, #1e1e20)', 
+            borderRadius: 16, 
+            overflow: 'hidden'
+          }}>
+            {/* Help center */}
+            <div 
+              onClick={() => { router.push('/help'); onClose(); }}
+              style={{ 
+                padding: 16, 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 12,
+                cursor: 'pointer',
+                borderBottom: '1px solid var(--divider, #3a3a3c)'
+              }}
+            >
+              <div style={{ color: 'var(--on-surface-muted, rgba(255,255,255,0.7))' }}>
+                <HelpCircle size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--on-surface, #ffffff)' }}>Help center</div>
+              </div>
+              <div style={{ color: 'var(--on-surface-subtle, rgba(255,255,255,0.4))' }}>
+                <ChevronRight size={18} />
+              </div>
+            </div>
+
+            {/* Terms of use */}
+            <div 
+              onClick={() => alert('Terms of use')}
+              style={{ 
+                padding: 16, 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 12,
+                cursor: 'pointer',
+                borderBottom: '1px solid var(--divider, #3a3a3c)'
+              }}
+            >
+              <div style={{ color: 'var(--on-surface-muted, rgba(255,255,255,0.7))' }}>
+                <FileText size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--on-surface, #ffffff)' }}>Terms of use</div>
+              </div>
+              <div style={{ color: 'var(--on-surface-subtle, rgba(255,255,255,0.4))' }}>
+                <ChevronRight size={18} />
+              </div>
+            </div>
+
+            {/* Privacy policy */}
+            <div 
+              onClick={() => alert('Privacy policy')}
+              style={{ 
+                padding: 16, 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 12,
+                cursor: 'pointer',
+                borderBottom: '1px solid var(--divider, #3a3a3c)'
+              }}
+            >
+              <div style={{ color: 'var(--on-surface-muted, rgba(255,255,255,0.7))' }}>
+                <Glasses size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--on-surface, #ffffff)' }}>Privacy policy</div>
+              </div>
+              <div style={{ color: 'var(--on-surface-subtle, rgba(255,255,255,0.4))' }}>
+                <ChevronRight size={18} />
+              </div>
+            </div>
+
+            {/* Licenses */}
+            <div 
+              onClick={() => alert('Licenses')}
+              style={{ 
+                padding: 16, 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 12,
+                cursor: 'pointer',
+                borderBottom: '1px solid var(--divider, #3a3a3c)'
+              }}
+            >
+              <div style={{ color: 'var(--on-surface-muted, rgba(255,255,255,0.7))' }}>
+                <FileText size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--on-surface, #ffffff)' }}>Licenses</div>
+              </div>
+              <div style={{ color: 'var(--on-surface-subtle, rgba(255,255,255,0.4))' }}>
+                <ChevronRight size={18} />
+              </div>
+            </div>
+
+            {/* Kyra for Web details */}
+            <div 
+              style={{ 
+                padding: 16, 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 12,
+                cursor: 'default'
+              }}
+            >
+              <div style={{ color: 'var(--on-surface-muted, rgba(255,255,255,0.7))' }}>
+                <Circle size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--on-surface, #ffffff)' }}>Kyra for Web</div>
+                <div style={{ fontSize: 12, color: 'var(--on-surface-subtle, rgba(255,255,255,0.5))', marginTop: 2 }}>1.2026.125 (19)</div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      );
+    }
+
+    return ReactDOM.createPortal(
+      <>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999999,
+            background: 'var(--bg-primary, #000000)',
+            display: 'flex',
+            flexDirection: 'column',
+            color: 'var(--on-surface, #ffffff)',
+            padding: '16px 20px',
+            overflowY: 'auto'
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, height: 44, marginTop: 12 }}>
+            <button
+              onClick={onClose}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                background: 'var(--surface-2, rgba(255,255,255,0.08))',
+                border: 'none',
+                color: 'var(--on-surface, #ffffff)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <span style={{ fontSize: 18, fontWeight: 600, flex: 1, textAlign: 'center', marginRight: 40 }}>Settings</span>
+          </div>
+
+          {/* Data controls */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ color: 'var(--on-surface-subtle, rgba(255,255,255,0.6))', fontSize: 13, fontWeight: 500, marginBottom: 8, paddingLeft: 4 }}>
+              Data controls
+            </div>
+            <div style={{ 
+              background: 'var(--surface-1, #1e1e20)', 
+              borderRadius: 16, 
+              padding: 16, 
+              display: 'flex', 
+              gap: 12,
+              alignItems: 'flex-start'
+            }}>
+              <div style={{ color: 'var(--on-surface-muted, rgba(255,255,255,0.7))', paddingTop: 2 }}>
+                <Database size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--on-surface, #ffffff)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Improve the model for everyone</span>
+                  <div
+                    onClick={() => setImproveModel(!improveModel)}
+                    style={{
+                      width: 50,
+                      height: 28,
+                      borderRadius: 99,
+                      background: improveModel ? 'var(--on-surface, #ffffff)' : 'var(--divider, #3a3a3c)',
+                      position: 'relative',
+                      cursor: 'pointer',
+                      transition: '0.3s',
+                      flexShrink: 0
+                    }}
+                  >
+                    <div style={{
+                      position: 'absolute',
+                      top: 3,
+                      left: improveModel ? 25 : 3,
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      background: improveModel ? 'var(--bg-primary, #000000)' : '#ffffff',
+                      transition: '0.3s'
+                    }} />
+                  </div>
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--on-surface-subtle, rgba(255,255,255,0.5))', lineHeight: 1.5, marginTop: 4, marginRight: 8 }}>
+                  Allow your content to be used to improve our models for you and other users. We take steps to protect your privacy. <span style={{ textDecoration: 'underline', cursor: 'pointer' }}>Learn more</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* App */}
+          <div>
+            <div style={{ color: 'var(--on-surface-subtle, rgba(255,255,255,0.6))', fontSize: 13, fontWeight: 500, marginBottom: 8, paddingLeft: 4 }}>
+              App
+            </div>
+            <div style={{ 
+              background: 'var(--surface-1, #1e1e20)', 
+              borderRadius: 16, 
+              overflow: 'hidden'
+            }}>
+              {/* Language */}
+              <div 
+                onClick={() => {
+                  setTempSelectedLanguage(language || 'English (US)');
+                  setIsLanguagePopupOpen(true);
+                }}
+                style={{ 
+                  padding: 16, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 12,
+                  cursor: 'pointer',
+                  borderBottom: '1px solid var(--divider, #3a3a3c)'
+                }}
+              >
+                <div style={{ color: 'var(--on-surface-muted, rgba(255,255,255,0.7))' }}>
+                  <Globe size={20} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--on-surface, #ffffff)' }}>Language</div>
+                  <div style={{ fontSize: 12, color: 'var(--on-surface-subtle, rgba(255,255,255,0.5))', marginTop: 2 }}>{language || 'English (US)'}</div>
+                </div>
+                <div style={{ color: 'var(--on-surface-subtle, rgba(255,255,255,0.4))' }}>
+                  <ChevronRight size={18} />
+                </div>
+              </div>
+
+              {/* About */}
+              <div 
+                onClick={() => setCurrentMobileView('about')}
+                style={{ 
+                  padding: 16, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 12,
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ color: 'var(--on-surface-muted, rgba(255,255,255,0.7))' }}>
+                  <Info size={20} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--on-surface, #ffffff)' }}>About</div>
+                </div>
+                <div style={{ color: 'var(--on-surface-subtle, rgba(255,255,255,0.4))' }}>
+                  <ChevronRight size={18} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {isLanguagePopupOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.6)',
+              zIndex: 10000000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px'
+            }}
+            onClick={() => {
+              setIsLanguagePopupOpen(false);
+              setLanguageSearchQuery('');
+            }}
+          >
+            {/* Dialog Container */}
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: '380px',
+                background: '#1c1c1e',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '24px',
+                padding: '24px',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
+                color: '#ffffff'
+              }}
+            >
+              {/* Title */}
+              <h3 style={{
+                fontSize: '20px',
+                fontWeight: 700,
+                margin: '0 0 16px 0',
+                textAlign: 'left'
+              }}>
+                App language
+              </h3>
+
+              {/* Search Bar Container */}
+              <div style={{
+                position: 'relative',
+                marginBottom: '16px',
+                width: '100%'
+              }}>
+                {/* Search Icon */}
+                <div style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'rgba(255,255,255,0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  pointerEvents: 'none'
+                }}>
+                  <SearchIcon size={18} />
+                </div>
+
+                {/* Input Field */}
+                <input
+                  type="text"
+                  placeholder="Search language..."
+                  value={languageSearchQuery}
+                  onChange={(e) => setLanguageSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px 12px 38px',
+                    borderRadius: '14px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    color: '#ffffff',
+                    fontSize: '14.5px',
+                    outline: 'none',
+                    fontFamily: 'inherit'
+                  }}
+                />
+
+                {/* Clear Input Button */}
+                {languageSearchQuery && (
+                  <button
+                    onClick={() => setLanguageSearchQuery('')}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'rgba(255,255,255,0.5)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: 0
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              {/* Scrollable Languages List Container */}
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                marginBottom: '20px',
+                maxHeight: '260px',
+                overflowY: 'auto',
+                paddingRight: '4px'
+              }} className="custom-scrollbar">
+                {(() => {
+                  const filtered = LANGUAGES.filter(l => !l.divider && (
+                    l.label.toLowerCase().includes(languageSearchQuery.toLowerCase()) ||
+                    l.value.toLowerCase().includes(languageSearchQuery.toLowerCase())
+                  ));
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div style={{
+                        padding: '24px 0',
+                        textAlign: 'center',
+                        color: 'rgba(255,255,255,0.5)',
+                        fontSize: '14.5px'
+                      }}>
+                        No languages found
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((lang) => {
+                    const isSelected = tempSelectedLanguage === lang.value || tempSelectedLanguage === lang.label;
+                    return (
+                      <div
+                        key={lang.value}
+                        onClick={() => setTempSelectedLanguage(lang.value)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '10px 12px',
+                          borderRadius: '12px',
+                          cursor: 'pointer',
+                          background: isSelected ? 'rgba(255,255,255,0.04)' : 'transparent',
+                          transition: 'background-color 0.2s'
+                        }}
+                      >
+                        {/* Radio Circle */}
+                        <div style={{
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          border: `2px solid ${isSelected ? 'var(--accent-color, #6366f1)' : '#48484a'}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: '12px',
+                          transition: 'border-color 0.2s',
+                          flexShrink: 0
+                        }}>
+                          {isSelected && (
+                            <div style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              background: 'var(--accent-color, #6366f1)'
+                            }} />
+                          )}
+                        </div>
+
+                        {/* Language Label */}
+                        <span style={{
+                          fontSize: '14.5px',
+                          fontWeight: isSelected ? 600 : 500,
+                          color: isSelected ? '#ffffff' : 'rgba(255,255,255,0.7)',
+                          transition: 'color 0.2s',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {lang.label}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
+              {/* Action Buttons Row */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                width: '100%',
+                gap: '12px'
+              }}>
+                {/* Cancel Button */}
+                <button
+                  onClick={() => {
+                    setIsLanguagePopupOpen(false);
+                    setLanguageSearchQuery('');
+                  }}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: '999px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.7)',
+                    fontSize: '14.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    transition: 'opacity 0.2s'
+                  }}
+                >
+                  Cancel
+                </button>
+
+                {/* OK Button */}
+                <button
+                  onClick={() => {
+                    setLanguage(tempSelectedLanguage);
+                    setIsLanguagePopupOpen(false);
+                    setLanguageSearchQuery('');
+                  }}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: '999px',
+                    background: 'var(--accent-color, #6366f1)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontSize: '14.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    transition: 'opacity 0.2s'
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>,
+      document.body
+    );
+  }
 
   const isDark = resolvedTheme === 'dark'; 
   const modalBg = 'var(--bg-primary)';

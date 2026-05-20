@@ -5,15 +5,16 @@ import { useAppContext } from '@/context/AppContext';
 import { X, Smartphone, Apple, Mail } from 'lucide-react';
 
 export default function AuthModal({ onClose }) {
-  const { login } = useAppContext();
+  const { login, resolvedTheme } = useAppContext();
   const [email, setEmail] = useState('');
 
   if (typeof document === 'undefined') return null;
 
   // CSS vars
+  const isDark = resolvedTheme === 'dark';
   const text   = 'var(--on-surface)';
   const muted  = 'var(--on-surface-muted)';
-  const border = 'var(--divider)';
+  const border = isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)';
   const hover  = 'var(--hover-overlay)';
 
   const GoogleIcon = () => (

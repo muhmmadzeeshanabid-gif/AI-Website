@@ -6,5 +6,5 @@ export default function LogoutPage() {
     document.title = 'Logout | Kyra';
   }, []);
   
-  return null;
+  return <div />;
 }

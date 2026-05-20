@@ -660,7 +660,7 @@ export default function ProfilePage() {
   }, []);
 
   if (isMobile === null || !isMobile) {
-    return null;
+    return <div />;
   }
 
   return (

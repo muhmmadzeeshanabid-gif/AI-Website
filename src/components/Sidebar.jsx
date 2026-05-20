@@ -2,7 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { useAppContext } from '@/context/AppContext';
-import { MessageSquare, Plus, Settings, LogOut, User, Menu, X, ChevronDown, ChevronUp, Search, Bot, PanelLeftClose, PanelLeftOpen, Edit, SquarePen, MoreHorizontal, Share2, Users, Pencil, Pin, Archive, Trash2, Sparkles, Palette, UserCircle, HelpCircle, ChevronRight, Lock, Image, Telescope, LayoutGrid, Link } from 'lucide-react';
+import { MessageSquare, Plus, Settings, LogOut, User, Menu, X, ChevronDown, ChevronUp, Search, Bot, PanelLeftClose, PanelLeftOpen, Edit, SquarePen, MoreHorizontal, Share2, Users, Pencil, Pin, Archive, Trash2, Sparkles, Palette, UserCircle, HelpCircle, ChevronRight, Lock, Image, Telescope, LayoutGrid, Link, BookOpen, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SettingsModal from './SettingsModal';
 import ProfileModal from './ProfileModal';
@@ -152,6 +152,132 @@ const Sidebar = () => {
   const displayChats = (chats || []).filter(c => c && c.messages && Array.isArray(c.messages) && c.messages.length > 0);
   const sortedChats = [...displayChats.filter(c => c.pinned), ...displayChats.filter(c => !c.pinned)];
 
+  if (mounted && isMobile && !showLoggedIn) {
+    return (
+      <>
+        <AnimatePresence>
+          {isSidebarOpen && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              style={{ zIndex: 190 }}
+            />
+          )}
+        </AnimatePresence>
+
+        <motion.div
+          initial={false}
+          animate={{ 
+            width: isSidebarOpen ? '280px' : '0px',
+            x: !isSidebarOpen ? '-100%' : 0,
+          }}
+          transition={{ type: 'spring', stiffness: 400, damping: 40 }}
+          className={`sidebar-root ${isSidebarOpen ? 'is-open' : ''} fixed left-0 top-0 h-screen bg-sidebar-bg flex flex-col z-[200] border-none shadow-2xl`}
+          style={{
+            height: '100vh',
+            boxShadow: isSidebarOpen ? '0 0 50px rgba(0,0,0,0.5)' : 'none',
+            pointerEvents: !isSidebarOpen ? 'none' : 'auto',
+            overflow: 'visible',
+            zIndex: 200
+          }}
+        >
+          <div className="flex flex-col h-full bg-sidebar-bg text-on-surface" style={{ width: '100%', height: '100%' }}>
+            {/* Top Bar */}
+            <div className="flex items-center justify-between px-4" style={{ minHeight: 56, borderBottom: '1px solid var(--divider)', paddingTop: '24px', paddingBottom: '16px' }}>
+              <button
+                onClick={() => {
+                  setActiveChatId(null);
+                  setMessages([]);
+                  closeArchivedChat();
+                  setAppView('chat');
+                  router.push('/');
+                  setIsSidebarOpen(false);
+                }}
+                className="flex items-center gap-3 bg-transparent border-none text-on-surface cursor-pointer animate-fade-in"
+                style={{ fontFamily: 'inherit', padding: 0 }}
+              >
+                <SquarePen size={20} />
+                <span style={{ fontSize: 16, fontWeight: 500 }}>New chat</span>
+              </button>
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--on-surface-muted)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '8px',
+                  borderRadius: '50%',
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Middle Links List */}
+            <div className="flex flex-col gap-1 px-2 mt-4 flex-1">
+              {[
+                { icon: <HelpCircle size={18} />, label: 'Help', action: () => { router.push('/help'); setIsSidebarOpen(false); } },
+                { icon: <Sparkles size={18} />, label: 'Upgrade plan', action: () => { router.push('/upgrade'); setIsSidebarOpen(false); } },
+                { icon: <Settings size={18} />, label: 'Settings', action: () => { router.push('/settings'); setIsSidebarOpen(false); } }
+              ].map((item, i) => (
+                <button
+                  key={i}
+                  onClick={item.action}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 16,
+                    padding: '12px 14px', background: 'transparent', border: 'none',
+                    color: 'var(--on-surface)', fontSize: 15, cursor: 'pointer',
+                    textAlign: 'left', fontFamily: 'inherit', borderRadius: 12,
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span style={{ color: 'var(--on-surface-muted)', display: 'flex', alignItems: 'center' }}>{item.icon}</span>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Bottom Section */}
+            <div className="px-4 pb-12 mt-auto" style={{ borderTop: '1px solid var(--divider)', paddingTop: '16px', paddingBottom: '36px' }}>
+              <p style={{ fontSize: 13, color: 'var(--on-surface-muted)', lineHeight: 1.5, marginBottom: 16 }}>
+                Save your chat history, share chats, and personalize your experience.
+              </p>
+              <button
+                onClick={() => {
+                  setAuthOpen(true);
+                  setIsSidebarOpen(false);
+                }}
+                style={{
+                  width: '100%', padding: '12px', borderRadius: 999,
+                  background: '#ffffff', color: '#000000', border: 'none',
+                  fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  transition: 'opacity 0.2s',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                Log in or sign up
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </>
+    );
+  }
+
   return (
     <>
       <AnimatePresence>
@@ -174,8 +300,9 @@ const Sidebar = () => {
           x: isMobile && !isSidebarOpen ? '-100%' : 0,
         }}
         transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-        className={`sidebar-root ${isSidebarOpen ? 'is-open' : ''} relative h-screen bg-sidebar-bg border-r border-divider flex flex-col z-40 shadow-2xl ${isMobile ? 'fixed left-0 top-0 h-full z-[200] border-none' : ''}`}
+        className={`sidebar-root ${isSidebarOpen ? 'is-open' : ''} relative h-screen bg-sidebar-bg border-r border-divider flex flex-col z-40 shadow-2xl ${isMobile ? 'fixed left-0 top-0 h-screen z-[200] border-none' : ''}`}
         style={{
+          height: '100vh',
           boxShadow: isMobile && isSidebarOpen ? '0 0 50px rgba(0,0,0,0.5)' : 'none',
           pointerEvents: isMobile && !isSidebarOpen ? 'none' : 'auto',
           overflow: 'visible',
