@@ -62,6 +62,7 @@ const Sidebar = () => {
   const menuRef = React.useRef(null);
   const [isMobile, setIsMobile] = React.useState(false);
   const [isRecentsCardOpen, setIsRecentsCardOpen] = React.useState(false);
+  const prevIsMobileRef = React.useRef(false);
   const recentsButtonRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -83,9 +84,10 @@ const Sidebar = () => {
   }, []);
 
   React.useEffect(() => {
-    if (isMobile && isSidebarOpen) {
+    if (isMobile && !prevIsMobileRef.current && isSidebarOpen) {
       setIsSidebarOpen(false);
     }
+    prevIsMobileRef.current = isMobile;
   }, [isMobile, isSidebarOpen]);
 
   React.useEffect(() => {
