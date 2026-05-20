@@ -134,6 +134,7 @@ export const AppProvider = ({ children }) => {
   const [authOpen, setAuthOpen] = useState(false);
   const [activeChatId, setActiveChatId] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [isTemporary, setIsTemporary] = useState(false);
   
   const [fontSize, setFontSizeState] = useState(() => {
     if (typeof window === 'undefined') return 'Medium';
@@ -187,12 +188,17 @@ export const AppProvider = ({ children }) => {
     } catch { return defaults; }
   });
 
-  // Strict enforcement: No messages allowed if no active chat
+  // Strict enforcement: No messages allowed if no active chat (except for temporary chats)
   useEffect(() => {
-    if (!activeChatId && messages.length > 0) {
+    if (!activeChatId && messages.length > 0 && !isTemporary) {
       setMessages([]);
     }
-  }, [activeChatId, messages.length]);
+  }, [activeChatId, messages.length, isTemporary]);
+
+  // Reset temporary chat state when switching/exiting chats
+  useEffect(() => {
+    setIsTemporary(false);
+  }, [activeChatId]);
 
   // Firestore listeners cleanup
   const unsubscribeRef = useRef(null);
@@ -840,6 +846,7 @@ export const AppProvider = ({ children }) => {
       messages, setMessages,
       chats, setChats,
       activeChatId, setActiveChatId,
+      isTemporary, setIsTemporary,
       createNewChat, deleteChat, switchChat, renameChat,
       archivedChats, archiveChat, unarchiveChat,
       archivePassword, setArchivePassword,

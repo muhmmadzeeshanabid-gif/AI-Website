@@ -407,7 +407,7 @@ const ChatWindow = () => {
     profile, showLoggedIn, personalization, accentColor,
     deleteChat, archiveChat, aiModel, setAiModel, renameChat,
     isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId,
-    leaveGroup
+    leaveGroup, isTemporary, setIsTemporary
   } = useAppContext();
 
   const [mounted, setMounted] = useState(false);
@@ -418,7 +418,6 @@ const ChatWindow = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [generatingId, setGeneratingId] = useState(null);
   const currentResponseRef = useRef("");
-  const [isTemporary, setIsTemporary] = useState(false);
   
   const currentChatForSend = chats.find(c => c.id === activeChatId);
   const isGroupForSend = currentChatForSend?.isGroup;
@@ -1398,7 +1397,9 @@ const ChatWindow = () => {
   }, [messages, activeChatId, isTemporary]);
 
   useEffect(() => {
-    if (activeChatId && chats.length > 0) {
+    if (isTemporary) {
+      document.title = 'Temporary Chat | Kyra';
+    } else if (activeChatId && chats.length > 0) {
       const activeChat = chats.find(c => c.id === activeChatId);
       if (activeChat) {
         document.title = `${activeChat.title} | Kyra`;
@@ -1406,7 +1407,7 @@ const ChatWindow = () => {
     } else if (!activeChatId) {
       document.title = 'New Chat | Kyra';
     }
-  }, [activeChatId, chats]);
+  }, [activeChatId, chats, isTemporary]);
 
   const formatDateLabel = (dateString) => {
     if (!dateString) return '';
@@ -1884,7 +1885,7 @@ const ChatWindow = () => {
   if (!mounted) return null;
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col relative h-screen bg-primary transition-colors duration-500" style={{ overflow: 'hidden' }}>
+    <div className="flex-1 min-w-0 flex flex-col relative bg-primary transition-colors duration-500" style={{ overflow: 'hidden', height: '100dvh' }}>
       <PeopleModal 
         isOpen={isPeopleModalOpen} 
         onClose={() => setIsPeopleModalOpen(false)} 
@@ -2013,7 +2014,14 @@ const ChatWindow = () => {
             {!activeChatId || !chats.some(c => c.id === activeChatId && c.messages && c.messages.length > 0) ? (
               /* Temporary Chat Toggle Icon for new/empty chats */
               <button 
-                onClick={() => setIsTemporary(!isTemporary)}
+                onClick={() => {
+                  if (isTemporary) {
+                    setMessages([]);
+                    setIsTemporary(false);
+                  } else {
+                    setIsTemporary(true);
+                  }
+                }}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   background: isTemporary 
@@ -2248,7 +2256,9 @@ const ChatWindow = () => {
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
-                {chats.find(c => c.id === activeChatId)?.isGroup ? (
+                {isTemporary ? (
+                  <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px', color: 'var(--on-surface)' }}>Temporary Chat</span>
+                ) : chats.find(c => c.id === activeChatId)?.isGroup ? (
                   <>
                     <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: '-0.2px' }}>
                       {chats.find(c => c.id === activeChatId)?.title || 'Group Chat'}
@@ -2354,9 +2364,16 @@ const ChatWindow = () => {
                 )}
               </div>
             ) : (
-              messages.length === 0 ? (
+              (isTemporary || messages.length === 0) ? (
                 <button 
-                  onClick={() => setIsTemporary(!isTemporary)}
+                  onClick={() => {
+                    if (isTemporary) {
+                      setMessages([]);
+                      setIsTemporary(false);
+                    } else {
+                      setIsTemporary(true);
+                    }
+                  }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '8px 14px', borderRadius: 12,
@@ -2533,19 +2550,19 @@ const ChatWindow = () => {
         >
           {/* Landing Page - Empty Chat (Only for non-group chats) */}
           {messages.length === 0 && !chats.find(c => c.id === activeChatId)?.isGroup && (
-            <div className={`flex-1 mx-auto w-full flex flex-col ${isMobile ? 'justify-between py-6' : 'items-center justify-center py-20'} px-4`} style={{ maxWidth: chatWidth === 'Wide' ? 'min(1000px, 100%)' : chatWidth === 'Full' ? '100%' : 'min(768px, 100%)' }}>
-              <div className={`w-full flex flex-col ${isMobile ? 'items-start text-left flex-1' : 'items-center justify-center text-center'} animate-fade-in px-4`}>
+            <div className={`flex-1 mx-auto w-full flex flex-col ${isMobile ? (isTemporary ? 'justify-center items-center py-6' : 'justify-between py-6') : 'items-center justify-center py-20'} px-4`} style={{ maxWidth: chatWidth === 'Wide' ? 'min(1000px, 100%)' : chatWidth === 'Full' ? '100%' : 'min(768px, 100%)' }}>
+              <div className={`w-full flex flex-col ${isMobile ? (isTemporary ? 'items-center text-center' : 'items-start text-left flex-1') : 'items-center justify-center text-center'} animate-fade-in px-4`}>
                 {isTemporary ? (
-                  <div className={`flex flex-col ${isMobile ? 'items-start text-left' : 'items-center text-center'} space-y-3`} style={{ marginBottom: isMobile ? '32px' : '60px' }}>
+                  <div className="flex flex-col items-center text-center space-y-3 w-full" style={{ marginBottom: isMobile ? '32px' : '60px' }}>
                     <h1 className="text-[32px] md:text-[52px] font-bold tracking-tight leading-tight" style={{ color: 'var(--on-surface)' }}>Temporary Chat</h1>
-                    <p className="text-base max-w-2xl" style={{ color: 'var(--on-surface-muted)' }}>This chat won't appear in your chat history, and won't be used to train our models.</p>
+                    <p className="text-base max-w-2xl mx-auto text-center" style={{ color: 'var(--on-surface-muted)' }}>This chat won't appear in your chat history, and won't be used to train our models.</p>
                   </div>
                 ) : (
                   !isMobile && <h1 className="text-[32px] md:text-[56px] font-bold tracking-tight leading-tight" style={{ color: 'var(--on-surface)', marginBottom: '60px' }}>{greeting}</h1>
                 )}
 
 
-                {isMobile && showLoggedIn && <div className="flex-1" />}
+                {isMobile && showLoggedIn && !isTemporary && <div className="flex-1" />}
                 
                 {isMobile && !showLoggedIn && (
                   <div style={{
@@ -2672,7 +2689,59 @@ const ChatWindow = () => {
                   </div>
                 )}
 
-                {/* Removed suggestion cards on mobile to prevent page from scrolling */}
+                {isMobile && showLoggedIn && !isTemporary && (
+                  <div className={`flex flex-col items-start gap-2 mt-0 w-full max-w-3xl mx-auto px-2 mb-4`}>
+                    {activeCategory !== 'write' && (
+                      <button 
+                        onClick={() => setInput("Create an image of ")} 
+                        className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
+                        style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
+                      >
+                        <Image size={22} style={{ color: accentColor }} />
+                        <span>Create an image</span>
+                      </button>
+                    )}
+
+                    <div className={`w-full flex flex-col`} ref={activeCategory === 'write' ? categoryRef : null}>
+                      {activeCategory === 'write' ? (
+                        <div className="w-full flex flex-col animate-fade-in pb-2 gap-2">
+                          {WRITE_SUGGESTIONS.map((s, idx) => (
+                            <button 
+                              key={idx}
+                              onClick={() => { setInput(s.prompt); setActiveCategory(null); }}
+                              className="flex items-center gap-4 py-3 text-[15px] font-medium text-left bg-transparent w-full"
+                              style={{ color: 'var(--on-surface)' }}
+                            >
+                              <PenLine size={20} style={{ color: accentColor }} />
+                              <span>{s.text}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => setActiveCategory('write')}
+                          className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
+                          style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
+                        >
+                          <PenTool size={22} style={{ color: accentColor }} />
+                          <span>Write or edit</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {activeCategory !== 'write' && (
+                      <button 
+                        onClick={() => setInput("Search for ")}
+                        className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
+                        style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
+                      >
+                        <Globe size={22} style={{ color: accentColor }} />
+                        <span>Look something up</span>
+                      </button>
+                    )}
+
+                  </div>
+                )}
 
                 {isMobile && !showLoggedIn ? (
                   <div className="w-full px-0 mt-auto">
@@ -2869,57 +2938,59 @@ const ChatWindow = () => {
                               </div>
                             )}
 
-                            <div className={`relative ${isMobile ? 'absolute left-1/2 -translate-x-1/2' : 'ml-4'}`}>
-                              <button 
-                                type="button"
-                                onClick={() => setShowModelSwitcherLanding(!showModelSwitcherLanding)}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
-                                style={{
-                                  backgroundColor: isTemporary ? 'transparent' : 'var(--hover-overlay)',
-                                  borderColor: isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)') : 'var(--divider)',
-                                  color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)'
-                                }}
-                              >
-                                {aiModel === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
-                                {aiModel === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
-                                {aiModel === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
-                                {aiModel === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                                {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
-                                <ChevronDown size={14} className={showModelSwitcherLanding ? 'rotate-180 transition-transform' : 'transition-transform'} />
-                              </button>
-                              
-                              <AnimatePresence>
-                                {showModelSwitcherLanding && (
-                                  <motion.div
-                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    style={{
-                                      position: 'absolute', top: '100%', left: 0, marginTop: '8px',
-                                      width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
-                                      border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
-                                      boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
-                                    }}
-                                  >
-                                    {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
-                                      <button
-                                        key={m}
-                                        onClick={() => { setAiModel(m); setShowModelSwitcherLanding(false); }}
-                                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-hover-overlay transition-all text-left group"
-                                      >
-                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-hover-overlay group-hover:bg-primary transition-colors">
-                                          {m === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
-                                          {m === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
-                                          {m === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
-                                          {m === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                                        </div>
-                                        <span className={`text-[14px] font-medium ${aiModel === m ? 'text-on-surface' : 'text-on-surface-muted'}`}>{m}</span>
-                                      </button>
-                                    ))}
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
+                            {!isMobile && (
+                              <div className={`relative ${isMobile ? 'absolute left-1/2 -translate-x-1/2' : 'ml-4'}`}>
+                                <button 
+                                  type="button"
+                                  onClick={() => setShowModelSwitcherLanding(!showModelSwitcherLanding)}
+                                  className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
+                                  style={{
+                                    backgroundColor: isTemporary ? 'transparent' : 'var(--hover-overlay)',
+                                    borderColor: isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)') : 'var(--divider)',
+                                    color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)'
+                                  }}
+                                >
+                                  {aiModel === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
+                                  {aiModel === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
+                                  {aiModel === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
+                                  {aiModel === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
+                                  {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
+                                  <ChevronDown size={14} className={showModelSwitcherLanding ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                                </button>
+                                
+                                <AnimatePresence>
+                                  {showModelSwitcherLanding && (
+                                    <motion.div
+                                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                      style={{
+                                        position: 'absolute', top: '100%', left: 0, marginTop: '8px',
+                                        width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
+                                        border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
+                                        boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
+                                      }}
+                                    >
+                                      {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
+                                        <button
+                                          key={m}
+                                          onClick={() => { setAiModel(m); setShowModelSwitcherLanding(false); }}
+                                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-hover-overlay transition-all text-left group"
+                                        >
+                                          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-hover-overlay group-hover:bg-primary transition-colors">
+                                            {m === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
+                                            {m === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
+                                            {m === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
+                                            {m === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
+                                          </div>
+                                          <span className={`text-[14px] font-medium ${aiModel === m ? 'text-on-surface' : 'text-on-surface-muted'}`}>{m}</span>
+                                        </button>
+                                      ))}
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            )}
                             
                             <div className="flex items-center gap-2 pr-1 ml-auto flex-shrink-0">
                               <div className="relative group/tooltip flex items-center justify-center">
@@ -2980,7 +3051,7 @@ const ChatWindow = () => {
                 </div>
               )}
 
-                {!isMobile && (
+                {!isMobile && !isTemporary && (
                   <div className={`flex flex-wrap items-center justify-center gap-2 w-full max-w-3xl mx-auto px-4`} style={{ marginTop: '40px' }}>
                     {activeCategory !== 'write' && (
                       <button 
@@ -3398,57 +3469,59 @@ const ChatWindow = () => {
                         </div>
                       )}
 
-                      <div className={`relative ${isMobile ? 'absolute left-1/2 -translate-x-1/2' : 'ml-4'}`}>
-                        <button 
-                          type="button"
-                          onClick={() => setShowModelSwitcher(!showModelSwitcher)}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
-                          style={{
-                            backgroundColor: isTemporary ? 'transparent' : 'var(--hover-overlay)',
-                            borderColor: isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)') : 'var(--divider)',
-                            color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)'
-                          }}
-                        >
-                          {aiModel === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
-                          {aiModel === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
-                          {aiModel === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
-                          {aiModel === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                          {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
-                          <ChevronDown size={14} className={showModelSwitcher ? 'rotate-180 transition-transform' : 'transition-transform'} />
-                        </button>
-                        
-                        <AnimatePresence>
-                          {showModelSwitcher && (
-                            <motion.div
-                              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                              style={{
-                                position: 'absolute', bottom: '100%', left: 0, marginBottom: '8px',
-                                width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
-                                border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
-                                boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
-                              }}
-                            >
-                              {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
-                                <button
-                                  key={m}
-                                  onClick={() => { setAiModel(m); setShowModelSwitcher(false); }}
-                                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-hover-overlay transition-all text-left group"
-                                >
-                                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-hover-overlay group-hover:bg-primary transition-colors">
-                                    {m === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
-                                    {m === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
-                                    {m === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
-                                    {m === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                                  </div>
-                                  <span className={`text-[14px] font-medium ${aiModel === m ? 'text-on-surface' : 'text-on-surface-muted'}`}>{m}</span>
-                                </button>
-                              ))}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
+                      {!isMobile && (
+                        <div className={`relative ${isMobile ? 'absolute left-1/2 -translate-x-1/2' : 'ml-4'}`}>
+                          <button 
+                            type="button"
+                            onClick={() => setShowModelSwitcher(!showModelSwitcher)}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
+                            style={{
+                              backgroundColor: isTemporary ? 'transparent' : 'var(--hover-overlay)',
+                              borderColor: isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)') : 'var(--divider)',
+                              color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)'
+                            }}
+                          >
+                            {aiModel === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
+                            {aiModel === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
+                            {aiModel === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
+                            {aiModel === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
+                            {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
+                            <ChevronDown size={14} className={showModelSwitcher ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                          </button>
+                          
+                          <AnimatePresence>
+                            {showModelSwitcher && (
+                              <motion.div
+                                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                                style={{
+                                  position: 'absolute', bottom: '100%', left: 0, marginBottom: '8px',
+                                  width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
+                                  border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
+                                  boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
+                                }}
+                              >
+                                {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
+                                  <button
+                                    key={m}
+                                    onClick={() => { setAiModel(m); setShowModelSwitcher(false); }}
+                                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-hover-overlay transition-all text-left group"
+                                  >
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-hover-overlay group-hover:bg-primary transition-colors">
+                                      {m === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
+                                      {m === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
+                                      {m === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
+                                      {m === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
+                                    </div>
+                                    <span className={`text-[14px] font-medium ${aiModel === m ? 'text-on-surface' : 'text-on-surface-muted'}`}>{m}</span>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
 
                       <div className="flex items-center gap-2 pr-1 ml-auto flex-shrink-0">
                            {!isLoading && (

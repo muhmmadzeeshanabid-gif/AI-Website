@@ -65,16 +65,28 @@ const Sidebar = () => {
   const recentsButtonRef = React.useRef(null);
 
   React.useEffect(() => {
+    let timeoutId;
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth < 768 && isSidebarOpen) {
-        setIsSidebarOpen(false);
+      if (typeof window === 'undefined') return;
+      if (window.innerWidth === 0) {
+        timeoutId = setTimeout(checkMobile, 50);
+        return;
       }
+      setIsMobile(window.innerWidth < 768);
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
+
+  React.useEffect(() => {
+    if (isMobile && isSidebarOpen) {
+      setIsSidebarOpen(false);
+    }
+  }, [isMobile, isSidebarOpen]);
 
   React.useEffect(() => {
     const handleClickOutside = (e) => {
@@ -175,9 +187,9 @@ const Sidebar = () => {
             x: !isSidebarOpen ? '-100%' : 0,
           }}
           transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-          className={`sidebar-root ${isSidebarOpen ? 'is-open' : ''} fixed left-0 top-0 h-screen bg-sidebar-bg flex flex-col z-[200] border-none shadow-2xl`}
+          className={`sidebar-root ${isSidebarOpen ? 'is-open' : ''} fixed left-0 top-0 bg-sidebar-bg flex flex-col z-[200] border-none shadow-2xl`}
           style={{
-            height: '100vh',
+            height: '100dvh',
             boxShadow: isSidebarOpen ? '0 0 50px rgba(0,0,0,0.5)' : 'none',
             pointerEvents: !isSidebarOpen ? 'none' : 'auto',
             overflow: 'visible',
@@ -300,9 +312,9 @@ const Sidebar = () => {
           x: isMobile && !isSidebarOpen ? '-100%' : 0,
         }}
         transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-        className={`sidebar-root ${isSidebarOpen ? 'is-open' : ''} relative h-screen bg-sidebar-bg border-r border-divider flex flex-col z-40 shadow-2xl ${isMobile ? 'fixed left-0 top-0 h-screen z-[200] border-none' : ''}`}
+        className={`sidebar-root ${isSidebarOpen ? 'is-open' : ''} relative bg-sidebar-bg border-r border-divider flex flex-col z-40 shadow-2xl ${isMobile ? 'fixed left-0 top-0 z-[200] border-none' : ''}`}
         style={{
-          height: '100vh',
+          height: '100dvh',
           boxShadow: isMobile && isSidebarOpen ? '0 0 50px rgba(0,0,0,0.5)' : 'none',
           pointerEvents: isMobile && !isSidebarOpen ? 'none' : 'auto',
           overflow: 'visible',

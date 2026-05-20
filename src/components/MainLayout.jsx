@@ -91,7 +91,7 @@ export default function MainLayout({ children }) {
   }
 
   return (
-    <div className="flex h-screen w-full bg-primary overflow-hidden">
+    <div className="flex w-full bg-primary overflow-hidden" style={{ height: '100dvh' }}>
       <Sidebar />
       <ChatWindow />
       
