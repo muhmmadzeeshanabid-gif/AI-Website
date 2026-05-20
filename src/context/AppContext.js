@@ -11,36 +11,13 @@ const AppContext = createContext();
 export const AppProvider = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const [theme, setTheme] = useState(() => {
-    if (typeof window === 'undefined') return 'dark';
-    return localStorage.getItem('aura-theme') || 'dark';
-  });
-  const [chatTheme, setChatTheme] = useState(() => {
-    if (typeof window === 'undefined') return 'classic';
-    return localStorage.getItem('aura-chat-theme') || 'classic';
-  });
-  const [language, setLanguageState] = useState(() => {
-    if (typeof window === 'undefined') return 'Auto-detect';
-    return localStorage.getItem('aura-language') || 'Auto-detect';
-  });
-  const [accentColor, setAccentColorState] = useState(() => {
-    if (typeof window === 'undefined') return '#6366f1';
-    return localStorage.getItem('aura-accent') || '#6366f1';
-  });
+  const [theme, setTheme] = useState('dark');
+  const [chatTheme, setChatTheme] = useState('classic');
+  const [language, setLanguageState] = useState('Auto-detect');
+  const [accentColor, setAccentColorState] = useState('#6366f1');
   const [isSidebarOpen, setIsSidebarOpenState] = useState(true);
   const [isSidebarInitializing, setIsSidebarInitializing] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
-
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('aura-sidebar-open');
-      if (saved !== null) {
-        setIsSidebarOpenState(JSON.parse(saved));
-      }
-      setIsSidebarInitializing(false);
-    }
-  }, []);
 
   const setIsSidebarOpen = (val) => {
     setIsSidebarOpenState(val);
@@ -49,23 +26,12 @@ export const AppProvider = ({ children }) => {
   const [appView, setAppView] = useState('chat');
   const [resolvedTheme, setResolvedTheme] = useState('dark');
 
-  const [chats, setChats] = useState(() => {
-    if (typeof window === 'undefined') return [];
-    try { return JSON.parse(localStorage.getItem('aura-chats') || '[]'); }
-    catch { return []; }
-  });
+  const [chats, setChats] = useState([]);
 
   // ── Archived Chats ─────────────────────────────────────────────────────────
-  const [archivedChats, setArchivedChatsState] = useState(() => {
-    if (typeof window === 'undefined') return [];
-    try { return JSON.parse(localStorage.getItem('aura-archived-chats') || '[]'); }
-    catch { return []; }
-  });
+  const [archivedChats, setArchivedChatsState] = useState([]);
 
-  const [archivePassword, setArchivePasswordState] = useState(() => {
-    if (typeof window === 'undefined') return '';
-    return localStorage.getItem('aura-archive-password') || '';
-  });
+  const [archivePassword, setArchivePasswordState] = useState('');
 
   const setArchivePassword = (pwd) => {
     setArchivePasswordState(pwd);
@@ -136,22 +102,10 @@ export const AppProvider = ({ children }) => {
   const [messages, setMessages] = useState([]);
   const [isTemporary, setIsTemporary] = useState(false);
   
-  const [fontSize, setFontSizeState] = useState(() => {
-    if (typeof window === 'undefined') return 'Medium';
-    return localStorage.getItem('aura-font-size') || 'Medium';
-  });
-  const [chatWidth, setChatWidthState] = useState(() => {
-    if (typeof window === 'undefined') return 'Standard';
-    return localStorage.getItem('aura-chat-width') || 'Standard';
-  });
-  const [lineHeight, setLineHeightState] = useState(() => {
-    if (typeof window === 'undefined') return 'Normal';
-    return localStorage.getItem('aura-line-height') || 'Normal';
-  });
-  const [aiModel, setAiModelState] = useState(() => {
-    if (typeof window === 'undefined') return 'Gemini';
-    return localStorage.getItem('aura-ai-model') || 'Gemini';
-  });
+  const [fontSize, setFontSizeState] = useState('Medium');
+  const [chatWidth, setChatWidthState] = useState('Standard');
+  const [lineHeight, setLineHeightState] = useState('Normal');
+  const [aiModel, setAiModelState] = useState('Gemini');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareChatId, setShareChatId] = useState(null);
   const [isGroupLinkModalOpen, setIsGroupLinkModalOpen] = useState(false);
@@ -161,31 +115,17 @@ export const AppProvider = ({ children }) => {
   const [groupChatTargetId, setGroupChatTargetId] = useState(null);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
-  const [personalization, setPersonalizationState] = useState(() => {
-    const defaults = {
-      baseStyle: 'Default', warm: 'Default', enthusiastic: 'Default',
-      headers: 'Default', emoji: 'Default', fastAnswers: true,
-      customInstructions: '', aboutYou: '', voice: 'Kyra',
-    };
-    if (typeof window === 'undefined') return defaults;
-    try {
-      const saved = localStorage.getItem('aura-personalization');
-      return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
-    } catch { return defaults; }
+  const [personalization, setPersonalizationState] = useState({
+    baseStyle: 'Default', warm: 'Default', enthusiastic: 'Default',
+    headers: 'Default', emoji: 'Default', fastAnswers: true,
+    customInstructions: '', aboutYou: '', voice: 'Kyra',
   });
 
-  const [profile, setProfileState] = useState(() => {
-    const defaults = {
-      displayName: '',
-      username: '',
-      email: '',
-      avatar: null,
-    };
-    if (typeof window === 'undefined') return defaults;
-    try {
-      const saved = localStorage.getItem('aura-profile');
-      return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
-    } catch { return defaults; }
+  const [profile, setProfileState] = useState({
+    displayName: '',
+    username: '',
+    email: '',
+    avatar: null,
   });
 
   // Strict enforcement: No messages allowed if no active chat (except for temporary chats)
@@ -369,34 +309,103 @@ export const AppProvider = ({ children }) => {
 
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--accent-color', accentColor);
-    document.documentElement.style.setProperty('--chat-bubble-user', accentColor);
-    document.documentElement.setAttribute('data-theme', theme);
-    document.documentElement.setAttribute('data-chat-theme', chatTheme);
-
-    // Initialize activeChatId from pathname or localStorage on client mount
+    // Initialize all states from localStorage on client mount
     if (typeof window !== 'undefined') {
-      const path = window.location.pathname;
-      if (path.startsWith('/c/')) {
-        const pathId = path.split('/c/')[1];
-        if (pathId) {
-          setActiveChatId(pathId);
-          const savedChats = localStorage.getItem('aura-chats');
-          if (savedChats) {
-            try {
-              const parsed = JSON.parse(savedChats);
-              const chat = parsed.find(c => c.id === pathId);
-              if (chat) setMessages(chat.messages || []);
-            } catch (e) {}
-          }
+      const savedTheme = localStorage.getItem('aura-theme') || 'dark';
+      setTheme(savedTheme);
+      
+      let resolved = savedTheme;
+      if (savedTheme === 'system') {
+        resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      setResolvedTheme(resolved);
+
+      const savedChatTheme = localStorage.getItem('aura-chat-theme') || 'classic';
+      setChatTheme(savedChatTheme);
+
+      const savedLanguage = localStorage.getItem('aura-language') || 'Auto-detect';
+      setLanguageState(savedLanguage);
+
+      const savedAccent = localStorage.getItem('aura-accent') || '#6366f1';
+      setAccentColorState(savedAccent);
+
+      const savedSidebar = localStorage.getItem('aura-sidebar-open');
+      if (savedSidebar !== null) {
+        setIsSidebarOpenState(JSON.parse(savedSidebar));
+      }
+
+      let loadedChats = [];
+      try {
+        const savedChats = localStorage.getItem('aura-chats');
+        if (savedChats) {
+          loadedChats = JSON.parse(savedChats);
+          setChats(loadedChats);
         }
-      } else {
-        // Start fresh with a new chat on the root URL path
+      } catch (e) {}
+
+      try {
+        const savedArchivedChats = localStorage.getItem('aura-archived-chats');
+        if (savedArchivedChats) setArchivedChatsState(JSON.parse(savedArchivedChats));
+      } catch (e) {}
+
+      const savedArchivePwd = localStorage.getItem('aura-archive-password') || '';
+      setArchivePasswordState(savedArchivePwd);
+
+      const savedFontSize = localStorage.getItem('aura-font-size') || 'Medium';
+      setFontSizeState(savedFontSize);
+
+      const savedChatWidth = localStorage.getItem('aura-chat-width') || 'Standard';
+      setChatWidthState(savedChatWidth);
+
+      const savedLineHeight = localStorage.getItem('aura-line-height') || 'Normal';
+      setLineHeightState(savedLineHeight);
+
+      const savedAiModel = localStorage.getItem('aura-ai-model') || 'Gemini';
+      setAiModelState(savedAiModel);
+
+      try {
+        const savedPers = localStorage.getItem('aura-personalization');
+        if (savedPers) {
+          setPersonalizationState(prev => ({ ...prev, ...JSON.parse(savedPers) }));
+        }
+      } catch (e) {}
+
+      try {
+        const savedProfile = localStorage.getItem('aura-profile');
+        if (savedProfile) {
+          setProfileState(prev => ({ ...prev, ...JSON.parse(savedProfile) }));
+        }
+      } catch (e) {}
+
+      // Initialize activeChatId from pathname or localStorage
+      const path = window.location.pathname;
+      const isSessionActive = sessionStorage.getItem('aura-session-active');
+      
+      if (!isSessionActive) {
+        // Fresh session/tab entry: always start a new chat at root path
+        sessionStorage.setItem('aura-session-active', 'true');
+        if (path !== '/') {
+          router.replace('/');
+        }
         setActiveChatId(null);
         setMessages([]);
+      } else {
+        // Page refresh or in-app navigation: preserve path state
+        if (path.startsWith('/c/')) {
+          const pathId = path.split('/c/')[1];
+          if (pathId) {
+            setActiveChatId(pathId);
+            const chat = loadedChats.find(c => c.id === pathId);
+            if (chat) setMessages(chat.messages || []);
+          }
+        } else {
+          setActiveChatId(null);
+          setMessages([]);
+        }
       }
     }
 
+    setIsSidebarInitializing(false);
     setIsInitializing(false);
 
     let isFirstCall = true;
@@ -444,7 +453,33 @@ export const AppProvider = ({ children }) => {
     }
     setResolvedTheme(resolved);
     document.documentElement.setAttribute('data-theme', resolved);
-  }, [theme]);
+    document.documentElement.setAttribute('data-chat-theme', chatTheme);
+    document.documentElement.style.setProperty('--accent-color', accentColor);
+    document.documentElement.style.setProperty('--chat-bubble-user', accentColor);
+
+    if (theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = (e) => {
+        const newResolved = e.matches ? 'dark' : 'light';
+        setResolvedTheme(newResolved);
+        document.documentElement.setAttribute('data-theme', newResolved);
+      };
+      
+      if (mediaQuery.addEventListener) {
+        mediaQuery.addEventListener('change', handleChange);
+      } else {
+        mediaQuery.addListener(handleChange);
+      }
+
+      return () => {
+        if (mediaQuery.removeEventListener) {
+          mediaQuery.removeEventListener('change', handleChange);
+        } else {
+          mediaQuery.removeListener(handleChange);
+        }
+      };
+    }
+  }, [theme, chatTheme, accentColor]);
 
 
   useEffect(() => {
@@ -510,6 +545,7 @@ export const AppProvider = ({ children }) => {
     let resolved = mode;
     if (mode === 'system') resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     setTheme(mode);
+    setResolvedTheme(resolved);
     localStorage.setItem('aura-theme', mode);
     document.documentElement.setAttribute('data-theme', resolved);
   };

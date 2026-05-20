@@ -148,7 +148,10 @@ const BROWSE_REGISTRY = [
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { profile, setProfile, user, logout } = useAppContext();
+  const { 
+    profile, setProfile, user, logout,
+    theme, resolvedTheme, setAppTheme, accentColor, setAccentColor 
+  } = useAppContext();
   const fileInputRef = useRef(null);
 
   // Responsive device check & desktop redirect
@@ -245,8 +248,13 @@ export default function ProfilePage() {
     .join('');
 
   // Local/Global customizations
-  const [selectedAccent, setSelectedAccent] = useState(ACCENT_COLORS[5]); // Default to Orange
-  const [selectedTheme, setSelectedTheme] = useState(THEMES[0]); // System (Default)
+  const selectedAccent = ACCENT_COLORS.find(c => c.hex.toLowerCase() === accentColor?.toLowerCase()) || ACCENT_COLORS[0];
+  const themeMap = {
+    system: 'System (Default)',
+    light: 'Light',
+    dark: 'Dark'
+  };
+  const selectedTheme = themeMap[theme] || 'System (Default)';
   const [isAccentDropdownOpen, setIsAccentDropdownOpen] = useState(false);
   const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
@@ -517,26 +525,7 @@ export default function ProfilePage() {
   };
 
   // Theme resolution helper state
-  const [isDark, setIsDark] = useState(true);
-
-  // Handle media queries for System theme
-  useEffect(() => {
-    if (selectedTheme === 'Dark') {
-      setIsDark(true);
-    } else if (selectedTheme === 'Light') {
-      setIsDark(false);
-    } else {
-      // System Default color scheme resolver
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      setIsDark(mediaQuery.matches);
-      
-      const listener = (e) => {
-        setIsDark(e.matches);
-      };
-      mediaQuery.addEventListener('change', listener);
-      return () => mediaQuery.removeEventListener('change', listener);
-    }
-  }, [selectedTheme]);
+  const isDark = resolvedTheme === 'dark';
 
   // Color Mapping Styles
   const themeStyles = {
@@ -1336,7 +1325,7 @@ export default function ProfilePage() {
                           <div
                             key={color.name}
                             onClick={() => {
-                              setSelectedAccent(color);
+                              setAccentColor(color.hex);
                               setIsAccentDropdownOpen(false);
                             }}
                             style={{
@@ -1388,11 +1377,16 @@ export default function ProfilePage() {
                           zIndex: 9999
                         }}
                       >
-                        {THEMES.map(theme => (
+                        {THEMES.map(themeItem => (
                           <div
-                            key={theme}
+                            key={themeItem}
                             onClick={() => {
-                              setSelectedTheme(theme);
+                              const modeMap = {
+                                'System (Default)': 'system',
+                                'Light': 'light',
+                                'Dark': 'dark'
+                              };
+                              setAppTheme(modeMap[themeItem]);
                               setIsThemeDropdownOpen(false);
                             }}
                             style={{
@@ -1408,9 +1402,9 @@ export default function ProfilePage() {
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                           >
                             <span style={{ fontSize: '14px', fontWeight: 500, color: themeStyles.text }}>
-                              {theme}
+                              {themeItem}
                             </span>
-                            {selectedTheme === theme && (
+                            {selectedTheme === themeItem && (
                               <Check size={14} style={{ color: themeStyles.text }} />
                             )}
                           </div>

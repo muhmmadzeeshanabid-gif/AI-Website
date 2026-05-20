@@ -1939,15 +1939,22 @@ const ChatWindow = () => {
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'transparent',
+                background: resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
                 border: 'none', cursor: 'pointer',
-                width: '44px', height: '44px', color: 'var(--on-surface)',
+                width: '44px', height: '44px', borderRadius: '50%', color: 'var(--on-surface)',
+                transition: 'background 0.2s',
               }}
+              onMouseEnter={e => e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}
+              onMouseLeave={e => e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'}
             >
-              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none">
-                <line x1="4" y1="8" x2="20" y2="8" />
-                <line x1="4" y1="16" x2="13" y2="16" />
-              </svg>
+              {isSidebarOpen ? (
+                <X size={20} strokeWidth={2.5} />
+              ) : (
+                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none">
+                  <line x1="4" y1="8" x2="20" y2="8" />
+                  <line x1="4" y1="16" x2="13" y2="16" />
+                </svg>
+              )}
             </button>
 
             {/* Center: App Title */}
@@ -2229,16 +2236,19 @@ const ChatWindow = () => {
                 style={{
                   display: 'none', // CSS will show this on mobile/narrow screens
                   alignItems: 'center', justifyContent: 'center',
-                  background: 'transparent', border: 'none', cursor: 'pointer',
-                  padding: '8px', borderRadius: 10, color: 'var(--on-surface)',
-                  transition: 'background 0.15s',
-                  marginRight: 4
+                  background: resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+                  border: 'none', cursor: 'pointer',
+                  width: '44px', height: '44px', borderRadius: '50%', color: 'var(--on-surface)',
+                  transition: 'background 0.2s',
+                  marginRight: 8
                 }}
+                onMouseEnter={e => e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}
+                onMouseLeave={e => e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'}
               >
                 {isSidebarOpen ? (
-                  <X size={22} strokeWidth={2.5} />
+                  <X size={20} strokeWidth={2.5} />
                 ) : (
-                  <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none">
+                  <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none">
                     <line x1="4" y1="8" x2="20" y2="8" />
                     <line x1="4" y1="16" x2="13" y2="16" />
                   </svg>
@@ -2749,7 +2759,7 @@ const ChatWindow = () => {
                       style={{ 
                         background: 'var(--surface-1)', 
                         borderRadius: '999px', 
-                        padding: '6px 6px 6px 14px',
+                        padding: '6px 8px 6px 12px',
                         borderColor: 'var(--divider)',
                         display: 'flex',
                         flexDirection: 'row',
@@ -2759,12 +2769,13 @@ const ChatWindow = () => {
                       {/* Left: Plus button */}
                       <button 
                         type="button"
-                        className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
+                        className="w-10 h-10 flex items-center justify-center rounded-full transition-all"
                         style={{ 
                           color: 'var(--on-surface-muted)',
                           backgroundColor: 'var(--hover-overlay)',
                           border: 'none',
-                          flexShrink: 0
+                          flexShrink: 0,
+                          padding: 0
                         }}
                         onClick={() => setAuthOpen(true)}
                       >
@@ -2797,11 +2808,12 @@ const ChatWindow = () => {
                         <button 
                           type="button" 
                           onClick={() => setAuthOpen(true)} 
-                          className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
+                          className="w-10 h-10 flex items-center justify-center rounded-full transition-all"
                           style={{ 
                             color: 'var(--on-surface-muted)',
                             background: 'transparent',
-                            border: 'none'
+                            border: 'none',
+                            padding: 0
                           }}
                         >
                           <Mic size={20} />
@@ -2812,15 +2824,16 @@ const ChatWindow = () => {
                             if (!input.trim()) return;
                             handleSend(e);
                           }}
-                          className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300"
+                          className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300"
                           style={{ 
                             background: input.trim() ? accentColor : 'var(--hover-overlay-2)',
                             color: input.trim() ? '#ffffff' : 'var(--on-surface-subtle)',
                             cursor: input.trim() ? 'pointer' : 'not-allowed',
-                            border: 'none'
+                            border: 'none',
+                            padding: 0
                           }}
                         >
-                          <ArrowUp size={18} strokeWidth={2.5} />
+                          <ArrowUp size={20} strokeWidth={2.5} />
                         </button>
                       </div>
                     </div>
