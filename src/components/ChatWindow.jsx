@@ -2672,59 +2672,7 @@ const ChatWindow = () => {
                   </div>
                 )}
 
-                {isMobile && showLoggedIn && (
-                  <div className={`flex flex-col items-start gap-2 mt-0 w-full max-w-3xl mx-auto px-2 mb-4`}>
-                    {activeCategory !== 'write' && (
-                      <button 
-                        onClick={() => setInput("Create an image of ")} 
-                        className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
-                        style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
-                      >
-                        <Image size={22} style={{ color: accentColor }} />
-                        <span>Create an image</span>
-                      </button>
-                    )}
-
-                    <div className={`w-full flex flex-col`} ref={activeCategory === 'write' ? categoryRef : null}>
-                      {activeCategory === 'write' ? (
-                        <div className="w-full flex flex-col animate-fade-in pb-2 gap-2">
-                          {WRITE_SUGGESTIONS.map((s, idx) => (
-                            <button 
-                              key={idx}
-                              onClick={() => { setInput(s.prompt); setActiveCategory(null); }}
-                              className="flex items-center gap-4 py-3 text-[15px] font-medium text-left bg-transparent w-full"
-                              style={{ color: 'var(--on-surface)' }}
-                            >
-                              <PenLine size={20} style={{ color: accentColor }} />
-                              <span>{s.text}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <button 
-                          onClick={() => setActiveCategory('write')}
-                          className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
-                          style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
-                        >
-                          <PenTool size={22} style={{ color: accentColor }} />
-                          <span>Write or edit</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {activeCategory !== 'write' && (
-                      <button 
-                        onClick={() => setInput("Search for ")}
-                        className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
-                        style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
-                      >
-                        <Globe size={22} style={{ color: accentColor }} />
-                        <span>Look something up</span>
-                      </button>
-                    )}
-
-                  </div>
-                )}
+                {/* Removed suggestion cards on mobile to prevent page from scrolling */}
 
                 {isMobile && !showLoggedIn ? (
                   <div className="w-full px-0 mt-auto">
