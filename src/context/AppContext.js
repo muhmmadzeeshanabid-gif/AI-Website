@@ -391,18 +391,9 @@ export const AppProvider = ({ children }) => {
           }
         }
       } else {
-        const savedId = localStorage.getItem('aura-active-chat-id');
-        if (savedId) {
-          setActiveChatId(savedId);
-          const savedChats = localStorage.getItem('aura-chats');
-          if (savedChats) {
-            try {
-              const parsed = JSON.parse(savedChats);
-              const chat = parsed.find(c => c.id === savedId);
-              if (chat) setMessages(chat.messages || []);
-            } catch (e) {}
-          }
-        }
+        // Start fresh with a new chat on the root URL path
+        setActiveChatId(null);
+        setMessages([]);
       }
     }
 
