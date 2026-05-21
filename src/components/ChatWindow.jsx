@@ -3245,73 +3245,104 @@ const ChatWindow = () => {
               return (
                 <>
                   {isSharedReadOnly && sharedChatData?.sharedByName && (
-                    <div 
-                      className="shared-chat-info-card animate-fade-in"
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px',
-                        padding: '20px',
-                        borderRadius: '24px',
-                        background: resolvedTheme === 'dark' 
-                          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.03) 100%)' 
-                          : 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.02) 100%)',
-                        border: resolvedTheme === 'dark' 
-                          ? '1px solid rgba(255, 255, 255, 0.06)' 
-                          : '1px solid rgba(0, 0, 0, 0.04)',
-                        marginBottom: '32px',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        textAlign: 'center',
-                        boxShadow: resolvedTheme === 'dark'
-                          ? '0 10px 30px -10px rgba(0, 0, 0, 0.3)'
-                          : '0 10px 30px -10px rgba(99, 102, 241, 0.05)',
-                        backdropFilter: 'blur(20px)',
-                      }}
-                    >
+                    <div style={{ position: 'relative', width: '100%', marginBottom: '32px' }}>
                       <div 
                         style={{
-                          width: '48px',
-                          height: '48px',
-                          borderRadius: '16px',
-                          background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                          position: 'absolute',
+                          inset: '-6px',
+                          background: `radial-gradient(circle, ${accentColor || '#6366f1'}1a 0%, rgba(168, 85, 247, 0.08) 60%, transparent 100%)`,
+                          filter: 'blur(20px)',
+                          zIndex: 0,
+                          pointerEvents: 'none',
+                          borderRadius: '30px'
+                        }}
+                      />
+                      <div 
+                        className="shared-chat-info-card animate-fade-in relative overflow-hidden"
+                        style={{
+                          zIndex: 1,
                           display: 'flex',
+                          flexDirection: 'column',
+                          gap: '14px',
+                          padding: '24px 20px',
+                          borderRadius: '24px',
+                          background: resolvedTheme === 'dark' 
+                            ? 'linear-gradient(135deg, rgba(20, 20, 25, 0.6) 0%, rgba(35, 35, 45, 0.6) 100%)' 
+                            : 'linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(240, 240, 255, 0.6) 100%)',
+                          border: resolvedTheme === 'dark' 
+                            ? '1px solid rgba(255, 255, 255, 0.08)' 
+                            : '1px solid rgba(0, 0, 0, 0.06)',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          boxShadow: '0 8px 16px -4px rgba(99, 102, 241, 0.4)',
-                          color: '#ffffff'
+                          textAlign: 'center',
+                          boxShadow: resolvedTheme === 'dark'
+                            ? '0 12px 36px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
+                            : '0 12px 36px -10px rgba(99, 102, 241, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
+                          backdropFilter: 'blur(25px)',
                         }}
                       >
-                        <Globe size={22} strokeWidth={2} />
-                      </div>
-                      
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <h3 
-                          style={{ 
-                            margin: 0, 
-                            fontSize: '16px', 
-                            fontWeight: '600', 
-                            color: 'var(--on-surface)',
-                            fontFamily: 'Outfit, sans-serif'
-                          }}
-                        >
-                          Shared Conversation
-                        </h3>
-                        <p 
-                          style={{ 
-                            margin: 0, 
-                            fontSize: '13.5px', 
-                            color: 'var(--on-surface-subtle)',
-                            lineHeight: '1.5'
-                          }}
-                        >
-                          This conversation was shared by <span style={{ fontWeight: '600', color: 'var(--on-surface)' }}>{sharedChatData.sharedByName}</span>
-                          {sharedChatData.sharedByEmail ? (
-                            <span style={{ fontSize: '12px', color: 'var(--on-surface-muted)', display: 'block', marginTop: '2px' }}>
-                              {sharedChatData.sharedByEmail}
+                        <div className="relative flex-shrink-0">
+                          <div 
+                            style={{
+                              width: '56px',
+                              height: '56px',
+                              borderRadius: '18px',
+                              background: `linear-gradient(135deg, ${accentColor || '#6366f1'} 0%, #a855f7 100%)`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: `0 8px 20px -4px ${(accentColor || '#6366f1')}66`,
+                              color: '#ffffff',
+                              position: 'relative',
+                              zIndex: 1
+                            }}
+                          >
+                            <Globe size={24} strokeWidth={2} />
+                          </div>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <h3 
+                            style={{ 
+                              margin: 0, 
+                              fontSize: '17px', 
+                              fontWeight: '700', 
+                              color: 'var(--on-surface)',
+                              fontFamily: 'Outfit, sans-serif',
+                              letterSpacing: '-0.01em'
+                            }}
+                          >
+                            Shared Chat Archive
+                          </h3>
+                          <p 
+                            style={{ 
+                              margin: 0, 
+                              fontSize: '13.5px', 
+                              color: 'var(--on-surface-muted)',
+                              lineHeight: '1.5'
+                            }}
+                          >
+                            This conversation was originally shared by{' '}
+                            <span style={{ fontWeight: '600', color: accentColor || 'var(--accent-color)' }}>
+                              {sharedChatData.sharedByName}
                             </span>
-                          ) : null}
-                        </p>
+                            {sharedChatData.sharedByEmail ? (
+                              <span style={{ 
+                                fontSize: '12px', 
+                                color: 'var(--on-surface-subtle)', 
+                                display: 'block', 
+                                marginTop: '4px',
+                                background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                                padding: '3px 10px',
+                                borderRadius: '999px',
+                                width: 'fit-content',
+                                margin: '4px auto 0 auto'
+                              }}>
+                                {sharedChatData.sharedByEmail}
+                              </span>
+                            ) : null}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -3503,95 +3534,160 @@ const ChatWindow = () => {
               )}
             </AnimatePresence>
             {isSharedReadOnly ? (
-              <div 
-                className="w-full relative flex flex-col md:flex-row items-center justify-between gap-4 p-5 md:p-6 transition-all duration-300 animate-fade-in"
-                style={{
-                  width: '100%',
-                  background: resolvedTheme === 'dark' 
-                    ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.03) 100%)' 
-                    : 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.02) 100%)',
-                  borderRadius: '24px',
-                  border: resolvedTheme === 'dark' 
-                    ? '1px solid rgba(255, 255, 255, 0.08)' 
-                    : '1px solid rgba(0, 0, 0, 0.06)',
-                  boxShadow: resolvedTheme === 'dark'
-                    ? '0 12px 30px -10px rgba(0, 0, 0, 0.4)'
-                    : '0 12px 30px -10px rgba(99, 102, 241, 0.08)',
-                  backdropFilter: 'blur(20px)',
-                  textAlign: isMobile ? 'center' : 'left'
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', gap: '16px' }}>
+              <div style={{ position: 'relative', width: '100%' }}>
+                <div 
+                  style={{
+                    position: 'absolute',
+                    inset: '-8px',
+                    background: `radial-gradient(circle, ${accentColor || '#6366f1'}15 0%, rgba(168, 85, 247, 0.08) 60%, transparent 100%)`,
+                    filter: 'blur(25px)',
+                    zIndex: 0,
+                    pointerEvents: 'none',
+                    borderRadius: '30px'
+                  }}
+                />
+                <div 
+                  className="w-full flex flex-col md:flex-row items-center justify-between gap-5 p-6 md:p-8 transition-all duration-300 animate-fade-in relative overflow-hidden"
+                  style={{
+                    zIndex: 1,
+                    background: resolvedTheme === 'dark' 
+                      ? 'linear-gradient(135deg, rgba(20, 20, 25, 0.7) 0%, rgba(35, 35, 45, 0.7) 100%)' 
+                      : 'linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(240, 240, 255, 0.7) 100%)',
+                    borderRadius: '26px',
+                    border: resolvedTheme === 'dark' 
+                      ? '1px solid rgba(255, 255, 255, 0.08)' 
+                      : '1px solid rgba(0, 0, 0, 0.06)',
+                    boxShadow: resolvedTheme === 'dark'
+                      ? '0 16px 40px -10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
+                      : '0 16px 40px -10px rgba(99, 102, 241, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
+                    backdropFilter: 'blur(30px)',
+                    textAlign: isMobile ? 'center' : 'left'
+                  }}
+                >
                   <div 
+                    style={{ 
+                      display: 'flex', 
+                      flexDirection: isMobile ? 'column' : 'row', 
+                      alignItems: 'center', 
+                      gap: '20px',
+                      flex: 1
+                    }}
+                  >
+                    <div className="relative flex-shrink-0">
+                      <div 
+                        style={{
+                          position: 'absolute',
+                          inset: '-6px',
+                          borderRadius: '16px',
+                          background: `linear-gradient(135deg, ${accentColor || '#6366f1'} 0%, #a855f7 100%)`,
+                          opacity: 0.15,
+                          filter: 'blur(4px)',
+                          animation: 'thinking-pulse 2s ease-in-out infinite'
+                        }}
+                      />
+                      <div 
+                        style={{
+                          width: '50px',
+                          height: '50px',
+                          borderRadius: '14px',
+                          background: `linear-gradient(135deg, ${accentColor || '#6366f1'} 0%, #a855f7 100%)`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#ffffff',
+                          boxShadow: `0 8px 20px -4px ${(accentColor || '#6366f1')}66`,
+                          position: 'relative',
+                          zIndex: 1
+                        }}
+                      >
+                        <MessageSquareDashed size={24} strokeWidth={2.2} />
+                        <div 
+                          style={{
+                            position: 'absolute',
+                            top: '-4px',
+                            right: '-4px',
+                            background: '#ffb300',
+                            borderRadius: '50%',
+                            width: '16px',
+                            height: '16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                          }}
+                        >
+                          <Sparkles size={10} color="#ffffff" strokeWidth={3} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <h4 
+                        style={{ 
+                          margin: 0, 
+                          fontSize: '16.5px', 
+                          fontWeight: '700', 
+                          color: 'var(--on-surface)',
+                          fontFamily: 'Outfit, sans-serif',
+                          letterSpacing: '-0.01em',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: isMobile ? 'center' : 'flex-start',
+                          gap: '6px'
+                        }}
+                      >
+                        Shared Conversation Space
+                      </h4>
+                      <p 
+                        style={{ 
+                          margin: 0, 
+                          fontSize: '13.5px', 
+                          color: 'var(--on-surface-muted)',
+                          lineHeight: 1.5,
+                          maxWidth: '520px'
+                        }}
+                      >
+                        You are exploring this chat in <span style={{ color: accentColor || '#6366f1', fontWeight: 600 }}>read-only mode</span>. Start a fresh conversation to ask questions and try all interactive features.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={() => createNewChat()}
                     style={{
-                      width: '42px',
-                      height: '42px',
-                      borderRadius: '12px',
-                      background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                      padding: '12px 28px',
+                      borderRadius: '999px',
+                      background: `linear-gradient(135deg, ${accentColor || '#6366f1'} 0%, #a855f7 100%)`,
+                      color: '#ffffff',
+                      border: 'none',
+                      fontSize: '14.5px',
+                      fontWeight: '750',
+                      cursor: 'pointer',
+                      fontFamily: 'Outfit, sans-serif',
+                      boxShadow: `0 8px 24px -6px ${(accentColor || '#6366f1')}77`,
+                      transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                      whiteSpace: 'nowrap',
+                      width: isMobile ? '100%' : 'auto',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#ffffff',
-                      boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
-                      flexShrink: 0
+                      gap: '8px',
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = 'translateY(-2px) scale(1.03)';
+                      e.currentTarget.style.boxShadow = `0 12px 28px -4px ${(accentColor || '#6366f1')}aa`;
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                      e.currentTarget.style.boxShadow = `0 8px 24px -6px ${(accentColor || '#6366f1')}77`;
                     }}
                   >
-                    <Globe size={20} />
-                  </div>
-                  <div>
-                    <h4 
-                      style={{ 
-                        margin: 0, 
-                        fontSize: '14.5px', 
-                        fontWeight: '600', 
-                        color: 'var(--on-surface)',
-                        fontFamily: 'Outfit, sans-serif'
-                      }}
-                    >
-                      Shared Read-Only Conversation
-                    </h4>
-                    <p 
-                      style={{ 
-                        margin: '2px 0 0 0', 
-                        fontSize: '13px', 
-                        color: 'var(--on-surface-subtle)',
-                        lineHeight: 1.4
-                      }}
-                    >
-                      You are viewing this chat via a shared link. Start a new chat to ask questions.
-                    </p>
-                  </div>
+                    <span>Start New Chat</span>
+                    <ChevronRight size={16} strokeWidth={2.5} />
+                  </button>
                 </div>
-                
-                <button
-                  onClick={() => createNewChat()}
-                  style={{
-                    padding: '10px 22px',
-                    borderRadius: '999px',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-                    color: '#ffffff',
-                    border: 'none',
-                    fontSize: '13.5px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
-                    transition: 'opacity 0.2s ease, transform 0.2s ease',
-                    whiteSpace: 'nowrap',
-                    width: isMobile ? '100%' : 'auto',
-                    textAlign: 'center'
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.opacity = '0.9';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.opacity = '1';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  Start New Chat
-                </button>
               </div>
             ) : (
               <div className={`w-full relative flex ${isMobile ? 'flex-col gap-2' : 'items-center'} transition-all duration-300`}
