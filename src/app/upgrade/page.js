@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Check, Sparkles, Zap, Brain, Cpu, ZapOff, Shield, Users, Clock, Globe, ArrowRight, Zap as ZapIcon, Info, ChevronRight, ArrowLeft, FileText, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -346,6 +346,44 @@ export default function UpgradePage() {
   const activeCards = billingPeriod === 'Personal' ? personalCards : businessCards;
 
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const hasLoadedFromUrl = useRef(false);
+
+  useEffect(() => {
+    if (hasLoadedFromUrl.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const planParam = params.get('plan');
+    const periodParam = params.get('period');
+
+    if (periodParam && (periodParam === 'Personal' || periodParam === 'Business')) {
+      setBillingPeriod(periodParam);
+    }
+
+    if (planParam) {
+      const cards = (periodParam || billingPeriod) === 'Personal' ? personalCards : businessCards;
+      const matched = cards.find(c => c.title.toLowerCase() === planParam.toLowerCase());
+      if (matched) {
+        setSelectedPlan(matched);
+        hasLoadedFromUrl.current = true;
+      }
+    } else {
+      hasLoadedFromUrl.current = true;
+    }
+  }, [selectedCountry, offerExpired, billingPeriod]);
+
+  useEffect(() => {
+    if (!hasLoadedFromUrl.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (selectedPlan) {
+      params.set('plan', selectedPlan.title);
+    } else {
+      params.delete('plan');
+    }
+    params.set('period', billingPeriod);
+
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
+  }, [selectedPlan, billingPeriod]);
 
   // States for checkout
   const [clientSecret, setClientSecret] = useState('');
@@ -516,10 +554,6 @@ export default function UpgradePage() {
             <ArrowLeft size={20} />
             <span>Configure your plan</span>
           </button>
-          
-          <div style={{ fontSize: '24px', fontWeight: 800, fontFamily: 'Outfit, sans-serif' }}>
-            Kyra
-          </div>
         </div>
 
         {/* Content */}
@@ -620,7 +654,7 @@ export default function UpgradePage() {
             {/* Right side: Plan Summary */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div style={{
-                backgroundColor: '#111111', // Always dark background for plain card
+                backgroundColor: resolvedTheme === 'dark' ? '#111111' : '#25252b', // Soften black card color on white screen
                 color: '#ffffff', // Force text inside plain card to be white
                 borderRadius: '28px',
                 padding: '32px 24px',

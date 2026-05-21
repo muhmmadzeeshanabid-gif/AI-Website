@@ -1263,8 +1263,8 @@ const Sidebar = () => {
               borderRadius: '24px',
               border: '1px solid var(--divider)',
               padding: '28px 28px 22px 28px',
-              width: 'calc(100% - 32px)',
-              maxWidth: '420px',
+              width: 'calc(100% - 48px)',
+              maxWidth: '400px',
               boxSizing: 'border-box'
             }}
             className="shadow-modal"

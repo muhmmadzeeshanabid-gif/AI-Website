@@ -378,7 +378,10 @@ export const AppProvider = ({ children }) => {
       setAccentColorState(savedAccent);
 
       const savedSidebar = localStorage.getItem('aura-sidebar-open');
-      if (savedSidebar !== null) {
+      if (window.location.pathname.startsWith('/c/') && window.innerWidth >= 768) {
+        setIsSidebarOpenState(true);
+        localStorage.setItem('aura-sidebar-open', 'true');
+      } else if (savedSidebar !== null) {
         setIsSidebarOpenState(JSON.parse(savedSidebar));
       }
 
@@ -701,6 +704,8 @@ export const AppProvider = ({ children }) => {
       lastPathnameRef.current = pathname;
 
       if (pathname === '/') {
+        setIsSharedReadOnly(false);
+        setSharedChatData(null);
         // If pathname is '/' but activeChatId points to an existing chat, reset to a new chat
         const isExistingChat = chats.some(c => c.id === activeChatId);
         if (isExistingChat) {

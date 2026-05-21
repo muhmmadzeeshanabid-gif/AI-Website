@@ -414,8 +414,9 @@ const ChatWindow = () => {
   const [mounted, setMounted] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null, name: '' });
   const [input, setInput] = useState('');
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const [globalToast, setGlobalToast] = useState('');
-  const showGlobalToast = (msg) => {
+  const showToast = (msg) => {
     setGlobalToast(msg);
     setTimeout(() => setGlobalToast(''), 2500);
   };
@@ -811,7 +812,7 @@ const ChatWindow = () => {
     }
 
     // Calculate context first
-    const isMe = msg.role === 'user' && (msg.sender?.email === profile?.email || !msg.sender?.email);
+    const isMe = msg.role === 'user' && (msg.sender?.email === profile?.email || !msg.sender?.email || isSharedReadOnly);
     const isOtherUser = msg.role === 'user' && !isMe;
     const isGroup = chats.find(c => c.id === activeChatId)?.isGroup;
 
@@ -2620,8 +2621,8 @@ const ChatWindow = () => {
         >
           {/* Landing Page - Empty Chat (Only for non-group chats) */}
           {messages.length === 0 && !chats.find(c => c.id === activeChatId)?.isGroup && (
-            <div className={`flex-1 mx-auto w-full flex flex-col ${isMobile ? (isTemporary ? 'justify-center items-center py-6' : 'justify-between py-6') : 'items-center justify-center py-20'} px-4`} style={{ maxWidth: chatWidth === 'Wide' ? 'min(1000px, 100%)' : chatWidth === 'Full' ? '100%' : 'min(768px, 100%)' }}>
-              <div className={`w-full flex flex-col ${isMobile ? (isTemporary ? 'items-center text-center' : 'items-start text-left flex-1') : 'items-center justify-center text-center'} animate-fade-in px-4`}>
+            <div className={`flex-1 mx-auto w-full flex flex-col ${isMobile ? (isTemporary ? 'justify-center items-center py-6' : 'justify-between py-6') : 'items-center justify-center py-20'} px-2 md:px-4`} style={{ maxWidth: chatWidth === 'Wide' ? 'min(1000px, 100%)' : chatWidth === 'Full' ? '100%' : 'min(768px, 100%)' }}>
+              <div className={`w-full flex flex-col ${isMobile ? (isTemporary ? 'items-center text-center' : 'items-start text-left flex-1') : 'items-center justify-center text-center'} animate-fade-in px-2 md:px-4`}>
                 {isTemporary ? (
                   <div className="flex flex-col items-center text-center space-y-3 w-full" style={{ marginBottom: isMobile ? '32px' : '60px' }}>
                     <h1 className="text-[32px] md:text-[52px] font-bold tracking-tight leading-tight" style={{ color: 'var(--on-surface)' }}>Temporary Chat</h1>
@@ -2759,7 +2760,7 @@ const ChatWindow = () => {
                   </div>
                 )}
 
-                {isMobile && showLoggedIn && !isTemporary && (
+                {isMobile && showLoggedIn && !isTemporary && isInputFocused && (
                   <div className={`flex flex-col items-start gap-2 mt-0 w-full max-w-3xl mx-auto px-2 mb-4`}>
                     {activeCategory !== 'write' && (
                       <button 
@@ -2900,229 +2901,348 @@ const ChatWindow = () => {
                   </div>
                 ) : (
                   <div className={`w-full ${isMobile ? 'mt-auto' : 'max-w-[840px] relative group'} px-0`}>
-                  <div className={`w-full relative flex ${isMobile ? 'flex-col gap-2' : 'items-center'} border border-divider shadow-2xl transition-all duration-300`} 
-                    style={{ 
-                      background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
-                      borderRadius: isMobile ? '24px' : '32px', 
-                      padding: isMobile ? '8px 8px' : '4px 6px 4px 16px',
-                      borderColor: isTemporary ? 'transparent' : 'var(--divider)'
-                    }}>
-                    
-                    {!isMobile && (
-                      <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefLanding}>
-                        <button 
-                          type="button"
-                          className="w-10 h-10 flex items-center justify-center rounded-full transition-all"
-                          style={{ 
-                            color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                            backgroundColor: 'transparent'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.backgroundColor = isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)'}
-                          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                          onClick={(e) => { e.stopPropagation(); setShowAttachmentMenuLanding(!showAttachmentMenuLanding); }}
-                        >
-                          <Plus size={22} />
-                        </button>
-                        <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                          Attach
+                    {isMobile ? (
+                      <div className="w-full flex items-end gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
+                        <div className="flex-shrink-0" ref={attachmentRefLanding}>
+                          <button 
+                            type="button"
+                            className="w-11 h-11 flex items-center justify-center rounded-full transition-all border border-divider shadow-md"
+                            style={{ 
+                              color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                              background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
+                              borderColor: 'var(--divider)'
+                            }}
+                            onClick={(e) => { e.stopPropagation(); setShowAttachmentMenuLanding(!showAttachmentMenuLanding); }}
+                          >
+                            <Plus size={22} />
+                          </button>
+                          <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
                         </div>
-                        <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
-                      </div>
-                    )}
-                    
-                    <form onSubmit={handleSend} className={`w-full flex ${isMobile ? 'flex-col gap-2' : 'flex-1 items-center gap-3'}`}>
-                      {isListening && isVoiceMessageMode ? (
-                        <div className="flex-1 flex items-center pr-1 pl-4 h-12 animate-in fade-in duration-200">
-                          <div className="flex-1 flex items-center h-full" style={{ gap: 3, padding: '0 8px' }}>
-                            {Array(28).fill(0).map((_, i) => (
-                              <div 
-                                key={i} 
-                                ref={el => { if(el) audioBarsRef.current[i] = el; }}
-                                style={{
-                                  width: 3,
-                                  borderRadius: 4,
-                                  background: 'var(--on-surface)',
-                                  height: '3px',
-                                  flexShrink: 0,
-                                  transition: 'height 0.08s ease',
-                                }}
-                              />
-                            ))}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button 
-                              type="button" 
-                              onClick={() => { toggleListening(); setInput(''); }}
-                              className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
-                              style={{ background: 'var(--hover-overlay)', color: 'var(--on-surface-muted)' }}
-                              onMouseEnter={e => { e.currentTarget.style.color = 'var(--on-surface)'; e.currentTarget.style.background = 'var(--hover-overlay-2)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.color = 'var(--on-surface-muted)'; e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                            >
-                              <X size={18} strokeWidth={2.5} />
-                            </button>
-                            <button 
-                              type="button" 
-                              onClick={(e) => { const currentInput = input; toggleListening(); handleSend(e, currentInput || "Voice message", true); }}
-                              className="w-10 h-10 rounded-full flex items-center justify-center transition-all border-2"
-                              style={{ 
-                                borderColor: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
-                                color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
-                                background: 'transparent'
-                              }}
-                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                            >
-                              <Check size={18} strokeWidth={3} />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className={`w-full ${isMobile ? 'pt-1 px-3' : 'flex-1'}`}>
-                            <input 
-                              ref={inputRef}
-                              type="text" 
-                              value={input} 
-                              onChange={(e) => { const val = e.target.value; setInput(val); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
-                              placeholder={isSendDisabled ? "Please wait for response to complete..." : (isLoading ? "Kyra is thinking..." : "Ask anything...")} 
-                              style={{ 
-                                background: 'transparent', border: 'none', outline: 'none', 
-                                color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' 
-                              }}
-                              className={`w-full bg-transparent border-none outline-none ${isMobile ? 'text-[16px] py-2' : 'px-4 text-[16px] py-3'} temp-placeholder`}
-                            />
-                          </div>
-                          
-                          <div className={`flex items-center ${isMobile ? 'justify-between w-full' : 'gap-3 ml-auto flex-shrink-0'}`}>
-                            
-                            {isMobile && (
-                              <div className="relative group/tooltip flex items-center justify-center pl-1" ref={attachmentRefLanding}>
-                                <button 
-                                  type="button"
-                                  className="w-10 h-10 flex items-center justify-center rounded-full transition-all bg-hover-overlay"
-                                  style={{ 
-                                    color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                                  }}
-                                  onClick={(e) => { e.stopPropagation(); setShowAttachmentMenuLanding(!showAttachmentMenuLanding); }}
-                                >
-                                  <Plus size={22} />
-                                </button>
-                                <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
-                              </div>
-                            )}
 
-                            {!isMobile && (
-                              <div className={`relative ${isMobile ? 'absolute left-1/2 -translate-x-1/2' : 'ml-4'}`}>
-                                <button 
-                                  type="button"
-                                  onClick={() => setShowModelSwitcherLanding(!showModelSwitcherLanding)}
-                                  className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
-                                  style={{
-                                    backgroundColor: isTemporary ? 'transparent' : 'var(--hover-overlay)',
-                                    borderColor: isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)') : 'var(--divider)',
-                                    color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)'
-                                  }}
-                                >
-                                  {aiModel === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
-                                  {aiModel === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
-                                  {aiModel === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
-                                  {aiModel === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                                  {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
-                                  <ChevronDown size={14} className={showModelSwitcherLanding ? 'rotate-180 transition-transform' : 'transition-transform'} />
-                                </button>
-                                
-                                <AnimatePresence>
-                                  {showModelSwitcherLanding && (
-                                    <motion.div
-                                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        <div className="flex-1 flex items-center border border-divider shadow-md transition-all duration-300"
+                          style={{
+                            background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
+                            borderRadius: '24px', 
+                            padding: '4px 6px 4px 14px',
+                            minHeight: '44px',
+                            borderColor: 'var(--divider)'
+                          }}
+                        >
+                          <form onSubmit={handleSend} className="w-full flex items-center gap-2">
+                            {isListening && isVoiceMessageMode ? (
+                              <div className="flex-1 flex items-center pr-1 h-10 animate-in fade-in duration-200">
+                                <div className="flex-1 flex items-center h-full" style={{ gap: 3, padding: '0 8px' }}>
+                                  {Array(18).fill(0).map((_, i) => (
+                                    <div 
+                                      key={i} 
+                                      ref={el => { if(el) audioBarsRef.current[i] = el; }}
                                       style={{
-                                        position: 'absolute', top: '100%', left: 0, marginTop: '8px',
-                                        width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
-                                        border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
-                                        boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
+                                        width: 2.5,
+                                        borderRadius: 4,
+                                        background: 'var(--on-surface)',
+                                        height: '3px',
+                                        flexShrink: 0,
+                                        transition: 'height 0.08s ease',
                                       }}
-                                    >
-                                      {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
-                                        <button
-                                          key={m}
-                                          onClick={() => { setAiModel(m); setShowModelSwitcherLanding(false); }}
-                                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-hover-overlay transition-all text-left group"
-                                        >
-                                          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-hover-overlay group-hover:bg-primary transition-colors">
-                                            {m === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
-                                            {m === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
-                                            {m === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
-                                            {m === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                                          </div>
-                                          <span className={`text-[14px] font-medium ${aiModel === m ? 'text-on-surface' : 'text-on-surface-muted'}`}>{m}</span>
-                                        </button>
-                                      ))}
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
-                              </div>
-                            )}
-                            
-                            <div className="flex items-center gap-2 pr-1 ml-auto flex-shrink-0">
-                              <div className="relative group/tooltip flex items-center justify-center">
-                                <button type="button" onClick={() => { setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening(); }} className={`w-10 h-10 flex items-center justify-center transition-all duration-300 rounded-full bg-hover-overlay ${isListening && !isVoiceMessageMode ? 'animate-pulse bg-red-500/20 text-red-500' : ''}`}
-                                  style={{ 
-                                    color: isListening 
-                                      ? '#ef4444' 
-                                      : (isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)') : 'var(--on-surface-muted)') 
-                                  }}
-                                >
-                                  <Mic size={20} className={isListening && !isVoiceMessageMode ? 'scale-110' : ''} />
-                                </button>
-                                <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                                  Voice
+                                    />
+                                  ))}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <button 
+                                    type="button" 
+                                    onClick={() => { toggleListening(); setInput(''); }}
+                                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                                    style={{ background: 'var(--hover-overlay)', color: 'var(--on-surface-muted)' }}
+                                  >
+                                    <X size={16} strokeWidth={2.5} />
+                                  </button>
+                                  <button 
+                                    type="button" 
+                                    onClick={(e) => { const currentInput = input; toggleListening(); handleSend(e, currentInput || "Voice message", true); }}
+                                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all border-2"
+                                    style={{ 
+                                      borderColor: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
+                                      color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
+                                      background: 'transparent'
+                                    }}
+                                  >
+                                    <Check size={16} strokeWidth={3} />
+                                  </button>
                                 </div>
                               </div>
-                              
-                              {isLoading ? (
-                                <button onClick={handleStop} type="button" className="w-10 h-10 rounded-full flex items-center justify-center bg-hover-overlay text-on-surface"><Square size={16} fill="currentColor" /></button>
-                              ) : (
-                                <button 
-                                  type={input.trim() ? "submit" : "button"}
-                                  disabled={isSendDisabled}
-                                  onClick={(e) => {
-                                    if (isSendDisabled) {
-                                      e.preventDefault();
-                                      return;
-                                    }
-                                    if (!input.trim()) {
-                                      e.preventDefault();
-                                      if (isListening && isVoiceMessageMode) {
-                                        recognitionRef.current?.stop();
-                                      } else {
-                                        setInput('');
-                                        setIsVoiceMessageMode(true); voiceModeRef.current = true;
-                                        toggleListening();
-                                      }
-                                    }
-                                  }}
-                                  className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300"
-                                  style={{ 
-                                     background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor,
-                                     color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff',
-                                     cursor: isSendDisabled ? 'not-allowed' : 'pointer',
-                                     opacity: isSendDisabled ? 0.6 : 1
-                                   }}
-                                  title={isSendDisabled ? "Please wait for current response to complete" : ""}
-                                >
-                                  {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
-                                </button>
-                              )}
-                            </div>
+                            ) : (
+                              <>
+                                <div className="flex-1 min-w-0">
+                                  <input 
+                                    ref={inputRef}
+                                    type="text" 
+                                    value={input} 
+                                    onChange={(e) => { const val = e.target.value; setInput(val); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                                    onFocus={() => setIsInputFocused(true)}
+                                    onBlur={() => setIsInputFocused(false)}
+                                    placeholder={isSendDisabled ? "Please wait..." : (isLoading ? "Thinking..." : "Ask anything...")} 
+                                    className="w-full bg-transparent border-none outline-none text-[16px] py-2 temp-placeholder"
+                                    style={{ 
+                                      background: 'transparent', border: 'none', outline: 'none', 
+                                      color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' 
+                                    }}
+                                  />
+                                </div>
+
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <button 
+                                    type="button" 
+                                    onClick={() => {
+                                      setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening();
+                                    }}
+                                    className="w-9 h-9 rounded-full flex items-center justify-center transition-all bg-hover-overlay"
+                                    style={{ 
+                                      color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                                    }}
+                                  >
+                                    <Mic size={16} />
+                                  </button>
+
+                                  {isLoading ? (
+                                    <button onClick={handleStop} type="button" className="w-9 h-9 rounded-full flex items-center justify-center bg-hover-overlay text-on-surface">
+                                      <Square size={12} fill="currentColor" />
+                                    </button>
+                                  ) : (
+                                    <button 
+                                      type={input.trim() ? "submit" : "button"}
+                                      disabled={isSendDisabled}
+                                      onClick={(e) => {
+                                        if (isSendDisabled) {
+                                          e.preventDefault();
+                                          return;
+                                        }
+                                        if (!input.trim()) {
+                                          e.preventDefault();
+                                          if (isListening && isVoiceMessageMode) {
+                                            recognitionRef.current?.stop();
+                                          } else {
+                                            setInput('');
+                                            setIsVoiceMessageMode(true); voiceModeRef.current = true;
+                                            toggleListening();
+                                          }
+                                        }
+                                      }}
+                                      className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
+                                      style={{ 
+                                        background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor,
+                                        color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff',
+                                        cursor: isSendDisabled ? 'not-allowed' : 'pointer',
+                                        opacity: isSendDisabled ? 0.6 : 1
+                                      }}
+                                    >
+                                      {input.trim() ? <ArrowUp size={18} strokeWidth={2.5} /> : <AudioLines size={18} strokeWidth={2.5} />}
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </form>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-full relative flex items-center border border-divider shadow-2xl transition-all duration-300" 
+                        style={{ 
+                          background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
+                          borderRadius: '32px', 
+                          padding: '4px 6px 4px 16px',
+                          borderColor: isTemporary ? 'transparent' : 'var(--divider)'
+                        }}>
+                        <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefLanding}>
+                          <button 
+                            type="button"
+                            className="w-10 h-10 flex items-center justify-center rounded-full transition-all"
+                            style={{ 
+                              color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                              backgroundColor: 'transparent'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onClick={(e) => { e.stopPropagation(); setShowAttachmentMenuLanding(!showAttachmentMenuLanding); }}
+                          >
+                            <Plus size={22} />
+                          </button>
+                          <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                            Attach
                           </div>
-                        </>
-                      )}
-                    </form>
+                          <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
+                        </div>
+                        
+                        <form onSubmit={handleSend} className="w-full flex flex-1 items-center gap-3">
+                          {isListening && isVoiceMessageMode ? (
+                            <div className="flex-1 flex items-center pr-1 pl-4 h-12 animate-in fade-in duration-200">
+                              <div className="flex-1 flex items-center h-full" style={{ gap: 3, padding: '0 8px' }}>
+                                {Array(28).fill(0).map((_, i) => (
+                                  <div 
+                                    key={i} 
+                                    ref={el => { if(el) audioBarsRef.current[i] = el; }}
+                                    style={{
+                                      width: 3,
+                                      borderRadius: 4,
+                                      background: 'var(--on-surface)',
+                                      height: '3px',
+                                      flexShrink: 0,
+                                      transition: 'height 0.08s ease',
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button 
+                                  type="button" 
+                                  onClick={() => { toggleListening(); setInput(''); }}
+                                  className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                                  style={{ background: 'var(--hover-overlay)', color: 'var(--on-surface-muted)' }}
+                                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--on-surface)'; e.currentTarget.style.background = 'var(--hover-overlay-2)'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--on-surface-muted)'; e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                                >
+                                  <X size={18} strokeWidth={2.5} />
+                                </button>
+                                <button 
+                                  type="button" 
+                                  onClick={(e) => { const currentInput = input; toggleListening(); handleSend(e, currentInput || "Voice message", true); }}
+                                  className="w-10 h-10 rounded-full flex items-center justify-center transition-all border-2"
+                                  style={{ 
+                                    borderColor: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
+                                    color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
+                                    background: 'transparent'
+                                  }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                                >
+                                  <Check size={18} strokeWidth={3} />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="w-full flex-1">
+                                <input 
+                                  ref={inputRef}
+                                  type="text" 
+                                  value={input} 
+                                  onChange={(e) => { const val = e.target.value; setInput(val); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                                  placeholder={isSendDisabled ? "Please wait for response to complete..." : (isLoading ? "Kyra is thinking..." : "Ask anything...")} 
+                                  style={{ 
+                                    background: 'transparent', border: 'none', outline: 'none', 
+                                    color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' 
+                                  }}
+                                  className="w-full bg-transparent border-none outline-none px-4 text-[16px] py-3 temp-placeholder"
+                                />
+                              </div>
+                              
+                              <div className="flex items-center gap-3 ml-auto flex-shrink-0">
+                                <div className="relative ml-4">
+                                  <button 
+                                    type="button"
+                                    onClick={() => setShowModelSwitcherLanding(!showModelSwitcherLanding)}
+                                    className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
+                                    style={{
+                                      backgroundColor: isTemporary ? 'transparent' : 'var(--hover-overlay)',
+                                      borderColor: isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)') : 'var(--divider)',
+                                      color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)'
+                                    }}
+                                  >
+                                    {aiModel === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
+                                    {aiModel === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
+                                    {aiModel === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
+                                    {aiModel === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
+                                    {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
+                                    <ChevronDown size={14} className={showModelSwitcherLanding ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                                  </button>
+                                  
+                                  <AnimatePresence>
+                                    {showModelSwitcherLanding && (
+                                      <motion.div
+                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        style={{
+                                          position: 'absolute', top: '100%', left: 0, marginTop: '8px',
+                                          width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
+                                          border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
+                                          boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
+                                        }}
+                                      >
+                                        {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
+                                          <button
+                                            key={m}
+                                            onClick={() => { setAiModel(m); setShowModelSwitcherLanding(false); }}
+                                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-hover-overlay transition-all text-left group"
+                                          >
+                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-hover-overlay group-hover:bg-primary transition-colors">
+                                              {m === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
+                                              {m === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
+                                              {m === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
+                                              {m === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
+                                            </div>
+                                            <span className={`text-[14px] font-medium ${aiModel === m ? 'text-on-surface' : 'text-on-surface-muted'}`}>{m}</span>
+                                          </button>
+                                        ))}
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                                
+                                <div className="flex items-center gap-2 pr-1 ml-auto flex-shrink-0">
+                                  <div className="relative group/tooltip flex items-center justify-center">
+                                    <button type="button" onClick={() => { setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening(); }} className="w-10 h-10 flex items-center justify-center transition-all duration-300 rounded-full bg-hover-overlay"
+                                      style={{ color: 'var(--on-surface-muted)' }}
+                                    >
+                                      <Mic size={20} />
+                                    </button>
+                                    <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                                      Voice
+                                    </div>
+                                  </div>
+                                  
+                                  {isLoading ? (
+                                    <button onClick={handleStop} type="button" className="w-10 h-10 rounded-full flex items-center justify-center bg-hover-overlay text-on-surface"><Square size={16} fill="currentColor" /></button>
+                                  ) : (
+                                    <button 
+                                      type={input.trim() ? "submit" : "button"}
+                                      disabled={isSendDisabled}
+                                      onClick={(e) => {
+                                        if (isSendDisabled) {
+                                          e.preventDefault();
+                                          return;
+                                        }
+                                        if (!input.trim()) {
+                                          e.preventDefault();
+                                          if (isListening && isVoiceMessageMode) {
+                                            recognitionRef.current?.stop();
+                                          } else {
+                                            setInput('');
+                                            setIsVoiceMessageMode(true); voiceModeRef.current = true;
+                                            toggleListening();
+                                          }
+                                        }
+                                      }}
+                                      className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300"
+                                      style={{ 
+                                         background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor,
+                                         color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff',
+                                         cursor: isSendDisabled ? 'not-allowed' : 'pointer',
+                                         opacity: isSendDisabled ? 0.6 : 1
+                                       }}
+                                      title={isSendDisabled ? "Please wait for current response to complete" : ""}
+                                    >
+                                      {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </form>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                )}
 
                 {!isMobile && !isTemporary && (
                   <div className={`flex flex-wrap items-center justify-center gap-2 w-full max-w-3xl mx-auto px-4`} style={{ marginTop: '40px' }}>
@@ -3244,108 +3364,7 @@ const ChatWindow = () => {
 
               return (
                 <>
-                  {isSharedReadOnly && sharedChatData?.sharedByName && (
-                    <div style={{ position: 'relative', width: '100%', marginBottom: '32px' }}>
-                      <div 
-                        style={{
-                          position: 'absolute',
-                          inset: '-6px',
-                          background: `radial-gradient(circle, ${accentColor || '#6366f1'}1a 0%, rgba(168, 85, 247, 0.08) 60%, transparent 100%)`,
-                          filter: 'blur(20px)',
-                          zIndex: 0,
-                          pointerEvents: 'none',
-                          borderRadius: '30px'
-                        }}
-                      />
-                      <div 
-                        className="shared-chat-info-card animate-fade-in relative overflow-hidden"
-                        style={{
-                          zIndex: 1,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '14px',
-                          padding: '24px 20px',
-                          borderRadius: '24px',
-                          background: resolvedTheme === 'dark' 
-                            ? 'linear-gradient(135deg, rgba(20, 20, 25, 0.6) 0%, rgba(35, 35, 45, 0.6) 100%)' 
-                            : 'linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(240, 240, 255, 0.6) 100%)',
-                          border: resolvedTheme === 'dark' 
-                            ? '1px solid rgba(255, 255, 255, 0.08)' 
-                            : '1px solid rgba(0, 0, 0, 0.06)',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          textAlign: 'center',
-                          boxShadow: resolvedTheme === 'dark'
-                            ? '0 12px 36px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
-                            : '0 12px 36px -10px rgba(99, 102, 241, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
-                          backdropFilter: 'blur(25px)',
-                        }}
-                      >
-                        <div className="relative flex-shrink-0">
-                          <div 
-                            style={{
-                              width: '56px',
-                              height: '56px',
-                              borderRadius: '18px',
-                              background: `linear-gradient(135deg, ${accentColor || '#6366f1'} 0%, #a855f7 100%)`,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              boxShadow: `0 8px 20px -4px ${(accentColor || '#6366f1')}66`,
-                              color: '#ffffff',
-                              position: 'relative',
-                              zIndex: 1
-                            }}
-                          >
-                            <Globe size={24} strokeWidth={2} />
-                          </div>
-                        </div>
-                        
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <h3 
-                            style={{ 
-                              margin: 0, 
-                              fontSize: '17px', 
-                              fontWeight: '700', 
-                              color: 'var(--on-surface)',
-                              fontFamily: 'Outfit, sans-serif',
-                              letterSpacing: '-0.01em'
-                            }}
-                          >
-                            Shared Chat Archive
-                          </h3>
-                          <p 
-                            style={{ 
-                              margin: 0, 
-                              fontSize: '13.5px', 
-                              color: 'var(--on-surface-muted)',
-                              lineHeight: '1.5'
-                            }}
-                          >
-                            This conversation was originally shared by{' '}
-                            <span style={{ fontWeight: '600', color: accentColor || 'var(--accent-color)' }}>
-                              {sharedChatData.sharedByName}
-                            </span>
-                            {sharedChatData.sharedByEmail ? (
-                              <span style={{ 
-                                fontSize: '12px', 
-                                color: 'var(--on-surface-subtle)', 
-                                display: 'block', 
-                                marginTop: '4px',
-                                background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                                padding: '3px 10px',
-                                borderRadius: '999px',
-                                width: 'fit-content',
-                                margin: '4px auto 0 auto'
-                              }}>
-                                {sharedChatData.sharedByEmail}
-                              </span>
-                            ) : null}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+
 
                   {sortedMessages.map((msg, index) => {
                     return (
@@ -3497,7 +3516,7 @@ const ChatWindow = () => {
               </button>
             )}
           </AnimatePresence>
-          <div className={`max-w-3xl mx-auto w-full flex flex-col items-center ${replyingToMsg ? 'gap-0' : 'gap-3'} px-4`}>
+          <div className={`max-w-3xl mx-auto w-full flex flex-col items-center ${replyingToMsg ? 'gap-0' : 'gap-3'} px-2 md:px-4`}>
             <AnimatePresence>
               {replyingToMsg && (
                 <motion.div
@@ -3534,282 +3553,296 @@ const ChatWindow = () => {
               )}
             </AnimatePresence>
             {isSharedReadOnly ? (
-              <div style={{ position: 'relative', width: '100%' }}>
-                <div 
-                  style={{
-                    position: 'absolute',
-                    inset: '-8px',
-                    background: `radial-gradient(circle, ${accentColor || '#6366f1'}15 0%, rgba(168, 85, 247, 0.08) 60%, transparent 100%)`,
-                    filter: 'blur(25px)',
-                    zIndex: 0,
-                    pointerEvents: 'none',
-                    borderRadius: '30px'
-                  }}
-                />
-                <div 
-                  className="w-full flex flex-col md:flex-row items-center justify-between gap-5 p-6 md:p-8 transition-all duration-300 animate-fade-in relative overflow-hidden"
-                  style={{
-                    zIndex: 1,
-                    background: resolvedTheme === 'dark' 
-                      ? 'linear-gradient(135deg, rgba(20, 20, 25, 0.7) 0%, rgba(35, 35, 45, 0.7) 100%)' 
-                      : 'linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(240, 240, 255, 0.7) 100%)',
-                    borderRadius: '26px',
-                    border: resolvedTheme === 'dark' 
-                      ? '1px solid rgba(255, 255, 255, 0.08)' 
-                      : '1px solid rgba(0, 0, 0, 0.06)',
-                    boxShadow: resolvedTheme === 'dark'
-                      ? '0 16px 40px -10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
-                      : '0 16px 40px -10px rgba(99, 102, 241, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
-                    backdropFilter: 'blur(30px)',
-                    textAlign: isMobile ? 'center' : 'left'
+              <div className="w-full flex flex-col items-center justify-center gap-4 py-8 px-4 text-center animate-fade-in">
+                <p 
+                  style={{ 
+                    margin: 0, 
+                    fontSize: '14px', 
+                    color: 'var(--on-surface-muted)',
+                    lineHeight: 1.5,
+                    maxWidth: '520px',
+                    fontFamily: 'Outfit, sans-serif'
                   }}
                 >
-                  <div 
-                    style={{ 
-                      display: 'flex', 
-                      flexDirection: isMobile ? 'column' : 'row', 
-                      alignItems: 'center', 
-                      gap: '20px',
-                      flex: 1
-                    }}
-                  >
-                    <div className="relative flex-shrink-0">
-                      <div 
-                        style={{
-                          position: 'absolute',
-                          inset: '-6px',
-                          borderRadius: '16px',
-                          background: `linear-gradient(135deg, ${accentColor || '#6366f1'} 0%, #a855f7 100%)`,
-                          opacity: 0.15,
-                          filter: 'blur(4px)',
-                          animation: 'thinking-pulse 2s ease-in-out infinite'
-                        }}
-                      />
-                      <div 
-                        style={{
-                          width: '50px',
-                          height: '50px',
-                          borderRadius: '14px',
-                          background: `linear-gradient(135deg, ${accentColor || '#6366f1'} 0%, #a855f7 100%)`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#ffffff',
-                          boxShadow: `0 8px 20px -4px ${(accentColor || '#6366f1')}66`,
-                          position: 'relative',
-                          zIndex: 1
-                        }}
-                      >
-                        <MessageSquareDashed size={24} strokeWidth={2.2} />
-                        <div 
-                          style={{
-                            position: 'absolute',
-                            top: '-4px',
-                            right: '-4px',
-                            background: '#ffb300',
-                            borderRadius: '50%',
-                            width: '16px',
-                            height: '16px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-                          }}
-                        >
-                          <Sparkles size={10} color="#ffffff" strokeWidth={3} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <h4 
-                        style={{ 
-                          margin: 0, 
-                          fontSize: '16.5px', 
-                          fontWeight: '700', 
-                          color: 'var(--on-surface)',
-                          fontFamily: 'Outfit, sans-serif',
-                          letterSpacing: '-0.01em',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: isMobile ? 'center' : 'flex-start',
-                          gap: '6px'
-                        }}
-                      >
-                        Shared Conversation Space
-                      </h4>
-                      <p 
-                        style={{ 
-                          margin: 0, 
-                          fontSize: '13.5px', 
-                          color: 'var(--on-surface-muted)',
-                          lineHeight: 1.5,
-                          maxWidth: '520px'
-                        }}
-                      >
-                        You are exploring this chat in <span style={{ color: accentColor || '#6366f1', fontWeight: 600 }}>read-only mode</span>. Start a fresh conversation to ask questions and try all interactive features.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <button
-                    onClick={() => createNewChat()}
-                    style={{
-                      padding: '12px 28px',
-                      borderRadius: '999px',
-                      background: `linear-gradient(135deg, ${accentColor || '#6366f1'} 0%, #a855f7 100%)`,
-                      color: '#ffffff',
-                      border: 'none',
-                      fontSize: '14.5px',
-                      fontWeight: '750',
-                      cursor: 'pointer',
-                      fontFamily: 'Outfit, sans-serif',
-                      boxShadow: `0 8px 24px -6px ${(accentColor || '#6366f1')}77`,
-                      transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-                      whiteSpace: 'nowrap',
-                      width: isMobile ? '100%' : 'auto',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      position: 'relative',
-                      overflow: 'hidden'
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.transform = 'translateY(-2px) scale(1.03)';
-                      e.currentTarget.style.boxShadow = `0 12px 28px -4px ${(accentColor || '#6366f1')}aa`;
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                      e.currentTarget.style.boxShadow = `0 8px 24px -6px ${(accentColor || '#6366f1')}77`;
-                    }}
-                  >
-                    <span>Start New Chat</span>
-                    <ChevronRight size={16} strokeWidth={2.5} />
-                  </button>
-                </div>
+                  This conversation was shared by{' '}
+                  <span style={{ fontWeight: '600', color: accentColor || 'var(--accent-color)' }}>
+                    {sharedChatData?.sharedByName || 'a user'}
+                  </span>
+                  {sharedChatData?.sharedByEmail ? ` (${sharedChatData.sharedByEmail})` : ''}.
+                  <br />
+                  You are exploring this chat in <span style={{ fontWeight: '600', color: accentColor || 'var(--accent-color)' }}>read-only mode</span>.
+                </p>
+                
+                <button
+                  type="button"
+                  onClick={() => createNewChat()}
+                  style={{
+                    padding: '10px 24px',
+                    borderRadius: '999px',
+                    background: `linear-gradient(135deg, ${accentColor || '#6366f1'} 0%, #a855f7 100%)`,
+                    color: '#ffffff',
+                    border: 'none',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    fontFamily: 'Outfit, sans-serif',
+                    boxShadow: `0 4px 14px -4px ${(accentColor || '#6366f1')}77`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <Share2 size={16} strokeWidth={2.5} />
+                  <span>Start New Chat</span>
+                </button>
               </div>
             ) : (
-              <div className={`w-full relative flex ${isMobile ? 'flex-col gap-2' : 'items-center'} transition-all duration-300`}
-                style={{ 
-                width: '100%', 
-                background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
-                borderRadius: replyingToMsg ? (isMobile ? '0 0 24px 24px' : '0 0 26px 26px') : (isMobile ? '24px' : '26px'), 
-                padding: isMobile ? '8px 8px' : '4px 6px 4px 16px', border: '1px solid var(--divider)',
-                borderTop: replyingToMsg ? 'none' : '1px solid var(--divider)',
-                transition: 'all 0.3s ease'
-              }}>                
-                  {!isMobile && (
-                    <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefFooter}>
-                      <button 
-                        type="button"
-                        onMouseEnter={() => setHoveredPlus(true)} 
-                        onMouseLeave={() => setHoveredPlus(false)} 
-                        onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }} 
-                        className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
-                        style={{
-                          color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                          backgroundColor: hoveredPlus ? (isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)') : 'transparent'
-                        }}
-                      >
-                        <Plus size={20} />
-                      </button>
-                      <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                        Attach
-                      </div>
-                      <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
-                    </div>
-                  )}
+              isMobile ? (
+                <div className="w-full flex items-end gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
+                  <div className="flex-shrink-0" ref={attachmentRefFooter}>
+                    <button 
+                      type="button"
+                      className="w-11 h-11 flex items-center justify-center rounded-full transition-all border border-divider shadow-md"
+                      style={{ 
+                        color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                        background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)',
+                        borderColor: 'var(--divider)'
+                      }}
+                      onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }}
+                    >
+                      <Plus size={22} />
+                    </button>
+                    <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
+                  </div>
 
-                <form onSubmit={handleSend} className={`w-full flex ${isMobile ? 'flex-col gap-2' : 'flex-1 items-center gap-3'}`} style={{ flex: isMobile ? 'none' : 1 }}>
-                  {isListening && isVoiceMessageMode ? (
-                    <div className="flex-1 flex items-center pr-1 pl-4 h-[48px] animate-in fade-in duration-200">
-                       <div className="flex-1 flex items-center h-full mr-4 relative overflow-hidden">
-                          <div className="absolute inset-0 flex items-center pr-[120px] z-10 pointer-events-none">
-                            <span className="text-[15px] font-medium truncate" style={{ color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' }}>
-                              {input || "Listening..."}
-                            </span>
+                  <div className="flex-1 flex items-center border border-divider shadow-md transition-all duration-300"
+                    style={{
+                      background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
+                      borderRadius: replyingToMsg ? '0 0 24px 24px' : '24px', 
+                      padding: '4px 6px 4px 14px',
+                      minHeight: '44px',
+                      borderColor: 'var(--divider)'
+                    }}
+                  >
+                    <form onSubmit={handleSend} className="w-full flex items-center gap-2">
+                      {isListening && isVoiceMessageMode ? (
+                        <div className="flex-1 flex items-center pr-1 h-10 animate-in fade-in duration-200">
+                          <div className="flex-1 flex items-center h-full mr-2 relative overflow-hidden">
+                            <div className="absolute inset-0 flex items-center pr-[60px] z-10 pointer-events-none">
+                              <span className="text-[14px] font-medium truncate animate-pulse" style={{ color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' }}>
+                                {input || "Listening..."}
+                              </span>
+                            </div>
+                            <div className="absolute inset-0 flex items-center">
+                              <div className="w-[200%] h-[2px] opacity-40 animate-slide-left" style={{ backgroundImage: 'repeating-linear-gradient(to right, var(--on-surface-muted) 0, var(--on-surface-muted) 4px, transparent 4px, transparent 8px)' }}></div>
+                            </div>
                           </div>
-                          <div className="absolute inset-0 flex items-center">
-                            <div className="w-[200%] h-[2px] opacity-40 animate-slide-left" style={{ backgroundImage: 'repeating-linear-gradient(to right, var(--on-surface-muted) 0, var(--on-surface-muted) 4px, transparent 4px, transparent 8px)' }}></div>
-                          </div>
-                          <div className="absolute right-0 flex items-center gap-[3px] pl-4 pr-2 h-full" style={{ background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)' }}>
-                            {Array(15).fill(0).map((_, i) => (
-                              <div 
-                                key={i} 
-                                ref={el => { if(el) audioBarsRef.current[i] = el; }}
-                                className="w-[3px] rounded-full transition-all duration-75" 
-                                style={{ background: 'var(--on-surface)', height: '4px' }}
-                              ></div>
-                            ))}
-                          </div>
-                       </div>
-                       <div className="flex items-center gap-2">
-                          <button 
-                            type="button" 
-                            onClick={cancelListening}
-                            className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
-                            style={{ color: 'var(--on-surface-muted)' }}
-                            onMouseEnter={e => { e.currentTarget.style.color = 'var(--on-surface)'; e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.color = 'var(--on-surface-muted)'; e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                          >
-                            <X size={18} strokeWidth={2.5} />
-                          </button>
-                          <button 
-                            type="button" 
-                            onClick={(e) => { const currentInput = input; toggleListening(); handleSend(e, currentInput || "Voice message", true); }}
-                            className="w-10 h-10 rounded-full flex items-center justify-center transition-all border-2"
-                            style={{ 
-                              borderColor: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
-                              color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
-                              background: 'transparent'
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' } }
-                          >
-                            <Check size={18} strokeWidth={3} />
-                          </button>
-                       </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className={`w-full ${isMobile ? 'pt-1 px-3' : 'flex-1'}`}>
-                        <input 
-                          ref={footerInputRef}
-                          type="text" 
-                          value={input} 
-                          onChange={(e) => { const val = e.target.value; setInput(val); if(val.endsWith('/')) setShowAttachmentMenu(true); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
-                          placeholder={isSendDisabled ? "Please wait for response to complete..." : (isLoading ? "Kyra is thinking..." : "Ask anything...")} 
-                          className={`w-full bg-transparent border-none outline-none ${isMobile ? 'text-[16px] py-2' : 'temp-placeholder'}`}
-                          style={{ 
-                            background: 'transparent', border: 'none', outline: 'none', 
-                            color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16, padding: isMobile ? '0' : (isSmallMobile ? '12px 8px' : '12px 14px')
-                          }} 
-                        />
-                      </div>
-                      
-                      <div className={`flex items-center ${isMobile ? 'justify-between w-full' : 'gap-3 ml-auto flex-shrink-0'}`}>
-                        
-                        {isMobile && (
-                          <div className="relative group/tooltip flex items-center justify-center pl-1" ref={attachmentRefFooter}>
+                          <div className="flex items-center gap-1">
                             <button 
-                              type="button"
-                              className="w-10 h-10 flex items-center justify-center rounded-full transition-all bg-hover-overlay"
+                              type="button" 
+                              onClick={cancelListening}
+                              className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                              style={{ color: 'var(--on-surface-muted)' }}
+                            >
+                              <X size={16} strokeWidth={2.5} />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={(e) => { const currentInput = input; toggleListening(); handleSend(e, currentInput || "Voice message", true); }}
+                              className="w-8 h-8 rounded-full flex items-center justify-center transition-all border-2"
+                              style={{ 
+                                borderColor: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
+                                color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
+                                background: 'transparent'
+                              }}
+                            >
+                              <Check size={16} strokeWidth={3} />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex-1 min-w-0">
+                            <input 
+                              ref={footerInputRef}
+                              type="text" 
+                              value={input} 
+                              onChange={(e) => { const val = e.target.value; setInput(val); if(val.endsWith('/')) setShowAttachmentMenu(true); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                              onFocus={() => setIsInputFocused(true)}
+                              onBlur={() => setIsInputFocused(false)}
+                              placeholder={isSendDisabled ? "Please wait..." : (isLoading ? "Thinking..." : "Ask anything...")} 
+                              className="w-full bg-transparent border-none outline-none text-[16px] py-2 temp-placeholder"
+                              style={{ 
+                                background: 'transparent', border: 'none', outline: 'none', 
+                                color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16
+                              }} 
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                if (isListening) {
+                                  recognitionRef.current?.stop();
+                                } else {
+                                  setInput('');
+                                  setIsVoiceMessageMode(true);
+                                  toggleListening();
+                                }
+                              }}
+                              className="w-9 h-9 rounded-full flex items-center justify-center transition-all bg-hover-overlay"
                               style={{ 
                                 color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
                               }}
-                              onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }}
                             >
-                              <Plus size={22} />
+                              {isListening ? <Square size={12} fill="currentColor" /> : <Mic size={16} />}
                             </button>
-                            <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
-                          </div>
-                        )}
 
-                        {!isMobile && (
-                          <div className={`relative ${isMobile ? 'absolute left-1/2 -translate-x-1/2' : 'ml-4'}`}>
+                            {isLoading ? (
+                              <button onClick={handleStop} type="button" className="w-9 h-9 rounded-full flex items-center justify-center bg-hover-overlay text-on-surface">
+                                <Square size={12} fill="currentColor" />
+                              </button>
+                            ) : (
+                              <button 
+                                type={input.trim() ? "submit" : "button"}
+                                disabled={isSendDisabled}
+                                onClick={(e) => {
+                                  if (isSendDisabled) {
+                                    e.preventDefault();
+                                    return;
+                                  }
+                                  if (!input.trim()) {
+                                    e.preventDefault();
+                                    if (isListening && isVoiceMessageMode) {
+                                      recognitionRef.current?.stop();
+                                    } else {
+                                      setInput('');
+                                      setIsVoiceMessageMode(true);
+                                      toggleListening();
+                                    }
+                                  }
+                                }}
+                                className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
+                                style={{ 
+                                  background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor,
+                                  color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff',
+                                  cursor: isSendDisabled ? 'not-allowed' : 'pointer',
+                                  opacity: isSendDisabled ? 0.6 : 1
+                                }}
+                              >
+                                {input.trim() ? <ArrowUp size={18} strokeWidth={2.5} /> : <AudioLines size={18} strokeWidth={2.5} />}
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </form>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full relative flex items-center transition-all duration-300"
+                  style={{ 
+                    width: '100%', 
+                    background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
+                    borderRadius: replyingToMsg ? '0 0 26px 26px' : '26px', 
+                    padding: '4px 6px 4px 16px', border: '1px solid var(--divider)',
+                    borderTop: replyingToMsg ? 'none' : '1px solid var(--divider)',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefFooter}>
+                    <button 
+                      type="button"
+                      onMouseEnter={() => setHoveredPlus(true)} 
+                      onMouseLeave={() => setHoveredPlus(false)} 
+                      onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }} 
+                      className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
+                      style={{
+                        color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                        backgroundColor: hoveredPlus ? (isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)') : 'transparent'
+                      }}
+                    >
+                      <Plus size={20} />
+                    </button>
+                    <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                      Attach
+                    </div>
+                    <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
+                  </div>
+
+                  <form onSubmit={handleSend} className="w-full flex flex-1 items-center gap-3" style={{ flex: 1 }}>
+                    {isListening && isVoiceMessageMode ? (
+                      <div className="flex-1 flex items-center pr-1 pl-4 h-[48px] animate-in fade-in duration-200">
+                         <div className="flex-1 flex items-center h-full mr-4 relative overflow-hidden">
+                            <div className="absolute inset-0 flex items-center pr-[120px] z-10 pointer-events-none">
+                              <span className="text-[15px] font-medium truncate" style={{ color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' }}>
+                                {input || "Listening..."}
+                              </span>
+                            </div>
+                            <div className="absolute inset-0 flex items-center">
+                              <div className="w-[200%] h-[2px] opacity-40 animate-slide-left" style={{ backgroundImage: 'repeating-linear-gradient(to right, var(--on-surface-muted) 0, var(--on-surface-muted) 4px, transparent 4px, transparent 8px)' }}></div>
+                            </div>
+                            <div className="absolute right-0 flex items-center gap-[3px] pl-4 pr-2 h-full" style={{ background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)' }}>
+                              {Array(15).fill(0).map((_, i) => (
+                                <div 
+                                  key={i} 
+                                  ref={el => { if(el) audioBarsRef.current[i] = el; }}
+                                  className="w-[3px] rounded-full transition-all duration-75" 
+                                  style={{ background: 'var(--on-surface)', height: '4px' }}
+                                ></div>
+                              ))}
+                            </div>
+                         </div>
+                         <div className="flex items-center gap-2">
                             <button 
-                              type="button"
+                              type="button" 
+                              onClick={cancelListening}
+                              className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                              style={{ color: 'var(--on-surface-muted)' }}
+                              onMouseEnter={e => { e.currentTarget.style.color = 'var(--on-surface)'; e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.color = 'var(--on-surface-muted)'; e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                            >
+                              <X size={18} strokeWidth={2.5} />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={(e) => { const currentInput = input; toggleListening(); handleSend(e, currentInput || "Voice message", true); }}
+                              className="w-10 h-10 rounded-full flex items-center justify-center transition-all border-2"
+                              style={{ 
+                                borderColor: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
+                                color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
+                                background: 'transparent'
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                            >
+                              <Check size={18} strokeWidth={3} />
+                            </button>
+                         </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="w-full flex-1">
+                          <input 
+                            ref={footerInputRef}
+                            type="text" 
+                            value={input} 
+                            onChange={(e) => { const val = e.target.value; setInput(val); if(val.endsWith('/')) setShowAttachmentMenu(true); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                            placeholder={isSendDisabled ? "Please wait for response to complete..." : (isLoading ? "Kyra is thinking..." : "Ask anything...")} 
+                            className="w-full bg-transparent border-none outline-none temp-placeholder"
+                            style={{ 
+                              background: 'transparent', border: 'none', outline: 'none', 
+                              color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16, padding: (isSmallMobile ? '12px 8px' : '12px 14px')
+                            }} 
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-3 ml-auto flex-shrink-0">
+                          <div className="relative ml-4">
+                            <button 
+                              type="button" 
                               onClick={() => setShowModelSwitcher(!showModelSwitcher)}
                               className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
                               style={{
@@ -3860,34 +3893,31 @@ const ChatWindow = () => {
                               )}
                             </AnimatePresence>
                           </div>
-                        )}
-                        
-                        <div className="flex items-center gap-1.5 ml-auto">
-                            {!isMobile && (
-                              <div className="relative group/tooltip flex items-center justify-center">
-                                <button 
-                                  type="button" 
-                                  onClick={() => {
-                                    if (isListening) {
-                                      recognitionRef.current?.stop();
-                                    } else {
-                                      setInput('');
-                                      setIsVoiceMessageMode(true);
-                                      toggleListening();
-                                    }
-                                  }}
-                                  className="w-10 h-10 rounded-full flex items-center justify-center transition-all bg-hover-overlay"
-                                  style={{ 
-                                    color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                                  }}
-                                >
-                                  {isListening ? <Square size={14} fill="currentColor" /> : <Mic size={18} />}
-                                </button>
-                                <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                                  Voice
-                                </div>
+
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            <div className="relative group/tooltip flex items-center justify-center">
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  if (isListening) {
+                                    recognitionRef.current?.stop();
+                                  } else {
+                                    setInput('');
+                                    setIsVoiceMessageMode(true);
+                                    toggleListening();
+                                  }
+                                }}
+                                className="w-10 h-10 rounded-full flex items-center justify-center transition-all bg-hover-overlay"
+                                style={{ 
+                                  color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                                }}
+                              >
+                                {isListening ? <Square size={14} fill="currentColor" /> : <Mic size={18} />}
+                              </button>
+                              <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                                Voice
                               </div>
-                            )}
+                            </div>
 
                             {isLoading ? (
                                <div className="relative group/tooltip flex items-center justify-center">
@@ -3910,44 +3940,45 @@ const ChatWindow = () => {
                                  </div>
                                </div>
                              ) : (
-                             <button 
-                               type={input.trim() ? "submit" : "button"}
-                               disabled={isSendDisabled}
-                               onClick={(e) => {
-                                 if (isSendDisabled) {
-                                   e.preventDefault();
-                                   return;
-                                 }
-                                 if (!input.trim()) {
-                                   e.preventDefault();
-                                   if (isListening && isVoiceMessageMode) {
-                                     recognitionRef.current?.stop();
-                                   } else {
-                                     setInput('');
-                                     setIsVoiceMessageMode(true);
-                                     toggleListening();
+                               <button 
+                                 type={input.trim() ? "submit" : "button"}
+                                 disabled={isSendDisabled}
+                                 onClick={(e) => {
+                                   if (isSendDisabled) {
+                                     e.preventDefault();
+                                     return;
                                    }
-                                 }
-                               }}
-                               style={{ 
-                                 width: 40, height: 40, borderRadius: '50%', 
-                                 background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor, 
-                                 color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff', 
-                                 border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                                 transition: 'all 0.3s ease', cursor: isSendDisabled ? 'not-allowed' : 'pointer',
-                                 opacity: isSendDisabled ? 0.6 : 1
-                               }}
-                               title={isSendDisabled ? "Please wait for current response to complete" : ""}
-                             >
-                               {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
-                             </button>
-                           )}
-                         </div>
-                      </div>
-                    </>
-                  )}
-                </form>
-              </div>
+                                   if (!input.trim()) {
+                                     e.preventDefault();
+                                     if (isListening && isVoiceMessageMode) {
+                                       recognitionRef.current?.stop();
+                                     } else {
+                                       setInput('');
+                                       setIsVoiceMessageMode(true);
+                                       toggleListening();
+                                     }
+                                   }
+                                 }}
+                                 style={{ 
+                                   width: 40, height: 40, borderRadius: '50%', 
+                                   background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor, 
+                                   color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff', 
+                                   border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                                   transition: 'all 0.3s ease', cursor: isSendDisabled ? 'not-allowed' : 'pointer',
+                                   opacity: isSendDisabled ? 0.6 : 1
+                                 }}
+                                 title={isSendDisabled ? "Please wait for current response to complete" : ""}
+                               >
+                                 {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
+                               </button>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </form>
+                </div>
+              )
             )}
           </div>
         </footer>
