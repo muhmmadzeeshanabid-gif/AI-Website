@@ -3502,7 +3502,98 @@ const ChatWindow = () => {
                 </motion.div>
               )}
             </AnimatePresence>
-            {isSharedReadOnly ? null : (
+            {isSharedReadOnly ? (
+              <div 
+                className="w-full relative flex flex-col md:flex-row items-center justify-between gap-4 p-5 md:p-6 transition-all duration-300 animate-fade-in"
+                style={{
+                  width: '100%',
+                  background: resolvedTheme === 'dark' 
+                    ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.03) 100%)' 
+                    : 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.02) 100%)',
+                  borderRadius: '24px',
+                  border: resolvedTheme === 'dark' 
+                    ? '1px solid rgba(255, 255, 255, 0.08)' 
+                    : '1px solid rgba(0, 0, 0, 0.06)',
+                  boxShadow: resolvedTheme === 'dark'
+                    ? '0 12px 30px -10px rgba(0, 0, 0, 0.4)'
+                    : '0 12px 30px -10px rgba(99, 102, 241, 0.08)',
+                  backdropFilter: 'blur(20px)',
+                  textAlign: isMobile ? 'center' : 'left'
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', gap: '16px' }}>
+                  <div 
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#ffffff',
+                      boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+                      flexShrink: 0
+                    }}
+                  >
+                    <Globe size={20} />
+                  </div>
+                  <div>
+                    <h4 
+                      style={{ 
+                        margin: 0, 
+                        fontSize: '14.5px', 
+                        fontWeight: '600', 
+                        color: 'var(--on-surface)',
+                        fontFamily: 'Outfit, sans-serif'
+                      }}
+                    >
+                      Shared Read-Only Conversation
+                    </h4>
+                    <p 
+                      style={{ 
+                        margin: '2px 0 0 0', 
+                        fontSize: '13px', 
+                        color: 'var(--on-surface-subtle)',
+                        lineHeight: 1.4
+                      }}
+                    >
+                      You are viewing this chat via a shared link. Start a new chat to ask questions.
+                    </p>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => createNewChat()}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: '999px',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontSize: '13.5px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
+                    transition: 'opacity 0.2s ease, transform 0.2s ease',
+                    whiteSpace: 'nowrap',
+                    width: isMobile ? '100%' : 'auto',
+                    textAlign: 'center'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.opacity = '0.9';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.opacity = '1';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                >
+                  Start New Chat
+                </button>
+              </div>
+            ) : (
               <div className={`w-full relative flex ${isMobile ? 'flex-col gap-2' : 'items-center'} transition-all duration-300`}
                 style={{ 
                 width: '100%', 
