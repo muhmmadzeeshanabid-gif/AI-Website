@@ -3683,49 +3683,18 @@ const ChatWindow = () => {
                           </div>
 
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <button 
-                              type="button" 
-                              onClick={() => {
-                                if (isListening) {
-                                  recognitionRef.current?.stop();
-                                } else {
-                                  setInput('');
-                                  setIsVoiceMessageMode(true);
-                                  toggleListening();
-                                }
-                              }}
-                              className="w-9 h-9 rounded-full flex items-center justify-center transition-all bg-hover-overlay"
-                              style={{ 
-                                color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                              }}
-                            >
-                              {isListening ? <Square size={12} fill="currentColor" /> : <Mic size={16} />}
-                            </button>
-
                             {isLoading ? (
-                              <button onClick={handleStop} type="button" className="w-9 h-9 rounded-full flex items-center justify-center bg-hover-overlay text-on-surface">
+                              <button 
+                                onClick={handleStop} 
+                                type="button" 
+                                className="w-9 h-9 rounded-full flex items-center justify-center bg-hover-overlay text-on-surface"
+                              >
                                 <Square size={12} fill="currentColor" />
                               </button>
-                            ) : (
+                            ) : input.trim() ? (
                               <button 
-                                type={input.trim() ? "submit" : "button"}
+                                type="submit"
                                 disabled={isSendDisabled}
-                                onClick={(e) => {
-                                  if (isSendDisabled) {
-                                    e.preventDefault();
-                                    return;
-                                  }
-                                  if (!input.trim()) {
-                                    e.preventDefault();
-                                    if (isListening && isVoiceMessageMode) {
-                                      recognitionRef.current?.stop();
-                                    } else {
-                                      setInput('');
-                                      setIsVoiceMessageMode(true);
-                                      toggleListening();
-                                    }
-                                  }
-                                }}
                                 className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
                                 style={{ 
                                   background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor,
@@ -3734,7 +3703,26 @@ const ChatWindow = () => {
                                   opacity: isSendDisabled ? 0.6 : 1
                                 }}
                               >
-                                {input.trim() ? <ArrowUp size={18} strokeWidth={2.5} /> : <AudioLines size={18} strokeWidth={2.5} />}
+                                <ArrowUp size={18} strokeWidth={2.5} />
+                              </button>
+                            ) : (
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  if (isListening) {
+                                    recognitionRef.current?.stop();
+                                  } else {
+                                    setInput('');
+                                    setIsVoiceMessageMode(true);
+                                    toggleListening();
+                                  }
+                                }}
+                                className="w-9 h-9 rounded-full flex items-center justify-center transition-all bg-hover-overlay"
+                                style={{ 
+                                  color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                                }}
+                              >
+                                {isListening ? <Square size={12} fill="currentColor" /> : <Mic size={16} />}
                               </button>
                             )}
                           </div>
