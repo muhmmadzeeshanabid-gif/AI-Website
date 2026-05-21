@@ -2,7 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { useAppContext } from '@/context/AppContext';
-import { MessageSquare, Plus, Settings, LogOut, User, Menu, X, ChevronDown, ChevronUp, Search, Bot, PanelLeftClose, PanelLeftOpen, Edit, SquarePen, MoreHorizontal, Share2, Users, Pencil, Pin, Archive, Trash2, Sparkles, Palette, UserCircle, HelpCircle, ChevronRight, Lock, Image, Telescope, LayoutGrid, Link, BookOpen, Shield } from 'lucide-react';
+import { MessageSquare, Plus, Settings, LogOut, User, Menu, X, ChevronDown, ChevronUp, Search, Bot, PanelLeftClose, PanelLeftOpen, Edit, SquarePen, MoreHorizontal, Share2, Users, Pencil, Pin, Archive, Trash2, Sparkles, Palette, UserCircle, HelpCircle, ChevronRight, Lock, Image, Telescope, LayoutGrid, Link, BookOpen, Shield, Library } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SettingsModal from './SettingsModal';
 import ProfileModal from './ProfileModal';
@@ -613,6 +613,25 @@ const Sidebar = () => {
                   >
                      <Image size={16} style={{ color: 'var(--on-surface-muted)' }} strokeWidth={1.5} />
                      <span>Images</span>
+                  </button>
+                  <button 
+                    onClick={() => { 
+                      setAppView('library'); 
+                      setIsMoreMenuOpen(false); 
+                      if (isMobile) setIsSidebarOpen(false);
+                    }}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                      border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                      fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                      fontFamily: 'inherit', transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                     <Library size={16} style={{ color: 'var(--on-surface-muted)' }} strokeWidth={1.5} />
+                     <span>Library</span>
                   </button>
                   <button 
                     style={{

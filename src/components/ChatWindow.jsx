@@ -15,6 +15,7 @@ import { getGeminiResponse } from '@/utils/gemini';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, arrayUnion, onSnapshot, getDoc, setDoc } from 'firebase/firestore';
 import AuthModal from './AuthModal';
+import LibraryView from './LibraryView';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -553,6 +554,19 @@ const ChatWindow = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Handle pending messages from other views (like Library preview chat)
+  useEffect(() => {
+    if (mounted && appView === 'chat') {
+      const pending = localStorage.getItem('aura-pending-message');
+      if (pending) {
+        localStorage.removeItem('aura-pending-message');
+        setTimeout(() => {
+          handleSend(null, pending);
+        }, 150);
+      }
+    }
+  }, [mounted, appView, activeChatId]);
 
   // Handle real-time typing status in Firestore for group chats
   const typingTimeoutRef = useRef(null);
@@ -1923,6 +1937,14 @@ const ChatWindow = () => {
   };
 
   if (!mounted) return null;
+
+  if (appView === 'library') {
+    return (
+      <div className="flex-1 min-w-0 flex flex-col relative bg-primary transition-colors duration-500" style={{ overflow: 'hidden', height: '100dvh' }}>
+        <LibraryView />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 min-w-0 flex flex-col relative bg-primary transition-colors duration-500" style={{ overflow: 'hidden', height: '100dvh' }}>

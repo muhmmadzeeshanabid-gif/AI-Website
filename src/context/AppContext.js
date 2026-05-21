@@ -182,6 +182,13 @@ export const AppProvider = ({ children }) => {
     setIsTemporary(false);
   }, [activeChatId]);
 
+  // Reset appView to chat when switching active chats
+  useEffect(() => {
+    if (activeChatId) {
+      setAppView('chat');
+    }
+  }, [activeChatId]);
+
   // Reset shared read-only states when starting/switching to a non-shared chat
   useEffect(() => {
     if (!activeChatId) {
@@ -773,6 +780,7 @@ export const AppProvider = ({ children }) => {
       setChats([]);
       setArchivedChatsState([]);
       setActiveChatId(null);
+      setAppView('chat');
       lastSyncedChatsRef.current = {};
       
       // Clear storage
@@ -792,6 +800,7 @@ export const AppProvider = ({ children }) => {
       setArchivedChatsState([]);
       setMessages([]);
       setActiveChatId(null);
+      setAppView('chat');
       setUser(null);
       lastSyncedChatsRef.current = {};
       await signOut(auth);
