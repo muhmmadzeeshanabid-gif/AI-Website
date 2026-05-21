@@ -666,6 +666,25 @@ export default function LibraryView() {
 
   return (
     <div className="w-full flex flex-col select-none" style={{ height: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>
+      <style>{`
+        .grid-card-checkbox,
+        .card-actions-trigger {
+          opacity: 0;
+          transition: opacity 0.15s ease-in-out;
+        }
+        .grid-card:hover .grid-card-checkbox,
+        .grid-card:hover .card-actions-trigger,
+        .grid-card-checkbox:checked {
+          opacity: 1 !important;
+        }
+        .list-actions-trigger {
+          opacity: 0;
+          transition: opacity 0.15s ease-in-out;
+        }
+        .list-row:hover .list-actions-trigger {
+          opacity: 1 !important;
+        }
+      `}</style>
       {/* Hidden file input */}
       <input 
         type="file"
@@ -954,7 +973,7 @@ export default function LibraryView() {
                     <div
                       key={file.id}
                       onClick={() => handleSelectFile(file)}
-                      className="group flex items-center px-4 py-3.5 rounded-xl transition-all cursor-pointer border border-transparent"
+                      className="group list-row flex items-center px-4 py-3.5 rounded-xl transition-all cursor-pointer border border-transparent"
                       style={{
                         backgroundColor: 'transparent',
                       }}
@@ -1039,7 +1058,7 @@ export default function LibraryView() {
                             e.stopPropagation();
                             setActiveDropdownFileId(activeDropdownFileId === file.id ? null : file.id);
                           }}
-                          className="p-2 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                          className="list-actions-trigger p-2 rounded-lg transition-colors"
                           style={{ 
                             color: 'var(--text-secondary)', 
                             backgroundColor: 'transparent',
@@ -1117,7 +1136,7 @@ export default function LibraryView() {
                   <div
                     key={file.id}
                     onClick={() => handleSelectFile(file)}
-                    className="group rounded-2xl overflow-hidden cursor-pointer transition-all flex flex-col border relative"
+                    className="group grid-card rounded-2xl overflow-hidden cursor-pointer transition-all flex flex-col border relative"
                     style={{
                       backgroundColor: 'var(--bg-secondary)',
                       borderColor: 'var(--border-color)',
@@ -1148,7 +1167,7 @@ export default function LibraryView() {
                             setSelectedFileIds(prev => prev.filter(id => id !== file.id));
                           }
                         }}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer opacity-0 group-hover:opacity-100 checked:opacity-100 transition-opacity"
+                        className="grid-card-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                         style={{ 
                           width: '18px', 
                           height: '18px', 
@@ -1168,7 +1187,7 @@ export default function LibraryView() {
                           e.stopPropagation();
                           setActiveDropdownFileId(activeDropdownFileId === file.id ? null : file.id);
                         }}
-                        className="p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100 shadow-md"
+                        className="card-actions-trigger p-1.5 rounded-full shadow-md"
                         style={{ 
                           color: '#ffffff', 
                           backgroundColor: 'rgba(0, 0, 0, 0.5)',
