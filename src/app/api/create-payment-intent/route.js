@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
 export async function POST(request) {
   try {
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      console.error('Missing STRIPE_SECRET_KEY environment variable');
+      return NextResponse.json(
+        { error: 'Payment service is temporarily unavailable.' },
+        { status: 500 }
+      );
+    }
+    const stripe = new Stripe(stripeSecretKey);
     const { amount, planName } = await request.json();
 
     if (amount === 0) {
