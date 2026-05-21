@@ -677,11 +677,14 @@ export default function LibraryView() {
         .grid-card-checkbox:checked {
           opacity: 1 !important;
         }
+        .list-row-checkbox,
         .list-actions-trigger {
           opacity: 0;
           transition: opacity 0.15s ease-in-out;
         }
-        .list-row:hover .list-actions-trigger {
+        .list-row:hover .list-row-checkbox,
+        .list-row:hover .list-actions-trigger,
+        .list-row-checkbox:checked {
           opacity: 1 !important;
         }
       `}</style>
@@ -1001,7 +1004,7 @@ export default function LibraryView() {
                               setSelectedFileIds(prev => prev.filter(id => id !== file.id));
                             }
                           }}
-                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          className="list-row-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                           style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--accent-color)' }}
                         />
                       </div>
