@@ -2113,7 +2113,7 @@ const ChatWindow = () => {
                 <button 
                   onClick={() => {
                     createNewChat();
-                    if (isSidebarOpen) setIsSidebarOpen(false);
+                    if (isMobile && isSidebarOpen) setIsSidebarOpen(false);
                   }}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -2761,7 +2761,7 @@ const ChatWindow = () => {
                   </div>
                 )}
 
-                {isMobile && showLoggedIn && !isTemporary && isInputFocused && (
+                {isMobile && showLoggedIn && !isTemporary && messages.length === 0 && (
                   <div className={`flex flex-col items-start gap-2 mt-0 w-full max-w-3xl mx-auto px-2 mb-4`}>
                     {activeCategory !== 'write' && (
                       <button 

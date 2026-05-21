@@ -98,7 +98,7 @@ function CheckoutForm({ selectedPlan, onCancel, isSuccess, setIsSuccess, isSubmi
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div>
         <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '24px' }}>Payment method</h2>
-        <PaymentElement />
+        <PaymentElement options={{ wallets: { applePay: 'never', googlePay: 'never' } }} />
       </div>
 
       {errorMessage && (
@@ -416,7 +416,8 @@ export default function UpgradePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             amount: isClaimFreeOffer ? 0 : Math.round((priceVal + priceVal * 0.2) * 100), // 0 for free offer, otherwise price + 20% VAT
-            planName: selectedPlan.title
+            planName: selectedPlan.title,
+            currency: selectedCountry.currency.toLowerCase()
           })
         });
         const data = await res.json();

@@ -12,7 +12,7 @@ export async function POST(request) {
       );
     }
     const stripe = new Stripe(stripeSecretKey);
-    const { amount, planName } = await request.json();
+    const { amount, planName, currency } = await request.json();
 
     if (amount === 0) {
       // Create a SetupIntent for free trials/free plans (no charge today)
@@ -30,14 +30,12 @@ export async function POST(request) {
     // Create a PaymentIntent with the order amount and currency
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amount,
-      currency: 'pkr',
+      currency: (currency || 'pkr').toLowerCase(),
       description: `Subscription payment for ${planName}`,
       metadata: {
         planName,
       },
-      automatic_payment_methods: {
-        enabled: true,
-      },
+      payment_method_types: ['card'],
     });
 
     return NextResponse.json({

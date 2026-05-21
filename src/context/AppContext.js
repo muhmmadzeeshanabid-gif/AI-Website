@@ -18,20 +18,56 @@ export const AppProvider = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpenState] = useState(true);
   const [isSidebarInitializing, setIsSidebarInitializing] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [appView, setAppView] = useState('chat');
+  const [resolvedTheme, setResolvedTheme] = useState('dark');
+  const [chats, setChats] = useState([]);
+  const [archivedChats, setArchivedChatsState] = useState([]);
+  const [archivePassword, setArchivePasswordState] = useState('');
+  const [viewingArchivedChat, setViewingArchivedChat] = useState(null);
+  const [user, setUser] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [activeChatId, setActiveChatId] = useState(() => {
+    if (pathname && pathname.startsWith('/c/')) {
+      return pathname.split('/c/')[1] || null;
+    }
+    return null;
+  });
+  const [messages, setMessages] = useState([]);
+  const [isTemporary, setIsTemporary] = useState(false);
+  const [fontSize, setFontSizeState] = useState('Medium');
+  const [chatWidth, setChatWidthState] = useState('Standard');
+  const [lineHeight, setLineHeightState] = useState('Normal');
+  const [aiModel, setAiModelState] = useState('Gemini');
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareChatId, setShareChatId] = useState(null);
+  const [isGroupLinkModalOpen, setIsGroupLinkModalOpen] = useState(false);
+  const [groupLinkChatId, setGroupLinkChatId] = useState(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isGroupChatModalOpen, setIsGroupChatModalOpen] = useState(false);
+  const [groupChatTargetId, setGroupChatTargetId] = useState(null);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [personalization, setPersonalizationState] = useState({
+    baseStyle: 'Default', warm: 'Default', enthusiastic: 'Default',
+    headers: 'Default', emoji: 'Default', fastAnswers: true,
+    customInstructions: '', aboutYou: '', voice: 'Kyra',
+  });
+  const [profile, setProfileState] = useState({
+    displayName: '',
+    username: '',
+    email: '',
+    avatar: null,
+  });
+  const [isSharedReadOnly, setIsSharedReadOnly] = useState(false);
+  const [sharedChatData, setSharedChatData] = useState(null);
+
+  const lastSyncedChatsRef = useRef({});
+  const unsubscribeRef = useRef(null);
 
   const setIsSidebarOpen = (val) => {
     setIsSidebarOpenState(val);
     localStorage.setItem('aura-sidebar-open', JSON.stringify(val));
   };
-  const [appView, setAppView] = useState('chat');
-  const [resolvedTheme, setResolvedTheme] = useState('dark');
-
-  const [chats, setChats] = useState([]);
-
-  // ── Archived Chats ─────────────────────────────────────────────────────────
-  const [archivedChats, setArchivedChatsState] = useState([]);
-
-  const [archivePassword, setArchivePasswordState] = useState('');
 
   const setArchivePassword = (pwd) => {
     setArchivePasswordState(pwd);
@@ -43,6 +79,14 @@ export const AppProvider = ({ children }) => {
     setChats(prev => {
       const chat = prev.find(c => c.id === id);
       if (!chat) return prev;
+
+      // Sync to Firestore if logged in
+      if (user?.uid && !chat.isGroup) {
+        const personalChatRef = doc(db, 'users', user.uid, 'personal_chats', id);
+        setDoc(personalChatRef, { isArchived: true, archivedAt: Date.now() }, { merge: true })
+          .catch(err => console.error("Error archiving chat in Firestore:", err));
+      }
+
       // Already archived? skip
       setArchivedChatsState(a => {
         if (a.find(c => c.id === id)) return a;
@@ -54,13 +98,21 @@ export const AppProvider = ({ children }) => {
       localStorage.setItem('aura-chats', JSON.stringify(filtered));
       return filtered;
     });
-  }, []);
+  }, [user]);
 
   const unarchiveChat = useCallback((id) => {
     setArchivedChatsState(prev => {
       const chat = prev.find(c => c.id === id);
       if (chat) {
         const { archivedAt, ...rest } = chat;
+
+        // Sync to Firestore if logged in
+        if (user?.uid && !chat.isGroup) {
+          const personalChatRef = doc(db, 'users', user.uid, 'personal_chats', id);
+          setDoc(personalChatRef, { isArchived: false, archivedAt: null }, { merge: true })
+            .catch(err => console.error("Error unarchiving chat in Firestore:", err));
+        }
+
         setChats(c => {
           if (c.find(x => x.id === id)) return c; // Avoid duplicate
           const updatedChats = [rest, ...c];
@@ -81,11 +133,9 @@ export const AppProvider = ({ children }) => {
       localStorage.setItem('aura-archived-chats', JSON.stringify(updated));
       return updated;
     });
-  }, []);
+  }, [user]);
 
   // ── View Archived Chat (read-only, no recent save) ──────────────────────
-  const [viewingArchivedChat, setViewingArchivedChat] = useState(null);
-
   const openArchivedChat = useCallback((chat) => {
     setViewingArchivedChat(chat);
   }, []);
@@ -94,47 +144,6 @@ export const AppProvider = ({ children }) => {
     setViewingArchivedChat(null);
   }, []);
   // ──────────────────────────────────────────────────────────────────────────
-
-  const [user, setUser] = useState(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [authOpen, setAuthOpen] = useState(false);
-  const [activeChatId, setActiveChatId] = useState(() => {
-    if (pathname && pathname.startsWith('/c/')) {
-      return pathname.split('/c/')[1] || null;
-    }
-    return null;
-  });
-  const [messages, setMessages] = useState([]);
-  const [isTemporary, setIsTemporary] = useState(false);
-  
-  const [fontSize, setFontSizeState] = useState('Medium');
-  const [chatWidth, setChatWidthState] = useState('Standard');
-  const [lineHeight, setLineHeightState] = useState('Normal');
-  const [aiModel, setAiModelState] = useState('Gemini');
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [shareChatId, setShareChatId] = useState(null);
-  const [isGroupLinkModalOpen, setIsGroupLinkModalOpen] = useState(false);
-  const [groupLinkChatId, setGroupLinkChatId] = useState(null);
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [isGroupChatModalOpen, setIsGroupChatModalOpen] = useState(false);
-  const [groupChatTargetId, setGroupChatTargetId] = useState(null);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-
-  const [personalization, setPersonalizationState] = useState({
-    baseStyle: 'Default', warm: 'Default', enthusiastic: 'Default',
-    headers: 'Default', emoji: 'Default', fastAnswers: true,
-    customInstructions: '', aboutYou: '', voice: 'Kyra',
-  });
-
-  const [profile, setProfileState] = useState({
-    displayName: '',
-    username: '',
-    email: '',
-    avatar: null,
-  });
-
-  const [isSharedReadOnly, setIsSharedReadOnly] = useState(false);
-  const [sharedChatData, setSharedChatData] = useState(null);
 
   const fetchSharedChat = useCallback(async (id) => {
     try {
@@ -187,9 +196,6 @@ export const AppProvider = ({ children }) => {
       setIsSidebarOpen(true);
     }
   }, [pathname]);
-
-  // Firestore listeners cleanup
-  const unsubscribeRef = useRef(null);
 
   const activeChatIsGroup = chats.find(c => c.id === activeChatId)?.isGroup;
   
@@ -551,9 +557,110 @@ export const AppProvider = ({ children }) => {
   }, [theme, chatTheme, accentColor]);
 
 
+  // Fetch personal chats from Firestore upon login using onSnapshot for safe loading
   useEffect(() => {
-    if (!isInitializing) localStorage.setItem('aura-chats', JSON.stringify(chats));
-  }, [chats, isInitializing]);
+    if (user?.uid) {
+      const personalChatsColRef = collection(db, 'users', user.uid, 'personal_chats');
+      const unsubscribe = onSnapshot(personalChatsColRef, (querySnapshot) => {
+        const fetchedChats = [];
+        querySnapshot.forEach((doc) => {
+          fetchedChats.push(doc.data());
+        });
+
+        // Populate lastSyncedRef to avoid redundant writes on load
+        fetchedChats.forEach(chat => {
+          lastSyncedChatsRef.current[chat.id] = {
+            messageCount: chat.messages?.length || 0,
+            title: chat.title || ''
+          };
+        });
+
+        const activePersonalChats = fetchedChats.filter(c => !c.isArchived);
+        const archivedPersonalChats = fetchedChats.filter(c => c.isArchived);
+
+        // Update active chats in state
+        setChats(prev => {
+          // Keep remote groups from Firestore
+          const groupChats = prev.filter(c => c.isGroup);
+          const combined = [...groupChats];
+
+          activePersonalChats.forEach(fc => {
+            const existingIdx = combined.findIndex(c => c.id === fc.id);
+            if (existingIdx === -1) {
+              combined.push(fc);
+            } else {
+              combined[existingIdx] = fc;
+            }
+          });
+
+          combined.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.createdAt || 0);
+            const timeB = new Date(b.timestamp || b.createdAt || 0);
+            return timeB - timeA;
+          });
+
+          localStorage.setItem('aura-chats', JSON.stringify(combined));
+          return combined;
+        });
+
+        // Update archived chats in state
+        setArchivedChatsState(prev => {
+          const combined = [...prev];
+          archivedPersonalChats.forEach(apc => {
+            const existingIdx = combined.findIndex(c => c.id === apc.id);
+            if (existingIdx === -1) {
+              combined.push(apc);
+            } else {
+              combined[existingIdx] = apc;
+            }
+          });
+          localStorage.setItem('aura-archived-chats', JSON.stringify(combined));
+          return combined;
+        });
+
+        // Unsubscribe immediately so it behaves like a one-time fetch
+        unsubscribe();
+      }, (err) => {
+        console.error("Error loading personal chats from Firestore:", err);
+      });
+      return () => unsubscribe();
+    } else {
+      lastSyncedChatsRef.current = {};
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!isInitializing) {
+      localStorage.setItem('aura-chats', JSON.stringify(chats));
+
+      if (user?.uid) {
+        chats.forEach(chat => {
+          if (chat.isGroup || isTemporary || chat.isSharedReadOnly) return;
+
+          const lastSynced = lastSyncedChatsRef.current[chat.id];
+          const currentMessageCount = chat.messages?.length || 0;
+          const currentTitle = chat.title || '';
+
+          if (!lastSynced || lastSynced.messageCount !== currentMessageCount || lastSynced.title !== currentTitle) {
+            lastSyncedChatsRef.current[chat.id] = {
+              messageCount: currentMessageCount,
+              title: currentTitle
+            };
+
+            const personalChatRef = doc(db, 'users', user.uid, 'personal_chats', chat.id);
+            setDoc(personalChatRef, {
+              id: chat.id,
+              title: chat.title || 'New Chat',
+              messages: chat.messages || [],
+              timestamp: chat.timestamp || new Date().toISOString(),
+              createdAt: chat.createdAt || new Date().toISOString(),
+              isArchived: false
+            }, { merge: true }).catch(err => console.error("Error autosaving personal chat to Firestore:", err));
+          }
+        });
+      }
+    }
+  }, [chats, isInitializing, user, isTemporary]);
 
   useEffect(() => {
     if (!isInitializing) {
@@ -638,10 +745,13 @@ export const AppProvider = ({ children }) => {
       // 1. Wipe ALL guest data from memory
       setMessages([]);
       setChats([]);
+      setArchivedChatsState([]);
       setActiveChatId(null);
+      lastSyncedChatsRef.current = {};
       
       // 2. Wipe ALL guest data from browser storage
       localStorage.removeItem('aura-chats');
+      localStorage.removeItem('aura-archived-chats');
       localStorage.removeItem('aura-active-chat-id');
       localStorage.removeItem('aura-messages');
       
@@ -661,12 +771,15 @@ export const AppProvider = ({ children }) => {
       setProfileState({ displayName: '', username: '', email: '', avatar: null });
       setMessages([]);
       setChats([]);
+      setArchivedChatsState([]);
       setActiveChatId(null);
+      lastSyncedChatsRef.current = {};
       
       // Clear storage
       localStorage.removeItem('aura-profile');
       localStorage.removeItem('aura-active-chat-id');
       localStorage.removeItem('aura-chats');
+      localStorage.removeItem('aura-archived-chats');
       localStorage.removeItem('aura-messages');
       
       window.location.href = '/';
@@ -676,9 +789,11 @@ export const AppProvider = ({ children }) => {
     try {
       localStorage.clear();
       setChats([]);
+      setArchivedChatsState([]);
       setMessages([]);
       setActiveChatId(null);
       setUser(null);
+      lastSyncedChatsRef.current = {};
       await signOut(auth);
       window.location.reload();
     } catch (error) { console.error("Delete account failed:", error); }
@@ -729,7 +844,7 @@ export const AppProvider = ({ children }) => {
   }, [pathname, chats, activeChatId, isInitializing, createNewChat, setActiveChatId, setMessages, fetchSharedChat]);
 
   const deleteChat = useCallback(async (id) => {
-    const chatToDelete = chats.find(c => c.id === id);
+    const chatToDelete = chats.find(c => c.id === id) || archivedChats.find(c => c.id === id);
     
     // 1. Handle Firestore removal if it's a group
     if (chatToDelete?.isGroup) {
@@ -749,6 +864,13 @@ export const AppProvider = ({ children }) => {
       } catch (err) {
         console.error("Error deleting/leaving group:", err);
       }
+    } else if (chatToDelete && user?.uid) {
+      // 1.b Handle Firestore removal if it's a personal chat and user is logged in
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'personal_chats', id));
+      } catch (err) {
+        console.error("Error deleting personal chat from Firestore:", err);
+      }
     }
 
     // 2. Local state cleanup
@@ -760,7 +882,13 @@ export const AppProvider = ({ children }) => {
       }
       return updatedChats;
     });
-  }, [activeChatId, chats, profile]);
+
+    setArchivedChatsState(prev => {
+      const updated = prev.filter(chat => chat.id !== id);
+      localStorage.setItem('aura-archived-chats', JSON.stringify(updated));
+      return updated;
+    });
+  }, [activeChatId, chats, archivedChats, profile, user]);
 
   const leaveGroup = useCallback(async (id) => {
     const chatToLeave = chats.find(c => c.id === id);
