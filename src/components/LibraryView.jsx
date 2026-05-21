@@ -1166,7 +1166,8 @@ export default function LibraryView() {
                   >
                     {/* Checkbox overlay (top-left) */}
                     <div 
-                      className="absolute top-3 left-3 z-10" 
+                      className="absolute z-10" 
+                      style={{ top: '16px', left: '16px' }}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <input 
