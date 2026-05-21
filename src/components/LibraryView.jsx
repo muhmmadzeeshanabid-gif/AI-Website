@@ -687,6 +687,14 @@ export default function LibraryView() {
         .list-row-checkbox:checked {
           opacity: 1 !important;
         }
+        .list-header-checkbox {
+          opacity: 0;
+          transition: opacity 0.15s ease-in-out;
+        }
+        .list-header:hover .list-header-checkbox,
+        .list-header-checkbox:checked {
+          opacity: 1 !important;
+        }
       `}</style>
       {/* Hidden file input */}
       <input 
@@ -932,7 +940,7 @@ export default function LibraryView() {
             <div className="w-full flex flex-col">
               {/* Table Header */}
               <div 
-                className="flex items-center px-4 py-2 text-xs font-semibold uppercase tracking-wider mb-2"
+                className="list-header flex items-center px-4 py-2 text-xs font-semibold uppercase tracking-wider mb-2"
                 style={{ 
                   color: 'var(--text-tertiary)',
                   borderBottom: '1px solid var(--border-color)'
@@ -955,7 +963,7 @@ export default function LibraryView() {
                         setSelectedFileIds(prev => prev.filter(id => !filteredIds.has(id)));
                       }
                     }}
-                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    className="list-header-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--accent-color)' }}
                   />
                 </div>
