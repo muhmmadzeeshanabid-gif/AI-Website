@@ -1146,6 +1146,7 @@ export default function LibraryView() {
                 return (
                   <div
                     key={file.id}
+                    title={file.name}
                     onClick={() => handleSelectFile(file)}
                     className="group grid-card rounded-2xl overflow-hidden cursor-pointer transition-all flex flex-col border relative"
                     style={{
@@ -1262,8 +1263,7 @@ export default function LibraryView() {
                       className="relative flex items-center justify-center overflow-hidden"
                       style={{
                         aspectRatio: '1/1',
-                        backgroundColor: 'var(--bg-tertiary)',
-                        borderBottom: '1px solid var(--border-color)'
+                        backgroundColor: 'var(--bg-tertiary)'
                       }}
                     >
                       {isImage && displayUrl ? (
@@ -1275,20 +1275,6 @@ export default function LibraryView() {
                       ) : (
                         <FileText size={40} style={{ color: 'var(--text-tertiary)' }} />
                       )}
-                    </div>
-
-                    {/* Description Box */}
-                    <div className="p-4 flex flex-col gap-1">
-                      <p 
-                        className="text-sm font-medium truncate transition-colors"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {file.name}
-                      </p>
-                      <div className="flex items-center justify-between text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                        <span>{getRelativeDate(file.timestamp)}</span>
-                        <span>{formatSize(file.size)}</span>
-                      </div>
                     </div>
                   </div>
                 );
