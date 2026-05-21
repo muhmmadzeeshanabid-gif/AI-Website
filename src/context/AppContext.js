@@ -173,6 +173,21 @@ export const AppProvider = ({ children }) => {
     setIsTemporary(false);
   }, [activeChatId]);
 
+  // Reset shared read-only states when starting/switching to a non-shared chat
+  useEffect(() => {
+    if (!activeChatId) {
+      setIsSharedReadOnly(false);
+      setSharedChatData(null);
+    }
+  }, [activeChatId]);
+
+  // Force sidebar to be open by default on desktop when opening a shared chat
+  useEffect(() => {
+    if (pathname && pathname.startsWith('/c/') && typeof window !== 'undefined' && window.innerWidth >= 768) {
+      setIsSidebarOpen(true);
+    }
+  }, [pathname]);
+
   // Firestore listeners cleanup
   const unsubscribeRef = useRef(null);
 
@@ -967,8 +982,8 @@ export const AppProvider = ({ children }) => {
       convertToGroupChat,
       joinGroup,
       leaveGroup,
-      isSharedReadOnly,
-      sharedChatData,
+      isSharedReadOnly, setIsSharedReadOnly,
+      sharedChatData, setSharedChatData,
       showLoggedIn: user || (isAuthLoading && typeof window !== 'undefined' && localStorage.getItem('aura-profile')),
     }}>
       {children}

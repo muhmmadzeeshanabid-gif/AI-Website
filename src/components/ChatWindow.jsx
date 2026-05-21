@@ -2007,11 +2007,6 @@ const ChatWindow = () => {
               {isSharedReadOnly ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px' }}>
                   <span style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'Outfit, sans-serif' }}>Shared Chat</span>
-                  {sharedChatData?.sharedByName && (
-                    <span style={{ fontSize: '10px', color: 'var(--on-surface-subtle)', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                      by {sharedChatData.sharedByName}
-                    </span>
-                  )}
                 </div>
               ) : (
                 "Kyra"
@@ -2070,11 +2065,6 @@ const ChatWindow = () => {
           {isSharedReadOnly && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px', flex: 1, textAlign: 'center', margin: '0 8px' }}>
               <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--on-surface)', fontFamily: 'Outfit, sans-serif' }}>Shared Chat</span>
-              {sharedChatData?.sharedByName && (
-                <span style={{ fontSize: '10px', color: 'var(--on-surface-subtle)', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                  by {sharedChatData.sharedByName}
-                </span>
-              )}
             </div>
           )}
 
@@ -2321,11 +2311,6 @@ const ChatWindow = () => {
                 <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--on-surface)', display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'Outfit, sans-serif' }}>
                   <Globe size={16} className="text-on-surface-subtle" /> Shared Conversation
                 </span>
-                {sharedChatData?.sharedByName && (
-                  <span style={{ fontSize: '11.5px', color: 'var(--on-surface-subtle)', fontWeight: 500 }}>
-                    shared by {sharedChatData.sharedByName} {sharedChatData.sharedByEmail ? `(${sharedChatData.sharedByEmail})` : ''}
-                  </span>
-                )}
               </div>
             ) : (
               <div className="relative" ref={groupChatMenuRef}>
@@ -3257,15 +3242,91 @@ const ChatWindow = () => {
 
               const sortedMessages = allMessages.sort((a, b) => getTime(a) - getTime(b));
 
-              return sortedMessages.map((msg, index) => {
-                return (
-                  <React.Fragment key={msg.id}>
-                    <div className={`w-full flex flex-col gap-4 mb-16 group/msg ${msg.role === 'ai' ? 'mt-8' : ''}`}>
-                      {renderMessageView(msg, index)}
+              return (
+                <>
+                  {isSharedReadOnly && sharedChatData?.sharedByName && (
+                    <div 
+                      className="shared-chat-info-card animate-fade-in"
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        padding: '20px',
+                        borderRadius: '24px',
+                        background: resolvedTheme === 'dark' 
+                          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.03) 100%)' 
+                          : 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.02) 100%)',
+                        border: resolvedTheme === 'dark' 
+                          ? '1px solid rgba(255, 255, 255, 0.06)' 
+                          : '1px solid rgba(0, 0, 0, 0.04)',
+                        marginBottom: '32px',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                        boxShadow: resolvedTheme === 'dark'
+                          ? '0 10px 30px -10px rgba(0, 0, 0, 0.3)'
+                          : '0 10px 30px -10px rgba(99, 102, 241, 0.05)',
+                        backdropFilter: 'blur(20px)',
+                      }}
+                    >
+                      <div 
+                        style={{
+                          width: '48px',
+                          height: '48px',
+                          borderRadius: '16px',
+                          background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 8px 16px -4px rgba(99, 102, 241, 0.4)',
+                          color: '#ffffff'
+                        }}
+                      >
+                        <Globe size={22} strokeWidth={2} />
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <h3 
+                          style={{ 
+                            margin: 0, 
+                            fontSize: '16px', 
+                            fontWeight: '600', 
+                            color: 'var(--on-surface)',
+                            fontFamily: 'Outfit, sans-serif'
+                          }}
+                        >
+                          Shared Conversation
+                        </h3>
+                        <p 
+                          style={{ 
+                            margin: 0, 
+                            fontSize: '13.5px', 
+                            color: 'var(--on-surface-subtle)',
+                            lineHeight: '1.5'
+                          }}
+                        >
+                          This conversation was shared by <span style={{ fontWeight: '600', color: 'var(--on-surface)' }}>{sharedChatData.sharedByName}</span>
+                          {sharedChatData.sharedByEmail ? (
+                            <span style={{ fontSize: '12px', color: 'var(--on-surface-muted)', display: 'block', marginTop: '2px' }}>
+                              {sharedChatData.sharedByEmail}
+                            </span>
+                          ) : null}
+                        </p>
+                      </div>
                     </div>
-                  </React.Fragment>
-                );
-              })
+                  )}
+
+                  {sortedMessages.map((msg, index) => {
+                    return (
+                      <React.Fragment key={msg.id}>
+                        <div className={`w-full flex flex-col gap-4 mb-16 group/msg ${msg.role === 'ai' ? 'mt-8' : ''}`}>
+                          {renderMessageView(msg, index)}
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
+                </>
+              );
             })()}
 
             {/* User typing indicators (Aligned inside messages container) */}

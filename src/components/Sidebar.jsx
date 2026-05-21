@@ -25,7 +25,9 @@ const Sidebar = () => {
     groupChatTargetId, setGroupChatTargetId,
     isUpgradeModalOpen, setIsUpgradeModalOpen,
     isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId,
-    leaveGroup
+    leaveGroup,
+    isSharedReadOnly, setIsSharedReadOnly,
+    sharedChatData, setSharedChatData
   } = useAppContext();
   const [mounted, setMounted] = React.useState(false);
 
@@ -205,6 +207,8 @@ const Sidebar = () => {
                 onClick={() => {
                   setActiveChatId(null);
                   setMessages([]);
+                  setIsSharedReadOnly(false);
+                  setSharedChatData(null);
                   closeArchivedChat();
                   setAppView('chat');
                   router.push('/');
@@ -466,6 +470,8 @@ const Sidebar = () => {
               onClick={() => { 
                 setActiveChatId(null); 
                 setMessages([]); 
+                setIsSharedReadOnly(false);
+                setSharedChatData(null);
                 closeArchivedChat(); 
                 setAppView('chat'); 
                 router.push('/'); 
