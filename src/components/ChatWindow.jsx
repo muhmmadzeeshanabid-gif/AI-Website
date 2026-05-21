@@ -2816,106 +2816,101 @@ const ChatWindow = () => {
                 )}
 
                 {isMobile && !showLoggedIn ? (
-                  <div className="w-full px-0 mt-auto">
-                    <div className="w-full relative flex items-center border border-divider shadow-2xl transition-all duration-300" 
-                      style={{ 
-                        background: 'var(--surface-1)', 
-                        borderRadius: '999px', 
-                        padding: '6px 8px 6px 12px',
-                        borderColor: 'var(--divider)',
-                        display: 'flex',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: '8px'
-                      }}>
-                      {/* Left: Plus button */}
+                  <div className="w-full flex items-center gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
+                    <div className="flex-shrink-0">
                       <button 
                         type="button"
-                        className="w-10 h-10 flex items-center justify-center rounded-full transition-all"
+                        className="w-10 h-10 flex items-center justify-center rounded-full transition-all border border-divider shadow-md"
                         style={{ 
-                          color: 'var(--on-surface-muted)',
-                          backgroundColor: 'var(--hover-overlay)',
-                          border: 'none',
-                          flexShrink: 0,
-                          padding: 0
+                          color: 'var(--on-surface)',
+                          background: 'var(--surface-1)',
+                          borderColor: 'var(--divider)'
                         }}
                         onClick={() => setAuthOpen(true)}
                       >
-                        <Plus size={20} />
+                        <Plus size={16} strokeWidth={2.5} />
                       </button>
+                    </div>
 
-                      {/* Center: Input field */}
-                      <form onSubmit={handleSend} style={{ flex: 1, display: 'flex', alignItems: 'center', margin: 0, padding: 0 }}>
-                        <input 
-                          ref={inputRef}
-                          type="text" 
-                          value={input} 
-                          onChange={(e) => setInput(e.target.value)} 
-                          placeholder="Ask Kyra" 
-                          style={{ 
-                            background: 'transparent',
-                            border: 'none',
-                            outline: 'none', 
-                            color: 'var(--on-surface)',
-                            fontSize: '16px',
-                            padding: '8px 4px',
-                            width: '100%'
-                          }}
-                          className="temp-placeholder"
-                        />
+                    <div className="flex-1 flex items-center border border-divider shadow-md transition-all duration-300"
+                      style={{
+                        background: 'var(--surface-1)', 
+                        borderRadius: '24px', 
+                        padding: '4px 4px 4px 14px',
+                        height: '48px',
+                        minHeight: '48px',
+                        borderColor: 'var(--divider)'
+                      }}
+                    >
+                      <form onSubmit={(e) => { e.preventDefault(); setAuthOpen(true); }} className="w-full flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <input 
+                            ref={inputRef}
+                            type="text" 
+                            value={input} 
+                            onChange={(e) => setInput(e.target.value)} 
+                            placeholder="Ask anything..." 
+                            className="w-full bg-transparent border-none outline-none text-[16px] temp-placeholder"
+                            style={{ 
+                              background: 'transparent', border: 'none', outline: 'none', 
+                              color: 'var(--on-surface)', fontSize: 16,
+                              padding: 0,
+                              margin: 0,
+                              height: '40px',
+                              lineHeight: '40px'
+                            }} 
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {!input.trim() && (
+                            <button 
+                              type="button" 
+                              onClick={() => setAuthOpen(true)}
+                              className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                              style={{ 
+                                color: 'var(--on-surface-muted)',
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                              }}
+                            >
+                              <Mic size={16} />
+                            </button>
+                          )}
+
+                          <button 
+                            type="button"
+                            onClick={() => setAuthOpen(true)}
+                            className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                            style={{ 
+                              background: input.trim() ? accentColor : 'var(--hover-overlay-2)',
+                              color: input.trim() ? '#ffffff' : 'var(--on-surface-subtle)',
+                              cursor: 'pointer',
+                              border: 'none',
+                            }}
+                          >
+                            <ArrowUp size={14} strokeWidth={2.5} />
+                          </button>
+                        </div>
                       </form>
-
-                      {/* Right: Mic and Send buttons */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                        <button 
-                          type="button" 
-                          onClick={() => setAuthOpen(true)} 
-                          className="w-10 h-10 flex items-center justify-center rounded-full transition-all"
-                          style={{ 
-                            color: 'var(--on-surface-muted)',
-                            background: 'transparent',
-                            border: 'none',
-                            padding: 0
-                          }}
-                        >
-                          <Mic size={20} />
-                        </button>
-
-                        <button 
-                          onClick={(e) => {
-                            if (!input.trim()) return;
-                            handleSend(e);
-                          }}
-                          className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300"
-                          style={{ 
-                            background: input.trim() ? accentColor : 'var(--hover-overlay-2)',
-                            color: input.trim() ? '#ffffff' : 'var(--on-surface-subtle)',
-                            cursor: input.trim() ? 'pointer' : 'not-allowed',
-                            border: 'none',
-                            padding: 0
-                          }}
-                        >
-                          <ArrowUp size={20} strokeWidth={2.5} />
-                        </button>
-                      </div>
                     </div>
                   </div>
                 ) : (
                   <div className={`w-full ${isMobile ? 'mt-auto' : 'max-w-[840px] relative group'} px-0`}>
                     {isMobile ? (
-                      <div className="w-full flex items-end gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
+                      <div className="w-full flex items-center gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
                         <div className="flex-shrink-0" ref={attachmentRefLanding}>
                           <button 
                             type="button"
-                            className="w-11 h-11 flex items-center justify-center rounded-full transition-all border border-divider shadow-md"
+                            className="w-10 h-10 flex items-center justify-center rounded-full transition-all border border-divider shadow-md"
                             style={{ 
-                              color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                              color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
                               background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
                               borderColor: 'var(--divider)'
                             }}
                             onClick={(e) => { e.stopPropagation(); setShowAttachmentMenuLanding(!showAttachmentMenuLanding); }}
                           >
-                            <Plus size={22} />
+                            <Plus size={16} strokeWidth={2.5} />
                           </button>
                           <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
                         </div>
@@ -2924,36 +2919,31 @@ const ChatWindow = () => {
                           style={{
                             background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
                             borderRadius: '24px', 
-                            padding: '4px 6px 4px 14px',
-                            minHeight: '44px',
+                            padding: '4px 4px 4px 14px',
+                            height: '48px',
+                            minHeight: '48px',
                             borderColor: 'var(--divider)'
                           }}
                         >
                           <form onSubmit={handleSend} className="w-full flex items-center gap-2">
                             {isListening && isVoiceMessageMode ? (
                               <div className="flex-1 flex items-center pr-1 h-10 animate-in fade-in duration-200">
-                                <div className="flex-1 flex items-center h-full" style={{ gap: 3, padding: '0 8px' }}>
-                                  {Array(18).fill(0).map((_, i) => (
-                                    <div 
-                                      key={i} 
-                                      ref={el => { if(el) audioBarsRef.current[i] = el; }}
-                                      style={{
-                                        width: 2.5,
-                                        borderRadius: 4,
-                                        background: 'var(--on-surface)',
-                                        height: '3px',
-                                        flexShrink: 0,
-                                        transition: 'height 0.08s ease',
-                                      }}
-                                    />
-                                  ))}
+                                <div className="flex-1 flex items-center h-full mr-2 relative overflow-hidden">
+                                  <div className="absolute inset-0 flex items-center pr-[60px] z-10 pointer-events-none">
+                                    <span className="text-[14px] font-medium truncate animate-pulse" style={{ color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' }}>
+                                      {input || "Listening..."}
+                                    </span>
+                                  </div>
+                                  <div className="absolute inset-0 flex items-center">
+                                    <div className="w-[200%] h-[2px] opacity-40 animate-slide-left" style={{ backgroundImage: 'repeating-linear-gradient(to right, var(--on-surface-muted) 0, var(--on-surface-muted) 4px, transparent 4px, transparent 8px)' }}></div>
+                                  </div>
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <button 
                                     type="button" 
-                                    onClick={() => { toggleListening(); setInput(''); }}
+                                    onClick={cancelListening}
                                     className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
-                                    style={{ background: 'var(--hover-overlay)', color: 'var(--on-surface-muted)' }}
+                                    style={{ color: 'var(--on-surface-muted)' }}
                                   >
                                     <X size={16} strokeWidth={2.5} />
                                   </button>
@@ -2982,30 +2972,49 @@ const ChatWindow = () => {
                                     onFocus={() => setIsInputFocused(true)}
                                     onBlur={() => setIsInputFocused(false)}
                                     placeholder={isSendDisabled ? "Please wait..." : (isLoading ? "Thinking..." : "Ask anything...")} 
-                                    className="w-full bg-transparent border-none outline-none text-[16px] py-2 temp-placeholder"
+                                    className="w-full bg-transparent border-none outline-none text-[16px] temp-placeholder"
                                     style={{ 
                                       background: 'transparent', border: 'none', outline: 'none', 
-                                      color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' 
+                                      color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16,
+                                      padding: 0,
+                                      margin: 0,
+                                      height: '40px',
+                                      lineHeight: '40px'
                                     }}
                                   />
                                 </div>
 
-                                <div className="flex items-center gap-1.5 flex-shrink-0">
-                                  <button 
-                                    type="button" 
-                                    onClick={() => {
-                                      setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening();
-                                    }}
-                                    className="w-9 h-9 rounded-full flex items-center justify-center transition-all bg-hover-overlay"
-                                    style={{ 
-                                      color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                                    }}
-                                  >
-                                    <Mic size={16} />
-                                  </button>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {!input.trim() && (
+                                    <button 
+                                      type="button" 
+                                      onClick={() => {
+                                        setInput('');
+                                        setIsVoiceMessageMode(true);
+                                        toggleListening();
+                                      }}
+                                      className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                                      style={{ 
+                                        color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                                        backgroundColor: 'transparent',
+                                        border: 'none',
+                                      }}
+                                    >
+                                      {isListening ? <Square size={12} fill="currentColor" /> : <Mic size={16} />}
+                                    </button>
+                                  )}
 
                                   {isLoading ? (
-                                    <button onClick={handleStop} type="button" className="w-9 h-9 rounded-full flex items-center justify-center bg-hover-overlay text-on-surface">
+                                    <button 
+                                      onClick={handleStop} 
+                                      type="button" 
+                                      className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                                      style={{
+                                        backgroundColor: 'var(--hover-overlay-2)',
+                                        color: 'var(--on-surface)',
+                                        border: 'none',
+                                      }}
+                                    >
                                       <Square size={12} fill="currentColor" />
                                     </button>
                                   ) : (
@@ -3023,20 +3032,21 @@ const ChatWindow = () => {
                                             recognitionRef.current?.stop();
                                           } else {
                                             setInput('');
-                                            setIsVoiceMessageMode(true); voiceModeRef.current = true;
+                                            setIsVoiceMessageMode(true);
                                             toggleListening();
                                           }
                                         }
                                       }}
-                                      className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
+                                      className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
                                       style={{ 
                                         background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor,
                                         color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff',
                                         cursor: isSendDisabled ? 'not-allowed' : 'pointer',
-                                        opacity: isSendDisabled ? 0.6 : 1
+                                        opacity: isSendDisabled ? 0.6 : 1,
+                                        border: 'none',
                                       }}
                                     >
-                                      {input.trim() ? <ArrowUp size={18} strokeWidth={2.5} /> : <AudioLines size={18} strokeWidth={2.5} />}
+                                      {input.trim() ? <ArrowUp size={14} strokeWidth={2.5} /> : <AudioLines size={14} strokeWidth={2.5} />}
                                     </button>
                                   )}
                                 </div>
@@ -3191,10 +3201,17 @@ const ChatWindow = () => {
                                 
                                 <div className="flex items-center gap-2 pr-1 ml-auto flex-shrink-0">
                                   <div className="relative group/tooltip flex items-center justify-center">
-                                    <button type="button" onClick={() => { setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening(); }} className="w-10 h-10 flex items-center justify-center transition-all duration-300 rounded-full bg-hover-overlay"
-                                      style={{ color: 'var(--on-surface-muted)' }}
+                                    <button 
+                                      type="button" 
+                                      onClick={() => { setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening(); }} 
+                                      className="w-10 h-10 flex items-center justify-center transition-all duration-300 rounded-full"
+                                      style={{ 
+                                        color: 'var(--on-surface-muted)',
+                                        backgroundColor: 'transparent',
+                                        border: 'none'
+                                      }}
                                     >
-                                      <Mic size={20} />
+                                      <Mic size={18} />
                                     </button>
                                     <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
                                       Voice
@@ -3601,19 +3618,19 @@ const ChatWindow = () => {
               </div>
             ) : (
               isMobile ? (
-                <div className="w-full flex items-end gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
+                <div className="w-full flex items-center gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
                   <div className="flex-shrink-0" ref={attachmentRefFooter}>
                     <button 
                       type="button"
-                      className="w-11 h-11 flex items-center justify-center rounded-full transition-all border border-divider shadow-md"
+                      className="w-10 h-10 flex items-center justify-center rounded-full transition-all border border-divider shadow-md"
                       style={{ 
-                        color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                        color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
                         background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)',
                         borderColor: 'var(--divider)'
                       }}
                       onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }}
                     >
-                      <Plus size={22} />
+                      <Plus size={16} strokeWidth={2.5} />
                     </button>
                     <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
                   </div>
@@ -3622,8 +3639,9 @@ const ChatWindow = () => {
                     style={{
                       background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
                       borderRadius: replyingToMsg ? '0 0 24px 24px' : '24px', 
-                      padding: '4px 8px 4px 14px',
-                      minHeight: '44px',
+                      padding: '4px 4px 4px 14px',
+                      height: '48px',
+                      minHeight: '48px',
                       borderColor: 'var(--divider)'
                     }}
                   >
@@ -3674,63 +3692,88 @@ const ChatWindow = () => {
                               onFocus={() => setIsInputFocused(true)}
                               onBlur={() => setIsInputFocused(false)}
                               placeholder={isSendDisabled ? "Please wait..." : (isLoading ? "Thinking..." : "Ask anything...")} 
-                              className="w-full bg-transparent border-none outline-none text-[16px] py-2 temp-placeholder"
+                              className="w-full bg-transparent border-none outline-none text-[16px] temp-placeholder"
                               style={{ 
                                 background: 'transparent', border: 'none', outline: 'none', 
-                                color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16
+                                color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16,
+                                padding: 0,
+                                margin: 0,
+                                height: '40px',
+                                lineHeight: '40px'
                               }} 
                             />
                           </div>
 
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <div className="flex items-center gap-1 flex-shrink-0">
                             {isLoading ? (
                               <button 
                                 onClick={handleStop} 
                                 type="button" 
-                                className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
+                                className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
                                 style={{
                                   backgroundColor: 'var(--hover-overlay-2)',
                                   color: 'var(--on-surface)',
-                                  border: '1px solid var(--divider)',
+                                  border: 'none',
                                 }}
                               >
                                 <Square size={12} fill="currentColor" />
                               </button>
-                            ) : input.trim() ? (
-                              <button 
-                                type="submit"
-                                disabled={isSendDisabled}
-                                className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
-                                style={{ 
-                                  background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor,
-                                  color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff',
-                                  cursor: isSendDisabled ? 'not-allowed' : 'pointer',
-                                  opacity: isSendDisabled ? 0.6 : 1
-                                }}
-                              >
-                                <ArrowUp size={18} strokeWidth={2.5} />
-                              </button>
                             ) : (
-                              <button 
-                                type="button" 
-                                onClick={() => {
-                                  if (isListening) {
-                                    recognitionRef.current?.stop();
-                                  } else {
-                                    setInput('');
-                                    setIsVoiceMessageMode(true);
-                                    toggleListening();
-                                  }
-                                }}
-                                className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
-                                style={{ 
-                                  color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                                  backgroundColor: isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)') : 'var(--hover-overlay-2)',
-                                  border: '1px solid var(--divider)',
-                                }}
-                              >
-                                {isListening ? <Square size={12} fill="currentColor" /> : <Mic size={16} />}
-                              </button>
+                              <>
+                                {!input.trim() && (
+                                  <button 
+                                    type="button" 
+                                    onClick={() => {
+                                      if (isListening) {
+                                        recognitionRef.current?.stop();
+                                      } else {
+                                        setInput('');
+                                        setIsVoiceMessageMode(true);
+                                        toggleListening();
+                                      }
+                                    }}
+                                    className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                                    style={{ 
+                                      color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                                      backgroundColor: 'transparent',
+                                      border: 'none',
+                                    }}
+                                  >
+                                    {isListening ? <Square size={12} fill="currentColor" /> : <Mic size={16} />}
+                                  </button>
+                                )}
+
+                                <button 
+                                  type={input.trim() ? "submit" : "button"}
+                                  disabled={isSendDisabled}
+                                  onClick={(e) => {
+                                    if (isSendDisabled) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    if (!input.trim()) {
+                                      e.preventDefault();
+                                      if (isListening && isVoiceMessageMode) {
+                                        recognitionRef.current?.stop();
+                                      } else {
+                                        setInput('');
+                                        setIsVoiceMessageMode(true);
+                                        toggleListening();
+                                      }
+                                    }
+                                  }}
+                                  className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                                  style={{ 
+                                    background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor,
+                                    color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff',
+                                    cursor: isSendDisabled ? 'not-allowed' : 'pointer',
+                                    opacity: isSendDisabled ? 0.6 : 1,
+                                    border: 'none',
+                                  }}
+                                >
+                                  {input.trim() ? <ArrowUp size={14} strokeWidth={2.5} /> : <AudioLines size={14} strokeWidth={2.5} />}
+                                </button>
+                              </>
                             )}
                           </div>
                         </>
@@ -3907,8 +3950,8 @@ const ChatWindow = () => {
                                 className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
                                 style={{ 
                                   color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                                  backgroundColor: isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)') : 'var(--hover-overlay-2)',
-                                  border: '1px solid var(--divider)',
+                                  backgroundColor: 'transparent',
+                                  border: 'none',
                                 }}
                               >
                                 {isListening ? <Square size={14} fill="currentColor" /> : <Mic size={18} />}
