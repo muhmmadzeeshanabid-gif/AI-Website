@@ -539,7 +539,7 @@ export default function LibraryView() {
         >
           <form 
             onSubmit={handleSendPreviewMessage}
-            className="w-full max-w-[640px] relative flex items-center rounded-full border"
+            className="w-full max-w-[440px] relative flex items-center rounded-full border"
             style={{
               backgroundColor: 'rgba(255, 255, 255, 0.04)',
               borderColor: 'rgba(255, 255, 255, 0.08)',
