@@ -13,7 +13,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { getGeminiResponse } from '@/utils/gemini';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, arrayUnion, onSnapshot, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, onSnapshot, getDoc, setDoc } from 'firebase/firestore';
 import AuthModal from './AuthModal';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -407,12 +407,18 @@ const ChatWindow = () => {
     profile, showLoggedIn, personalization, accentColor,
     deleteChat, archiveChat, aiModel, setAiModel, renameChat,
     isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId,
-    leaveGroup, isTemporary, setIsTemporary
+    leaveGroup, isTemporary, setIsTemporary,
+    isSharedReadOnly, sharedChatData
   } = useAppContext();
 
   const [mounted, setMounted] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null, name: '' });
   const [input, setInput] = useState('');
+  const [globalToast, setGlobalToast] = useState('');
+  const showGlobalToast = (msg) => {
+    setGlobalToast(msg);
+    setTimeout(() => setGlobalToast(''), 2500);
+  };
   const [greeting, setGreeting] = useState("What's on your mind?");
   const [hoveredChip, setHoveredChip] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -1033,8 +1039,14 @@ const ChatWindow = () => {
 
       {!msg.isVoice && (
         <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? ((generatingId === msg.id || msg.isPlaceholder) ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
-         <div className={`flex gap-1 ${!isMe && isOtherUser ? 'ml-[44px]' : ''}`}>
-          {chats.find(c => c.id === activeChatId)?.isGroup ? (
+         <div className={`flex flex-wrap gap-1 ${!isMe && isOtherUser ? 'ml-[44px]' : ''}`}>
+          {isSharedReadOnly ? (
+            <ActionButton 
+              onClick={() => handleCopy(msg.content, msg.id)} 
+              label={copyingId === msg.id ? "Copied" : "Copy"} 
+              icon={copyingId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />} 
+            />
+          ) : chats.find(c => c.id === activeChatId)?.isGroup ? (
             msg.role === 'ai' ? (
             <>
               <div className="relative">
@@ -1234,10 +1246,11 @@ const ChatWindow = () => {
                       initial={{ opacity: 0, scale: 0.95, y: 15 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                      className="absolute right-0"
+                      className="absolute"
                       style={{
                         bottom: "calc(100% + 6px)",
                         top: "auto", 
+                        right: isMobile ? '8px' : '0',
                         minWidth: '210px',
                         background: 'var(--surface-1)',
                         border: '1px solid var(--divider)',
@@ -1437,6 +1450,31 @@ const ChatWindow = () => {
 
   const handleRate = (id, rating) => {
     setRatings(prev => prev[id] === rating ? { ...prev, [id]: undefined } : { ...prev, [id]: rating });
+  };
+
+  const handleBranchChat = (msgId) => {
+    const msgIndex = messages.findIndex(m => m.id === msgId);
+    if (msgIndex === -1) return;
+    
+    // Slice messages up to the clicked message (inclusive)
+    const branchedMessages = messages.slice(0, msgIndex + 1);
+    
+    // Create new chat ID
+    const newChatId = Date.now().toString();
+    
+    const newChatObj = {
+      id: newChatId,
+      title: (currentChatForSend?.title || 'Branched Chat') + ' (Branch)',
+      messages: branchedMessages,
+      createdAt: new Date().toISOString(),
+      accentColor: accentColor || 'var(--accent-color)',
+      chatTheme: chatTheme || 'classic'
+    };
+    
+    setChats(prev => [newChatObj, ...prev]);
+    setActiveChatId(newChatId);
+    setMessages(branchedMessages);
+    setIsTemporary(false);
   };
 
   const abortControllerRef = useRef(null);
@@ -1908,6 +1946,7 @@ const ChatWindow = () => {
         isOpen={isGroupLinkModalOpen} 
         onClose={() => setIsGroupLinkModalOpen(false)} 
         chatId={groupLinkChatId} 
+        showGlobalToast={showGlobalToast}
       />
       <ReportModal 
         isOpen={isReportModalOpen} 
@@ -1962,9 +2001,21 @@ const ChatWindow = () => {
               fontSize: '18px',
               fontWeight: '600',
               color: 'var(--on-surface)',
-              fontFamily: 'inherit'
+              fontFamily: 'inherit',
+              textAlign: 'center'
             }}>
-              Kyra
+              {isSharedReadOnly ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'Outfit, sans-serif' }}>Shared Chat</span>
+                  {sharedChatData?.sharedByName && (
+                    <span style={{ fontSize: '10px', color: 'var(--on-surface-subtle)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                      by {sharedChatData.sharedByName}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                "Kyra"
+              )}
             </div>
 
             {/* Right: Log In Button */}
@@ -2015,6 +2066,17 @@ const ChatWindow = () => {
               </svg>
             )}
           </button>
+
+          {isSharedReadOnly && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px', flex: 1, textAlign: 'center', margin: '0 8px' }}>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--on-surface)', fontFamily: 'Outfit, sans-serif' }}>Shared Chat</span>
+              {sharedChatData?.sharedByName && (
+                <span style={{ fontSize: '10px', color: 'var(--on-surface-subtle)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                  by {sharedChatData.sharedByName}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Right side buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2254,106 +2316,119 @@ const ChatWindow = () => {
                   </svg>
                 )}
               </button>
-            <div className="relative" ref={groupChatMenuRef}>
-              <button 
-                onClick={() => setIsGroupChatMenuOpen(!isGroupChatMenuOpen)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', cursor: 'pointer',
-                  padding: '8px 4px', borderRadius: 12, color: 'var(--on-surface)',
-                  visibility: isSidebarOpen && isMobile ? 'hidden' : 'visible',
-                  transition: 'background 0.15s'
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                {isTemporary ? (
-                  <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px', color: 'var(--on-surface)' }}>Temporary Chat</span>
-                ) : chats.find(c => c.id === activeChatId)?.isGroup ? (
-                  <>
-                    <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: '-0.2px' }}>
-                      {chats.find(c => c.id === activeChatId)?.title || 'Group Chat'}
-                    </span>
-                    <ChevronDown size={15} style={{ color: 'var(--on-surface-muted)', marginTop: 1 }} />
-                  </>
-                ) : (
-                  <>
-                    <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>Kyra</span>
-                    <ChevronDown size={15} style={{ color: 'var(--on-surface-muted)', marginTop: 1 }} />
-                  </>
+            {isSharedReadOnly ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px', padding: '4px 8px' }}>
+                <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--on-surface)', display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'Outfit, sans-serif' }}>
+                  <Globe size={16} className="text-on-surface-subtle" /> Shared Conversation
+                </span>
+                {sharedChatData?.sharedByName && (
+                  <span style={{ fontSize: '11.5px', color: 'var(--on-surface-subtle)', fontWeight: 500 }}>
+                    shared by {sharedChatData.sharedByName} {sharedChatData.sharedByEmail ? `(${sharedChatData.sharedByEmail})` : ''}
+                  </span>
                 )}
-              </button>
+              </div>
+            ) : (
+              <div className="relative" ref={groupChatMenuRef}>
+                <button 
+                  onClick={() => setIsGroupChatMenuOpen(!isGroupChatMenuOpen)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', cursor: 'pointer',
+                    padding: '8px 4px', borderRadius: 12, color: 'var(--on-surface)',
+                    visibility: isSidebarOpen && isMobile ? 'hidden' : 'visible',
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  {isTemporary ? (
+                    <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px', color: 'var(--on-surface)' }}>Temporary Chat</span>
+                  ) : chats.find(c => c.id === activeChatId)?.isGroup ? (
+                    <>
+                      <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: '-0.2px' }}>
+                        {chats.find(c => c.id === activeChatId)?.title || 'Group Chat'}
+                      </span>
+                      <ChevronDown size={15} style={{ color: 'var(--on-surface-muted)', marginTop: 1 }} />
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>Kyra</span>
+                      <ChevronDown size={15} style={{ color: 'var(--on-surface-muted)', marginTop: 1 }} />
+                    </>
+                  )}
+                </button>
 
-              <AnimatePresence>
-                {isGroupChatMenuOpen && chats.find(c => c.id === activeChatId)?.isGroup && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    transition={{ duration: 0.2 }}
-                    style={{
-                      position: 'absolute', top: '100%', left: 0, marginTop: 8,
-                      width: 240, background: 'var(--surface-1)', borderRadius: 18,
-                      border: '1px solid var(--divider)', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-                      padding: 6, zIndex: 100, overflow: 'hidden'
-                    }}
-                  >
-                    <button 
-                      onClick={() => { setIsPeopleModalOpen(true); setIsGroupChatMenuOpen(false); }}
-                      className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                <AnimatePresence>
+                  {isGroupChatMenuOpen && chats.find(c => c.id === activeChatId)?.isGroup && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                      transition={{ duration: 0.2 }}
+                      style={{
+                        position: 'absolute', top: '100%', left: 0, marginTop: 8,
+                        width: 240, background: 'var(--surface-1)', borderRadius: 18,
+                        border: '1px solid var(--divider)', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                        padding: 6, zIndex: 100, overflow: 'hidden'
+                      }}
                     >
-                      <UserPlus size={18} className="text-on-surface-muted" />
-                      <span className="text-[14px] font-medium text-on-surface">People</span>
-                    </button>
-                    {chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid && (
                       <button 
-                        onClick={() => { setGroupLinkChatId(activeChatId); setIsGroupLinkModalOpen(true); setIsGroupChatMenuOpen(false); }}
+                        onClick={() => { setIsPeopleModalOpen(true); setIsGroupChatMenuOpen(false); }}
                         className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
                       >
-                        <Paperclip size={18} className="text-on-surface-muted" />
-                        <span className="text-[14px] font-medium text-on-surface">Manage group link</span>
+                        <UserPlus size={18} className="text-on-surface-muted" />
+                        <span className="text-[14px] font-medium text-on-surface">People</span>
                       </button>
-                    )}
-                    <button className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
-                      <Edit2 size={18} className="text-on-surface-muted" />
-                      <span className="text-[14px] font-medium text-on-surface" onClick={() => { 
-                        const chat = chats.find(c => c.id === activeChatId);
-                        setTempGroupName(chat?.title || '');
-                        setIsRenameModalOpen(true); 
-                        setIsGroupChatMenuOpen(false); 
-                      }}>Rename group</span>
-                    </button>
-                    <button className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
-                      <Settings size={18} className="text-on-surface-muted" />
-                      <span className="text-[14px] font-medium text-on-surface">Customized Kyra</span>
-                    </button>
-                    <button 
-                      className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
-                      onClick={() => { setIsReportModalOpen(true); setIsGroupChatMenuOpen(false); }}
-                    >
-                      <AlertTriangle size={18} style={{ color: '#ef4444' }} />
-                      <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Report</span>
-                    </button>
-                    {chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid ? (
+                      {chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid && (
+                        <button 
+                          onClick={() => { setGroupLinkChatId(activeChatId); setIsGroupLinkModalOpen(true); setIsGroupChatMenuOpen(false); }}
+                          className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                        >
+                          <Paperclip size={18} className="text-on-surface-muted" />
+                          <span className="text-[14px] font-medium text-on-surface">Manage group link</span>
+                        </button>
+                      )}
+                      <button className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
+                        <Edit2 size={18} className="text-on-surface-muted" />
+                        <span className="text-[14px] font-medium text-on-surface" onClick={() => { 
+                          const chat = chats.find(c => c.id === activeChatId);
+                          setTempGroupName(chat?.title || '');
+                          setIsRenameModalOpen(true); 
+                          setIsGroupChatMenuOpen(false); 
+                        }}>Rename group</span>
+                      </button>
+                      <button className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
+                        <Settings size={18} className="text-on-surface-muted" />
+                        <span className="text-[14px] font-medium text-on-surface">Customized Kyra</span>
+                      </button>
                       <button 
                         className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
-                        onClick={() => { setIsDeleteConfirmOpen(true); setIsGroupChatMenuOpen(false); }}
+                        onClick={() => { setIsReportModalOpen(true); setIsGroupChatMenuOpen(false); }}
                       >
-                        <Trash2 size={18} style={{ color: '#ef4444' }} />
-                        <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Delete group</span>
+                        <AlertTriangle size={18} style={{ color: '#ef4444' }} />
+                        <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Report</span>
                       </button>
-                    ) : (
-                      <button 
-                        className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
-                        onClick={() => { setIsExitConfirmOpen(true); setIsGroupChatMenuOpen(false); }}
-                      >
-                        <LogOut size={18} style={{ color: '#ef4444' }} />
-                        <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Exit group</span>
-                      </button>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                      {chats.find(c => c.id === activeChatId)?.creator?.uid === profile?.uid ? (
+                        <button 
+                          className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                          onClick={() => { setIsDeleteConfirmOpen(true); setIsGroupChatMenuOpen(false); }}
+                        >
+                          <Trash2 size={18} style={{ color: '#ef4444' }} />
+                          <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Delete group</span>
+                        </button>
+                      ) : (
+                        <button 
+                          className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                          onClick={() => { setIsExitConfirmOpen(true); setIsGroupChatMenuOpen(false); }}
+                        >
+                          <LogOut size={18} style={{ color: '#ef4444' }} />
+                          <span className="text-[14px] font-medium" style={{ color: '#ef4444' }}>Exit group</span>
+                        </button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {chats.find(c => c.id === activeChatId)?.isGroup ? (
@@ -3366,256 +3441,266 @@ const ChatWindow = () => {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className={`w-full relative flex ${isMobile ? 'flex-col gap-2' : 'items-center'} transition-all duration-300`}
-              style={{ 
-              width: '100%', 
-              background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
-              borderRadius: replyingToMsg ? (isMobile ? '0 0 24px 24px' : '0 0 26px 26px') : (isMobile ? '24px' : '26px'), 
-              padding: isMobile ? '8px 8px' : '4px 6px 4px 16px', border: '1px solid var(--divider)',
-              borderTop: replyingToMsg ? 'none' : '1px solid var(--divider)',
-              transition: 'all 0.3s ease'
-            }}>                
-                {!isMobile && (
-                  <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefFooter}>
-                    <button 
-                      type="button"
-                      onMouseEnter={() => setHoveredPlus(true)} 
-                      onMouseLeave={() => setHoveredPlus(false)} 
-                      onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }} 
-                      className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
-                      style={{
-                        color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                        backgroundColor: hoveredPlus ? (isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)') : 'transparent'
-                      }}
-                    >
-                      <Plus size={20} />
-                    </button>
-                    <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                      Attach
+            {isSharedReadOnly ? null : (
+              <div className={`w-full relative flex ${isMobile ? 'flex-col gap-2' : 'items-center'} transition-all duration-300`}
+                style={{ 
+                width: '100%', 
+                background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
+                borderRadius: replyingToMsg ? (isMobile ? '0 0 24px 24px' : '0 0 26px 26px') : (isMobile ? '24px' : '26px'), 
+                padding: isMobile ? '8px 8px' : '4px 6px 4px 16px', border: '1px solid var(--divider)',
+                borderTop: replyingToMsg ? 'none' : '1px solid var(--divider)',
+                transition: 'all 0.3s ease'
+              }}>                
+                  {!isMobile && (
+                    <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefFooter}>
+                      <button 
+                        type="button"
+                        onMouseEnter={() => setHoveredPlus(true)} 
+                        onMouseLeave={() => setHoveredPlus(false)} 
+                        onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }} 
+                        className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
+                        style={{
+                          color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                          backgroundColor: hoveredPlus ? (isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)') : 'transparent'
+                        }}
+                      >
+                        <Plus size={20} />
+                      </button>
+                      <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                        Attach
+                      </div>
+                      <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
                     </div>
-                    <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
-                  </div>
-                )}
+                  )}
 
-              <form onSubmit={handleSend} className={`w-full flex ${isMobile ? 'flex-col gap-2' : 'flex-1 items-center gap-3'}`} style={{ flex: isMobile ? 'none' : 1 }}>
-                {isListening && isVoiceMessageMode ? (
-                  <div className="flex-1 flex items-center pr-1 pl-4 h-[48px] animate-in fade-in duration-200">
-                     <div className="flex-1 flex items-center h-full mr-4 relative overflow-hidden">
-                        <div className="absolute inset-0 flex items-center pr-[120px] z-10 pointer-events-none">
-                          <span className="text-[15px] font-medium truncate" style={{ color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' }}>
-                            {input || "Listening..."}
-                          </span>
-                        </div>
-                        <div className="absolute inset-0 flex items-center">
-                          <div className="w-[200%] h-[2px] opacity-40 animate-slide-left" style={{ backgroundImage: 'repeating-linear-gradient(to right, var(--on-surface-muted) 0, var(--on-surface-muted) 4px, transparent 4px, transparent 8px)' }}></div>
-                        </div>
-                        <div className="absolute right-0 flex items-center gap-[3px] pl-4 pr-2 h-full" style={{ background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)' }}>
-                          {Array(15).fill(0).map((_, i) => (
-                            <div 
-                              key={i} 
-                              ref={el => { if(el) audioBarsRef.current[i] = el; }}
-                              className="w-[3px] rounded-full transition-all duration-75" 
-                              style={{ background: 'var(--on-surface)', height: '4px' }}
-                            ></div>
-                          ))}
-                        </div>
-                     </div>
-                     <div className="flex items-center gap-2">
-                        <button 
-                          type="button" 
-                          onClick={() => { toggleListening(); setInput(''); }}
-                          className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
-                          style={{ background: 'var(--hover-overlay)', color: 'var(--on-surface-muted)' }}
-                          onMouseEnter={e => { e.currentTarget.style.color = 'var(--on-surface)'; e.currentTarget.style.background = 'var(--hover-overlay-2)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.color = 'var(--on-surface-muted)'; e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                        >
-                          <X size={18} strokeWidth={2.5} />
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={(e) => { const currentInput = input; toggleListening(); handleSend(e, currentInput || "Voice message", true); }}
-                          className="w-10 h-10 rounded-full flex items-center justify-center transition-all border-2"
-                          style={{ 
-                            borderColor: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
-                            color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
-                            background: 'transparent'
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent' } }
-                        >
-                          <Check size={18} strokeWidth={3} />
-                        </button>
-                     </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className={`w-full ${isMobile ? 'pt-1 px-3' : 'flex-1'}`}>
-                      <input 
-                        ref={footerInputRef}
-                        type="text" 
-                        value={input} 
-                        onChange={(e) => { const val = e.target.value; setInput(val); if(val.endsWith('/')) setShowAttachmentMenu(true); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
-                        placeholder={isSendDisabled ? "Please wait for response to complete..." : (isLoading ? "Kyra is thinking..." : "Ask anything...")} 
-                        className={`w-full bg-transparent border-none outline-none ${isMobile ? 'text-[16px] py-2' : 'temp-placeholder'}`}
-                        style={{ 
-                          background: 'transparent', border: 'none', outline: 'none', 
-                          color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16, padding: isMobile ? '0' : (isSmallMobile ? '12px 8px' : '12px 14px')
-                        }} 
-                      />
-                    </div>
-                    
-                    <div className={`flex items-center ${isMobile ? 'justify-between w-full' : 'gap-3 ml-auto flex-shrink-0'}`}>
-                      
-                      {isMobile && (
-                        <div className="relative group/tooltip flex items-center justify-center pl-1" ref={attachmentRefFooter}>
+                <form onSubmit={handleSend} className={`w-full flex ${isMobile ? 'flex-col gap-2' : 'flex-1 items-center gap-3'}`} style={{ flex: isMobile ? 'none' : 1 }}>
+                  {isListening && isVoiceMessageMode ? (
+                    <div className="flex-1 flex items-center pr-1 pl-4 h-[48px] animate-in fade-in duration-200">
+                       <div className="flex-1 flex items-center h-full mr-4 relative overflow-hidden">
+                          <div className="absolute inset-0 flex items-center pr-[120px] z-10 pointer-events-none">
+                            <span className="text-[15px] font-medium truncate" style={{ color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)' }}>
+                              {input || "Listening..."}
+                            </span>
+                          </div>
+                          <div className="absolute inset-0 flex items-center">
+                            <div className="w-[200%] h-[2px] opacity-40 animate-slide-left" style={{ backgroundImage: 'repeating-linear-gradient(to right, var(--on-surface-muted) 0, var(--on-surface-muted) 4px, transparent 4px, transparent 8px)' }}></div>
+                          </div>
+                          <div className="absolute right-0 flex items-center gap-[3px] pl-4 pr-2 h-full" style={{ background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)' }}>
+                            {Array(15).fill(0).map((_, i) => (
+                              <div 
+                                key={i} 
+                                ref={el => { if(el) audioBarsRef.current[i] = el; }}
+                                className="w-[3px] rounded-full transition-all duration-75" 
+                                style={{ background: 'var(--on-surface)', height: '4px' }}
+                              ></div>
+                            ))}
+                          </div>
+                       </div>
+                       <div className="flex items-center gap-2">
                           <button 
-                            type="button"
-                            className="w-10 h-10 flex items-center justify-center rounded-full transition-all bg-hover-overlay"
+                            type="button" 
+                            onClick={cancelListening}
+                            className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                            style={{ color: 'var(--on-surface-muted)' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = 'var(--on-surface)'; e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = 'var(--on-surface-muted)'; e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                          >
+                            <X size={18} strokeWidth={2.5} />
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { const currentInput = input; toggleListening(); handleSend(e, currentInput || "Voice message", true); }}
+                            className="w-10 h-10 rounded-full flex items-center justify-center transition-all border-2"
                             style={{ 
-                              color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                              borderColor: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
+                              color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)',
+                              background: 'transparent'
                             }}
-                            onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' } }
                           >
-                            <Plus size={22} />
+                            <Check size={18} strokeWidth={3} />
                           </button>
-                          <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
-                        </div>
-                      )}
+                       </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className={`w-full ${isMobile ? 'pt-1 px-3' : 'flex-1'}`}>
+                        <input 
+                          ref={footerInputRef}
+                          type="text" 
+                          value={input} 
+                          onChange={(e) => { const val = e.target.value; setInput(val); if(val.endsWith('/')) setShowAttachmentMenu(true); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                          placeholder={isSendDisabled ? "Please wait for response to complete..." : (isLoading ? "Kyra is thinking..." : "Ask anything...")} 
+                          className={`w-full bg-transparent border-none outline-none ${isMobile ? 'text-[16px] py-2' : 'temp-placeholder'}`}
+                          style={{ 
+                            background: 'transparent', border: 'none', outline: 'none', 
+                            color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16, padding: isMobile ? '0' : (isSmallMobile ? '12px 8px' : '12px 14px')
+                          }} 
+                        />
+                      </div>
+                      
+                      <div className={`flex items-center ${isMobile ? 'justify-between w-full' : 'gap-3 ml-auto flex-shrink-0'}`}>
+                        
+                        {isMobile && (
+                          <div className="relative group/tooltip flex items-center justify-center pl-1" ref={attachmentRefFooter}>
+                            <button 
+                              type="button"
+                              className="w-10 h-10 flex items-center justify-center rounded-full transition-all bg-hover-overlay"
+                              style={{ 
+                                color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                              }}
+                              onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }}
+                            >
+                              <Plus size={22} />
+                            </button>
+                            <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
+                          </div>
+                        )}
 
-                      {!isMobile && (
-                        <div className={`relative ${isMobile ? 'absolute left-1/2 -translate-x-1/2' : 'ml-4'}`}>
-                          <button 
-                            type="button"
-                            onClick={() => setShowModelSwitcher(!showModelSwitcher)}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
-                            style={{
-                              backgroundColor: isTemporary ? 'transparent' : 'var(--hover-overlay)',
-                              borderColor: isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)') : 'var(--divider)',
-                              color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)'
-                            }}
-                          >
-                            {aiModel === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
-                            {aiModel === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
-                            {aiModel === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
-                            {aiModel === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                            {!isSmallMobile && <span className="text-[13px] font-semibold">{aiModel}</span>}
-                            <ChevronDown size={14} className={showModelSwitcher ? 'rotate-180 transition-transform' : 'transition-transform'} />
-                          </button>
-                          
-                          <AnimatePresence>
-                            {showModelSwitcher && (
-                              <motion.div
-                                initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                                style={{
-                                  position: 'absolute', bottom: '100%', left: 0, marginBottom: '8px',
-                                  width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
-                                  border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
-                                  boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
-                                }}
-                              >
-                                {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
-                                  <button
-                                    key={m}
-                                    onClick={() => { setAiModel(m); setShowModelSwitcher(false); }}
-                                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-hover-overlay transition-all text-left group"
-                                  >
-                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-hover-overlay group-hover:bg-primary transition-colors">
-                                      {m === 'GPT-4' && <Zap size={16} className="text-amber-500" />}
-                                      {m === 'DeepSeek' && <Brain size={16} className="text-blue-500" />}
-                                      {m === 'Llama' && <Cpu size={16} className="text-emerald-500" />}
-                                      {m === 'Gemini' && <Sparkles size={16} className="text-indigo-500" />}
-                                    </div>
-                                    <span className={`text-[14px] font-medium ${aiModel === m ? 'text-on-surface' : 'text-on-surface-muted'}`}>{m}</span>
-                                  </button>
-                                ))}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-2 pr-1 ml-auto flex-shrink-0">
-                           {!isLoading && (
-                             <div className="relative group/tooltip flex items-center justify-center">
-                               <button 
-                                 type="button" 
-                                 onClick={() => { setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening(); }}
-                                 className={`w-10 h-10 flex items-center justify-center transition-all duration-300 rounded-full ${isListening && !isVoiceMessageMode ? 'animate-pulse bg-red-500/10' : 'bg-hover-overlay'}`}
-                                 style={{ 
-                                   color: isListening && !isVoiceMessageMode
-                                     ? '#ef4444' 
-                                     : (isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)') : 'var(--on-surface-muted)') 
-                                 }}
-                               >
-                                 <Mic size={20} className={isListening && !isVoiceMessageMode ? 'scale-110' : ''} />
-                               </button>
-                               <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                                 Voice
-                               </div>
-                             </div>
-                           )}
-
-                           {isLoading ? (
-                              <div className="relative group/tooltip flex items-center justify-center">
-                                <button 
-                                  type="button"
-                                  onClick={handleStop}
-                                  className="group/stop relative flex items-center justify-center transition-all duration-300 active:scale-90"
-                                  style={{ 
-                                    width: 40, height: 40, borderRadius: '50%', 
-                                    background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)', 
-                                    color: accentColor, 
-                                    border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                                    cursor: 'pointer' 
+                        {!isMobile && (
+                          <div className={`relative ${isMobile ? 'absolute left-1/2 -translate-x-1/2' : 'ml-4'}`}>
+                            <button 
+                              type="button"
+                              onClick={() => setShowModelSwitcher(!showModelSwitcher)}
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
+                              style={{
+                                borderColor: 'var(--divider)',
+                                background: 'transparent',
+                                color: 'var(--on-surface-muted)',
+                                fontSize: '12px',
+                                fontWeight: 600
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; e.currentTarget.style.color = 'var(--on-surface)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--on-surface-muted)'; }}
+                            >
+                              <Brain size={13} style={{ color: accentColor }} />
+                              <span className="capitalize">{aiModel}</span>
+                              <ChevronDown size={12} />
+                            </button>
+                            
+                            <AnimatePresence>
+                              {showModelSwitcher && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                  className="absolute bottom-full left-0 mb-2 p-1.5 rounded-2xl flex flex-col gap-1 shadow-lg border z-50 min-w-[140px]"
+                                  style={{
+                                    background: 'var(--surface-1)',
+                                    borderColor: 'var(--divider)'
                                   }}
                                 >
-                                  <Square size={14} fill={accentColor} className="group-hover/stop:scale-110 transition-transform" />
+                                  {['gemini', 'aura'].map(model => (
+                                    <button
+                                      key={model}
+                                      type="button"
+                                      onClick={() => { setAiModel(model); setShowModelSwitcher(false); }}
+                                      className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-semibold transition-all capitalize flex items-center justify-between"
+                                      style={{
+                                        color: aiModel === model ? 'var(--on-surface)' : 'var(--on-surface-muted)',
+                                        background: aiModel === model ? 'var(--hover-overlay-2)' : 'transparent'
+                                      }}
+                                      onMouseEnter={e => { if(aiModel !== model) e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                                      onMouseLeave={e => { if(aiModel !== model) e.currentTarget.style.background = 'transparent'; }}
+                                    >
+                                      <span>{model}</span>
+                                      {aiModel === model && <Check size={14} style={{ color: accentColor }} />}
+                                    </button>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        )}
+                        
+                        <div className="flex items-center gap-1.5 ml-auto">
+                            {!isMobile && (
+                              <div className="relative group/tooltip flex items-center justify-center">
+                                <button 
+                                  type="button" 
+                                  onClick={() => {
+                                    if (isListening) {
+                                      recognitionRef.current?.stop();
+                                    } else {
+                                      setInput('');
+                                      setIsVoiceMessageMode(true);
+                                      toggleListening();
+                                    }
+                                  }}
+                                  className="w-10 h-10 rounded-full flex items-center justify-center transition-all bg-hover-overlay"
+                                  style={{ 
+                                    color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                                  }}
+                                >
+                                  {isListening ? <Square size={14} fill="currentColor" /> : <Mic size={18} />}
                                 </button>
                                 <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                                  Stop answering
+                                  Voice
                                 </div>
                               </div>
-                            ) : (
-                            <button 
-                              type={input.trim() ? "submit" : "button"}
-                              disabled={isSendDisabled}
-                              onClick={(e) => {
-                                if (isSendDisabled) {
-                                  e.preventDefault();
-                                  return;
-                                }
-                                if (!input.trim()) {
-                                  e.preventDefault();
-                                  if (isListening && isVoiceMessageMode) {
-                                    recognitionRef.current?.stop();
-                                  } else {
-                                    setInput('');
-                                    setIsVoiceMessageMode(true);
-                                    toggleListening();
-                                  }
-                                }
-                              }}
-                              style={{ 
-                                width: 40, height: 40, borderRadius: '50%', 
-                                background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor, 
-                                color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff', 
-                                border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                                transition: 'all 0.3s ease', cursor: isSendDisabled ? 'not-allowed' : 'pointer',
-                                opacity: isSendDisabled ? 0.6 : 1
-                              }}
-                              title={isSendDisabled ? "Please wait for current response to complete" : ""}
-                            >
-                              {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
-                            </button>
-                          )}
-                        </div>
-                    </div>
-                  </>
-                )}
-              </form>
-            </div>
+                            )}
+
+                            {isLoading ? (
+                               <div className="relative group/tooltip flex items-center justify-center">
+                                 <button 
+                                   type="button"
+                                   onClick={handleStop}
+                                   className="group/stop relative flex items-center justify-center transition-all duration-300 active:scale-90"
+                                   style={{ 
+                                     width: 40, height: 40, borderRadius: '50%', 
+                                     background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)', 
+                                     color: accentColor, 
+                                     border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                     cursor: 'pointer' 
+                                   }}
+                                 >
+                                   <Square size={14} fill={accentColor} className="group-hover/stop:scale-110 transition-transform" />
+                                 </button>
+                                 <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                                   Stop answering
+                                 </div>
+                               </div>
+                             ) : (
+                             <button 
+                               type={input.trim() ? "submit" : "button"}
+                               disabled={isSendDisabled}
+                               onClick={(e) => {
+                                 if (isSendDisabled) {
+                                   e.preventDefault();
+                                   return;
+                                 }
+                                 if (!input.trim()) {
+                                   e.preventDefault();
+                                   if (isListening && isVoiceMessageMode) {
+                                     recognitionRef.current?.stop();
+                                   } else {
+                                     setInput('');
+                                     setIsVoiceMessageMode(true);
+                                     toggleListening();
+                                   }
+                                 }
+                               }}
+                               style={{ 
+                                 width: 40, height: 40, borderRadius: '50%', 
+                                 background: isSendDisabled ? 'var(--hover-overlay-2)' : accentColor, 
+                                 color: isSendDisabled ? 'var(--on-surface-subtle)' : '#ffffff', 
+                                 border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                                 transition: 'all 0.3s ease', cursor: isSendDisabled ? 'not-allowed' : 'pointer',
+                                 opacity: isSendDisabled ? 0.6 : 1
+                               }}
+                               title={isSendDisabled ? "Please wait for current response to complete" : ""}
+                             >
+                               {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
+                             </button>
+                           )}
+                         </div>
+                      </div>
+                    </>
+                  )}
+                </form>
+              </div>
+            )}
           </div>
         </footer>
       )}
@@ -3626,7 +3711,7 @@ const ChatWindow = () => {
         >
           <div
             onClick={e => e.stopPropagation()}
-            style={{ background: 'var(--surface-1)', borderRadius: '24px', border: '1px solid var(--divider)', padding: '28px 28px 22px 28px', width: '420px' }}
+            style={{ background: 'var(--surface-1)', borderRadius: '24px', border: '1px solid var(--divider)', padding: '28px 28px 22px 28px', width: 'calc(100% - 48px)', maxWidth: '420px', boxSizing: 'border-box' }}
             className="shadow-modal"
           >
             <h3 style={{ color: 'var(--on-surface)', fontSize: '18px', fontWeight: 600, marginBottom: '14px', fontFamily: 'inherit' }}>Delete chat?</h3>
@@ -3667,6 +3752,7 @@ const ChatWindow = () => {
         isOpen={isShareModalOpen} 
         onClose={() => setIsShareModalOpen(false)} 
         chatId={shareChatId}
+        showGlobalToast={showGlobalToast}
       />
       <GroupChatModal
         isOpen={isGroupChatModalOpen}
@@ -3732,6 +3818,48 @@ const ChatWindow = () => {
             }}
             resolvedTheme={resolvedTheme}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {globalToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -70, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -70, x: '-50%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            style={{
+              position: 'fixed',
+              top: '24px',
+              left: '50%',
+              background: accentColor || 'var(--accent-color)',
+              color: '#ffffff',
+              padding: '12px 24px',
+              borderRadius: '999px',
+              boxShadow: `0 12px 30px ${(accentColor || 'rgba(99, 102, 241, 0.4)')}40`,
+              zIndex: 9999999999,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              fontFamily: 'Inter, sans-serif'
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(255, 255, 255, 0.2)',
+              borderRadius: '50%',
+              padding: '3px',
+              color: '#ffffff'
+            }}>
+              <Check size={12} strokeWidth={3} />
+            </div>
+            <span>{globalToast}</span>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
@@ -3848,8 +3976,8 @@ const MessageDeleteModal = ({ isOpen, onClose, onConfirm, resolvedTheme }) => {
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={e => e.stopPropagation()}
         style={{
-          width: '400px', background: resolvedTheme === 'dark' ? 'var(--surface-1)' : '#fff',
-          borderRadius: '16px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+          width: 'calc(100% - 48px)', maxWidth: '400px', background: resolvedTheme === 'dark' ? 'var(--surface-1)' : '#fff',
+          borderRadius: '16px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', boxSizing: 'border-box'
         }}
       >
         <h3 style={{ color: 'var(--on-surface)', fontSize: '18px', fontWeight: 600, marginBottom: '14px', fontFamily: 'inherit' }}>Delete message?</h3>
@@ -3890,7 +4018,6 @@ const GroupChatModal = ({ isOpen, onClose }) => {
     convertToGroupChat(groupChatTargetId || activeChatId);
     onClose();
   };
-
   return createPortal(
     <AnimatePresence>
       <div 
@@ -3903,22 +4030,73 @@ const GroupChatModal = ({ isOpen, onClose }) => {
         }}
         onClick={onClose}
       >
+        <style>{`
+          .gchat-modal-card {
+            background: ${resolvedTheme === 'dark' ? '#1c1c1e' : '#ffffff'};
+            border-radius: 28px;
+            width: 100%;
+            max-width: 480px;
+            padding: 32px;
+            box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.45);
+            border: 1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'};
+            position: relative;
+            box-sizing: border-box;
+          }
+          .gchat-modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            gap: 16px;
+            box-sizing: border-box;
+          }
+          .gchat-modal-actions {
+            display: flex;
+            gap: 12px;
+            box-sizing: border-box;
+          }
+          .gchat-btn {
+            white-space: nowrap;
+            box-sizing: border-box;
+          }
+          @media (max-width: 520px) {
+            .gchat-modal-card {
+              padding: 24px;
+              border-radius: 24px;
+            }
+            .gchat-modal-footer {
+              flex-direction: column-reverse;
+              align-items: stretch;
+              gap: 16px;
+            }
+            .gchat-modal-actions {
+              flex-direction: column-reverse;
+              gap: 10px;
+              width: 100%;
+            }
+            .gchat-btn-learn-more {
+              text-align: center;
+              padding: 8px 0 !important;
+              width: 100%;
+            }
+            .gchat-btn-action {
+              width: 100% !important;
+              text-align: center !important;
+              padding: 12px 24px !important;
+              font-size: 15px !important;
+              display: flex !important;
+              align-items: center !important;
+              justify-content: center !important;
+            }
+          }
+        `}</style>
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 30 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 30 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           onClick={e => e.stopPropagation()}
-          style={{
-            background: resolvedTheme === 'dark' ? '#1c1c1e' : '#ffffff',
-            borderRadius: '28px',
-            width: '100%',
-            maxWidth: '480px',
-            padding: '32px',
-            boxShadow: '0 30px 60px -12px rgba(0, 0, 0, 0.45)',
-            border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
-            position: 'relative'
-          }}
+          className="gchat-modal-card"
         >
           <h2 style={{ 
             fontSize: '20px', fontWeight: 700, color: resolvedTheme === 'dark' ? '#fff' : '#000', 
@@ -3935,8 +4113,9 @@ const GroupChatModal = ({ isOpen, onClose }) => {
             Only this conversation will be shared. Your personal Kyra memory is always private.
           </p>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="gchat-modal-footer">
             <button
+              className="gchat-btn-learn-more"
               style={{ 
                 background: 'none', border: 'none', color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)',
                 fontSize: '14px', fontWeight: 600, cursor: 'pointer', padding: 0,
@@ -3948,9 +4127,10 @@ const GroupChatModal = ({ isOpen, onClose }) => {
               Learn more
             </button>
             
-            <div style={{ display: 'flex', gap: '12px' }}>
+            <div className="gchat-modal-actions">
               <button
                 onClick={onClose}
+                className="gchat-btn gchat-btn-action"
                 style={{
                   padding: '11px 24px', borderRadius: '999px',
                   background: resolvedTheme === 'dark' ? '#2c2c2e' : '#f2f2f2',
@@ -3965,6 +4145,7 @@ const GroupChatModal = ({ isOpen, onClose }) => {
               </button>
               <button
                 onClick={handleStartGroup}
+                className="gchat-btn gchat-btn-action"
                 style={{
                   padding: '11px 24px', borderRadius: '999px',
                   background: resolvedTheme === 'dark' ? '#ffffff' : '#000000',
@@ -3987,8 +4168,8 @@ const GroupChatModal = ({ isOpen, onClose }) => {
   );
 };
 
-const ShareModal = ({ isOpen, onClose, chatId }) => {
-  const { chats, activeChatId, aiModel, resolvedTheme } = useAppContext();
+const ShareModal = ({ isOpen, onClose, chatId, showGlobalToast }) => {
+  const { chats, activeChatId, aiModel, resolvedTheme, profile } = useAppContext();
   const [copied, setCopied] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
@@ -4004,10 +4185,32 @@ const ShareModal = ({ isOpen, onClose, chatId }) => {
   const displayTitle = chatTitle || 'Aura AI Chat';
   const accentColor = 'var(--accent-color)'; 
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
+  const handleCopyLink = async () => {
+    const shareUrl = `${window.location.origin}/c/${chatId || activeChatId}`;
+    navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    if (showGlobalToast) {
+      showGlobalToast("Link copied to clipboard!");
+    }
+
+    try {
+      if (targetChat) {
+        await setDoc(doc(db, 'shared_chats', chatId || activeChatId), {
+          id: chatId || activeChatId,
+          title: targetChat.title || 'Shared Chat',
+          messages: targetChat.messages || [],
+          createdAt: targetChat.createdAt || new Date().toISOString(),
+          sharedAt: new Date().toISOString(),
+          accentColor: targetChat.accentColor || 'var(--accent-color)',
+          chatTheme: targetChat.chatTheme || 'classic',
+          sharedByName: profile?.displayName || 'Anonymous User',
+          sharedByEmail: profile?.email || ''
+        });
+      }
+    } catch (err) {
+      console.error("Failed to save shared chat to Firestore:", err);
+    }
   };
 
   return createPortal(
@@ -4037,19 +4240,121 @@ const ShareModal = ({ isOpen, onClose, chatId }) => {
               border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, 
               borderRadius: '32px', overflow: 'hidden', 
               boxShadow: resolvedTheme === 'dark' ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' : '0 25px 50px -12px rgba(0, 0, 0, 0.1)', 
-              zIndex: 1000001 
+              zIndex: 1000001,
+              boxSizing: 'border-box'
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div className="share-modal-container">
+              <style>{`
+                .share-modal-container {
+                  padding: 32px;
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  box-sizing: border-box;
+                  width: 100%;
+                }
+                .share-grid {
+                  display: grid;
+                  grid-template-columns: repeat(4, 1fr);
+                  gap: 32px;
+                  width: 100%;
+                  justify-items: center;
+                  box-sizing: border-box;
+                }
+                .share-item {
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  gap: 12px;
+                  width: 100%;
+                  box-sizing: border-box;
+                }
+                .share-btn {
+                  width: 56px;
+                  height: 56px;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  border: none;
+                  cursor: pointer;
+                  transition: transform 0.2s;
+                  box-sizing: border-box;
+                }
+                .share-label {
+                  font-size: 12px;
+                  font-weight: 500;
+                  box-sizing: border-box;
+                  text-align: center;
+                  max-width: 100%;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                }
+                .share-close-btn {
+                  position: absolute;
+                  top: 24px;
+                  right: 24px;
+                  width: 40px;
+                  height: 40px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  border-radius: 50%;
+                  border: none;
+                  cursor: pointer;
+                  transition: all 0.2s;
+                }
+                @media (max-width: 500px) {
+                  .share-modal-container {
+                    padding: 24px 16px;
+                  }
+                  .share-grid {
+                    gap: 12px;
+                  }
+                  .share-item {
+                    gap: 8px;
+                  }
+                  .share-btn {
+                    width: 48px;
+                    height: 48px;
+                  }
+                  .share-btn svg {
+                    width: 18px !important;
+                    height: 18px !important;
+                  }
+                  .share-label {
+                    font-size: 11px;
+                  }
+                  .share-close-btn {
+                    top: 16px !important;
+                    right: 16px !important;
+                    width: 32px !important;
+                    height: 32px !important;
+                  }
+                }
+                @media (max-width: 360px) {
+                  .share-grid {
+                    gap: 8px;
+                  }
+                  .share-btn {
+                    width: 40px;
+                    height: 40px;
+                  }
+                  .share-btn svg {
+                    width: 16px !important;
+                    height: 16px !important;
+                  }
+                }
+              `}</style>
               <button 
                 onClick={onClose}
+                className="share-close-btn"
                 style={{ 
-                  position: 'absolute', top: '24px', right: '24px', width: '40px', height: '40px', 
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', 
                   background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', 
-                  border: 'none', color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)', 
-                  cursor: 'pointer', transition: 'all 0.2s'
+                  color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)', 
                 }}
                 onMouseEnter={e => { 
                   e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; 
@@ -4114,31 +4419,32 @@ const ShareModal = ({ isOpen, onClose, chatId }) => {
               </div>
 
               {/* Social Share Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '32px', width: '100%' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <div className="share-grid">
+                <div className="share-item">
                   <button 
                     onClick={handleCopyLink}
+                    className="share-btn"
                     style={{ 
-                      width: '56px', height: '56px', borderRadius: '50%', background: accentColor, 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', 
-                      border: 'none', cursor: 'pointer', transition: 'transform 0.2s',
-                      boxShadow: `0 10px 20px ${accentColor}33` 
+                      background: accentColor, 
+                      boxShadow: `0 10px 20px ${accentColor}33`,
+                      color: '#fff'
                     }}
                     onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
                     onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
                   >
                     {copied ? <Check size={22} strokeWidth={2.5} color="white" /> : <Copy size={20} strokeWidth={2.5} color="white" />}
                   </button>
-                  <span style={{ fontSize: '12px', fontWeight: '500', color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>{copied ? 'Copied!' : 'Copy link'}</span>
+                  <span className="share-label" style={{ color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>{copied ? 'Copied!' : 'Copy link'}</span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                  <button style={{ 
-                    width: '56px', height: '56px', borderRadius: '50%', background: accentColor, 
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', 
-                    border: 'none', cursor: 'pointer', transition: 'transform 0.2s',
-                    boxShadow: `0 10px 20px ${accentColor}33` 
-                  }}
+                <div className="share-item">
+                  <button 
+                    className="share-btn"
+                    style={{ 
+                      background: accentColor, 
+                      boxShadow: `0 10px 20px ${accentColor}33`,
+                      color: '#fff'
+                    }}
                     onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
                     onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
                   >
@@ -4146,16 +4452,17 @@ const ShareModal = ({ isOpen, onClose, chatId }) => {
                       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                     </svg>
                   </button>
-                  <span style={{ fontSize: '12px', fontWeight: '500', color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>X</span>
+                  <span className="share-label" style={{ color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>X</span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                  <button style={{ 
-                    width: '56px', height: '56px', borderRadius: '50%', background: accentColor, 
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', 
-                    border: 'none', cursor: 'pointer', transition: 'transform 0.2s',
-                    boxShadow: `0 10px 20px ${accentColor}33` 
-                  }}
+                <div className="share-item">
+                  <button 
+                    className="share-btn"
+                    style={{ 
+                      background: accentColor, 
+                      boxShadow: `0 10px 20px ${accentColor}33`,
+                      color: '#fff'
+                    }}
                     onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
                     onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
                   >
@@ -4163,16 +4470,17 @@ const ShareModal = ({ isOpen, onClose, chatId }) => {
                       <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
                     </svg>
                   </button>
-                  <span style={{ fontSize: '12px', fontWeight: '500', color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>LinkedIn</span>
+                  <span className="share-label" style={{ color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>LinkedIn</span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                  <button style={{ 
-                    width: '56px', height: '56px', borderRadius: '50%', background: accentColor, 
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', 
-                    border: 'none', cursor: 'pointer', transition: 'transform 0.2s',
-                    boxShadow: `0 10px 20px ${accentColor}33` 
-                  }}
+                <div className="share-item">
+                  <button 
+                    className="share-btn"
+                    style={{ 
+                      background: accentColor, 
+                      boxShadow: `0 10px 20px ${accentColor}33`,
+                      color: '#fff'
+                    }}
                     onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
                     onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
                   >
@@ -4180,7 +4488,7 @@ const ShareModal = ({ isOpen, onClose, chatId }) => {
                       <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.056 1.597.04.21.06.42.06.63 0 2.656-2.936 4.808-6.54 4.808-3.604 0-6.54-2.152-6.54-4.808 0-.21.02-.42.06-.63A1.748 1.748 0 0 1 4.75 11.95c0-.968.786-1.754 1.754-1.754.463 0 .875.18 1.185.47 1.2-.833 2.83-1.389 4.63-1.47 l.884-4.14a.25.25 0 0 1 .311-.19l2.76.581c.143-.45.565-.774 1.066-.774zM9.36 12.388c-.68 0-1.233.553-1.233 1.233s.553 1.233 1.233 1.233 1.233-.553 1.233-1.233-.553-1.233-1.233-1.233zm5.28 0c-.68 0-1.233.553-1.233 1.233s.553 1.233 1.233 1.233 1.233-.553 1.233-1.233-.553-1.233-1.233-1.233zm-5.32 3.193s.34.42 1.68.42c1.34 0 1.68-.42 1.68-.42a.125.125 0 0 0-.197-.154c-.233.15-.71.304-1.483.304-.773 0-1.25-.154-1.483-.304a.125.125 0 0 0-.197.154z" />
                     </svg>
                   </button>
-                  <span style={{ fontSize: '12px', fontWeight: '500', color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Reddit</span>
+                  <span className="share-label" style={{ color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Reddit</span>
                 </div>
               </div>
             </div>
@@ -4326,8 +4634,10 @@ const DeleteGroupModal = ({ isOpen, onClose, onConfirm, groupName }) => {
           borderRadius: '24px',
           border: '1px solid var(--divider)',
           padding: '28px',
-          width: '420px',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+          width: 'calc(100% - 48px)',
+          maxWidth: '420px',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+          boxSizing: 'border-box'
         }}
       >
         <h3 style={{
@@ -4489,9 +4799,12 @@ const RenameGroupModal = ({ isOpen, onClose, onConfirm, initialValue }) => {
     document.body
   );
 };
-
-const GroupLinkModal = ({ isOpen, onClose, chatId }) => {
+const GroupLinkModal = ({ isOpen, onClose, chatId, showGlobalToast }) => {
   const [copied, setCopied] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [linkActive, setLinkActive] = useState(true);
+  const [regeneratedSuffix, setRegeneratedSuffix] = useState('');
+  const [toastMessage, setToastMessage] = useState('');
   const { resolvedTheme, accentColor } = useAppContext();
   const [baseUrl, setBaseUrl] = useState('https://aura-ai.vercel.app');
 
@@ -4503,38 +4816,98 @@ const GroupLinkModal = ({ isOpen, onClose, chatId }) => {
 
   if (!isOpen) return null;
 
-  const groupUrl = `${baseUrl}/g/${chatId || 'new'}`;
+  const finalChatId = chatId || 'new';
+  const groupUrl = linkActive 
+    ? `${baseUrl}/g/${finalChatId}${regeneratedSuffix}` 
+    : 'Link deactivated';
 
   const handleCopy = () => {
+    if (!linkActive) return;
     navigator.clipboard.writeText(groupUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const showToast = (msg) => {
+    if (showGlobalToast) {
+      showGlobalToast(msg);
+    } else {
+      setToastMessage(msg);
+      setTimeout(() => setToastMessage(''), 2500);
+    }
+  };
+
   return createPortal(
-    <div 
-      style={{
-        position: 'fixed', inset: 0, zIndex: 99999999,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.5)',
-        backdropFilter: 'blur(4px)'
-      }}
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        onClick={e => e.stopPropagation()}
+    <>
+      {/* Viewport-level Toast (Push Notification Style) */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -70, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -70, x: '-50%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            style={{
+              position: 'fixed',
+              top: '24px',
+              left: '50%',
+              background: resolvedTheme === 'dark' ? '#1c1c1e' : '#ffffff',
+              color: resolvedTheme === 'dark' ? '#ffffff' : '#000000',
+              padding: '12px 20px',
+              borderRadius: '16px',
+              fontSize: '14px',
+              fontWeight: 600,
+              boxShadow: resolvedTheme === 'dark' ? '0 12px 35px rgba(0,0,0,0.5)' : '0 12px 30px rgba(0,0,0,0.1)',
+              zIndex: 9999999999, // Float way above modal backdrop
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              border: resolvedTheme === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#10b981',
+              borderRadius: '50%',
+              padding: '3px',
+              color: '#ffffff'
+            }}>
+              <Check size={12} strokeWidth={3} />
+            </div>
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div 
         style={{
-          background: 'var(--surface-1)',
-          borderRadius: '28px',
-          border: '1px solid var(--divider)',
-          padding: '28px',
-          width: 'calc(100% - 40px)',
-          maxWidth: '460px',
-          boxShadow: resolvedTheme === 'dark' ? '0 40px 80px rgba(0,0,0,0.6)' : '0 20px 40px rgba(0,0,0,0.1)'
+          position: 'fixed', inset: 0, zIndex: 99999999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.45)'
         }}
+        onClick={onClose}
       >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          onClick={e => {
+            e.stopPropagation();
+            setIsMenuOpen(false);
+          }}
+          style={{
+            background: 'var(--surface-1)',
+            borderRadius: '28px',
+            border: '1px solid var(--divider)',
+            padding: '28px',
+            width: 'calc(100% - 48px)',
+            maxWidth: '460px',
+            boxShadow: resolvedTheme === 'dark' ? '0 40px 80px rgba(0,0,0,0.6)' : '0 20px 40px rgba(0,0,0,0.1)',
+            position: 'relative',
+            boxSizing: 'border-box'
+          }}
+        >
         <h3 style={{
           color: 'var(--on-surface)',
           fontSize: '22px',
@@ -4553,22 +4926,170 @@ const GroupLinkModal = ({ isOpen, onClose, chatId }) => {
           border: `1px solid ${accentColor ? `${accentColor}40` : 'var(--divider)'}`,
           borderRadius: '14px',
           padding: '12px 16px',
-          marginBottom: '20px'
+          marginBottom: '20px',
+          position: 'relative'
         }}>
           <div style={{
             flex: 1,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            color: 'var(--on-surface)',
+            color: linkActive ? 'var(--on-surface)' : 'var(--on-surface-muted)',
             fontSize: '15px',
-            fontFamily: 'monospace'
+            fontFamily: 'monospace',
+            textDecoration: linkActive ? 'none' : 'line-through'
           }}>
             {groupUrl}
           </div>
-          <button style={{ background: 'transparent', border: 'none', color: 'var(--on-surface-muted)', cursor: 'pointer' }}>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsMenuOpen(!isMenuOpen);
+            }}
+            style={{ 
+              background: 'transparent', 
+              border: 'none', 
+              color: 'var(--on-surface-muted)', 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '6px',
+              borderRadius: '8px',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
             <MoreHorizontal size={18} />
           </button>
+
+          {/* Context Popover Dropdown Card */}
+          <AnimatePresence>
+            {isMenuOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.15 }}
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: '16px',
+                  marginTop: '8px',
+                  background: resolvedTheme === 'dark' ? '#1e1e1e' : '#ffffff',
+                  border: '1px solid var(--divider)',
+                  borderRadius: '16px',
+                  boxShadow: resolvedTheme === 'dark' ? '0 10px 30px rgba(0,0,0,0.5)' : '0 10px 25px rgba(0,0,0,0.08)',
+                  padding: '6px',
+                  zIndex: 100,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                  minWidth: '170px'
+                }}
+              >
+                {linkActive && (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopy();
+                        setIsMenuOpen(false);
+                        showToast('Copied to clipboard');
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--on-surface)',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        width: '100%',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <Copy size={14} /> Copy link
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const randomSuffix = `?ref=${Math.floor(Math.random() * 1000000)}`;
+                        setRegeneratedSuffix(randomSuffix);
+                        setIsMenuOpen(false);
+                        showToast('Link regenerated');
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--on-surface)',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        width: '100%',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <RotateCw size={14} /> Regenerate link
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const nextState = !linkActive;
+                    setLinkActive(nextState);
+                    setIsMenuOpen(false);
+                    showToast(nextState ? 'Link activated' : 'Link deactivated');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: linkActive ? '#ef4444' : '#10b981',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    width: '100%',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  {linkActive ? (
+                    <>
+                      <Trash2 size={14} style={{ color: '#ef4444' }} /> Deactivate link
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} style={{ color: '#10b981' }} /> Activate link
+                    </>
+                  )}
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <p style={{
@@ -4601,27 +5122,31 @@ const GroupLinkModal = ({ isOpen, onClose, chatId }) => {
           </button>
           <button
             onClick={handleCopy}
+            disabled={!linkActive}
             style={{
               padding: '12px 28px',
               borderRadius: '999px',
-              background: accentColor || 'var(--on-surface)',
-              color: accentColor ? '#fff' : 'var(--bg-primary)',
+              background: linkActive ? (accentColor || 'var(--on-surface)') : 'var(--hover-overlay-2)',
+              color: linkActive ? (accentColor ? '#fff' : 'var(--bg-primary)') : 'var(--on-surface-muted)',
               fontSize: '14px',
               fontWeight: 600,
-              cursor: 'pointer',
+              cursor: linkActive ? 'pointer' : 'not-allowed',
               border: 'none',
               transition: 'all 0.2s',
-              transform: copied ? 'scale(0.98)' : 'scale(1)'
+              transform: copied ? 'scale(0.98)' : 'scale(1)',
+              opacity: linkActive ? 1 : 0.6
             }}
           >
             {copied ? 'Copied!' : 'Copy link'}
           </button>
         </div>
       </motion.div>
-    </div>,
+      </div>
+    </>,
     document.body
   );
 };
+
 
 const ReportModal = ({ isOpen, onClose }) => {
   const { resolvedTheme, accentColor } = useAppContext();
@@ -4659,12 +5184,13 @@ const ReportModal = ({ isOpen, onClose }) => {
         style={{
           background: 'var(--surface-1)',
           borderRadius: '24px',
-          width: 'calc(100% - 40px)',
+          width: 'calc(100% - 48px)',
           maxWidth: '440px',
           padding: '24px',
           position: 'relative',
           boxShadow: resolvedTheme === 'dark' ? '0 40px 80px rgba(0,0,0,0.5)' : '0 20px 40px rgba(0,0,0,0.1)',
-          border: '1px solid var(--divider)'
+          border: '1px solid var(--divider)',
+          boxSizing: 'border-box'
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>

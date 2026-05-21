@@ -128,6 +128,34 @@ export const AppProvider = ({ children }) => {
     avatar: null,
   });
 
+  const [isSharedReadOnly, setIsSharedReadOnly] = useState(false);
+  const [sharedChatData, setSharedChatData] = useState(null);
+
+  const fetchSharedChat = useCallback(async (id) => {
+    try {
+      const docSnap = await getDoc(doc(db, 'shared_chats', id));
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setMessages(data.messages || []);
+        setIsSharedReadOnly(true);
+        setSharedChatData(data);
+        
+        // Temporarily put it in chats so the UI doesn't redirect
+        setChats(prev => {
+          if (prev.some(c => c.id === id)) return prev;
+          return [{ id, ...data, isSharedReadOnly: true }, ...prev];
+        });
+      } else {
+        console.log("Shared chat not found in Firestore.");
+        router.replace('/');
+      }
+    } catch (err) {
+      console.error("Failed to fetch shared chat:", err);
+      router.replace('/');
+    }
+  }, [router]);
+
+
   // Strict enforcement: No messages allowed if no active chat (except for temporary chats)
   useEffect(() => {
     if (!activeChatId && messages.length > 0 && !isTemporary) {
@@ -382,13 +410,25 @@ export const AppProvider = ({ children }) => {
       const isSessionActive = sessionStorage.getItem('aura-session-active');
       
       if (!isSessionActive) {
-        // Fresh session/tab entry: always start a new chat at root path
         sessionStorage.setItem('aura-session-active', 'true');
-        if (path !== '/') {
+        if (path.startsWith('/c/')) {
+          const pathId = path.split('/c/')[1];
+          if (pathId) {
+            setActiveChatId(pathId);
+            const chat = loadedChats.find(c => c.id === pathId);
+            if (chat) {
+              setMessages(chat.messages || []);
+              setIsSharedReadOnly(!!chat.isSharedReadOnly);
+              setSharedChatData(chat.isSharedReadOnly ? chat : null);
+            } else {
+              fetchSharedChat(pathId);
+            }
+          }
+        } else if (path !== '/') {
           router.replace('/');
+          setActiveChatId(null);
+          setMessages([]);
         }
-        setActiveChatId(null);
-        setMessages([]);
       } else {
         // Page refresh or in-app navigation: preserve path state
         if (path.startsWith('/c/')) {
@@ -396,7 +436,13 @@ export const AppProvider = ({ children }) => {
           if (pathId) {
             setActiveChatId(pathId);
             const chat = loadedChats.find(c => c.id === pathId);
-            if (chat) setMessages(chat.messages || []);
+            if (chat) {
+              setMessages(chat.messages || []);
+              setIsSharedReadOnly(!!chat.isSharedReadOnly);
+              setSharedChatData(chat.isSharedReadOnly ? chat : null);
+            } else {
+              fetchSharedChat(pathId);
+            }
           }
         } else {
           setActiveChatId(null);
@@ -617,6 +663,8 @@ export const AppProvider = ({ children }) => {
     const newId = Date.now().toString();
     setActiveChatId(newId);
     setMessages([]);
+    setIsSharedReadOnly(false);
+    setSharedChatData(null);
     router.push('/');
   }, [setActiveChatId, setMessages, router]);
 
@@ -642,11 +690,17 @@ export const AppProvider = ({ children }) => {
         if (pathId && pathId !== activeChatId) {
           setActiveChatId(pathId);
           const foundChat = chats.find(c => c.id === pathId);
-          setMessages(foundChat ? (foundChat.messages || []) : []);
+          if (foundChat) {
+            setMessages(foundChat.messages || []);
+            setIsSharedReadOnly(!!foundChat.isSharedReadOnly);
+            setSharedChatData(foundChat.isSharedReadOnly ? foundChat : null);
+          } else {
+            fetchSharedChat(pathId);
+          }
         }
       }
     }
-  }, [pathname, chats, activeChatId, isInitializing, createNewChat, setActiveChatId, setMessages]);
+  }, [pathname, chats, activeChatId, isInitializing, createNewChat, setActiveChatId, setMessages, fetchSharedChat]);
 
   const deleteChat = useCallback(async (id) => {
     const chatToDelete = chats.find(c => c.id === id);
@@ -725,7 +779,12 @@ export const AppProvider = ({ children }) => {
   const switchChat = useCallback((id) => {
     setChats(prev => {
       const chat = prev.find(c => c.id === id);
-      if (chat) { setActiveChatId(id); setMessages(chat.messages || []); }
+      if (chat) { 
+        setActiveChatId(id); 
+        setMessages(chat.messages || []); 
+        setIsSharedReadOnly(!!chat.isSharedReadOnly);
+        setSharedChatData(chat.isSharedReadOnly ? chat : null);
+      }
       return prev;
     });
   }, [setActiveChatId, setMessages]);
@@ -902,6 +961,8 @@ export const AppProvider = ({ children }) => {
       convertToGroupChat,
       joinGroup,
       leaveGroup,
+      isSharedReadOnly,
+      sharedChatData,
       showLoggedIn: user || (isAuthLoading && typeof window !== 'undefined' && localStorage.getItem('aura-profile')),
     }}>
       {children}
