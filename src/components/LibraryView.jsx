@@ -414,7 +414,10 @@ export default function LibraryView() {
           backgroundColor: '#0c0c0d', 
           color: '#ffffff', 
           fontFamily: "'Outfit', sans-serif",
-          position: 'relative'
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          width: '100%'
         }}
       >
         <style>{`
@@ -501,14 +504,29 @@ export default function LibraryView() {
         {/* Centered Media Content */}
         <div 
           className="flex-1 flex items-center justify-center p-8 overflow-hidden relative"
-          style={{ backgroundColor: '#0c0c0d' }}
+          style={{ 
+            backgroundColor: '#0c0c0d',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: 1,
+            padding: '32px',
+            overflow: 'hidden',
+            position: 'relative'
+          }}
         >
           {isImage && displayUrl ? (
             <img 
               src={displayUrl} 
               alt={activeFile.name} 
-              className="max-w-full max-h-full object-contain rounded-xl shadow-2xl animate-fade-in"
+              className="animate-fade-in"
               style={{ 
+                maxWidth: '95%',
+                maxHeight: '80vh',
+                width: 'auto',
+                height: 'auto',
+                objectFit: 'contain',
+                borderRadius: '16px',
                 boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.5)',
                 border: '1px solid rgba(255, 255, 255, 0.05)'
               }}
