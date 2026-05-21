@@ -1257,7 +1257,9 @@ const Sidebar = () => {
               borderRadius: '24px',
               border: '1px solid var(--divider)',
               padding: '28px 28px 22px 28px',
-              width: '420px',
+              width: 'calc(100% - 32px)',
+              maxWidth: '420px',
+              boxSizing: 'border-box'
             }}
             className="shadow-modal"
           >
@@ -1433,9 +1435,12 @@ const ExitConfirmModal = ({ isOpen, onClose, onConfirm, resolvedTheme }) => {
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={e => e.stopPropagation()}
         style={{
-          width: '400px', background: resolvedTheme === 'dark' ? 'var(--surface-1)' : '#fff',
+          width: 'calc(100% - 32px)',
+          maxWidth: '400px',
+          background: resolvedTheme === 'dark' ? 'var(--surface-1)' : '#fff',
           borderRadius: '24px', padding: '28px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-          border: '1px solid var(--divider)'
+          border: '1px solid var(--divider)',
+          boxSizing: 'border-box'
         }}
       >
         <h3 style={{ color: 'var(--on-surface)', fontSize: '18px', fontWeight: 600, marginBottom: '14px', fontFamily: 'inherit' }}>Exit group?</h3>

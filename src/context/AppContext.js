@@ -98,7 +98,12 @@ export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [authOpen, setAuthOpen] = useState(false);
-  const [activeChatId, setActiveChatId] = useState(null);
+  const [activeChatId, setActiveChatId] = useState(() => {
+    if (pathname && pathname.startsWith('/c/')) {
+      return pathname.split('/c/')[1] || null;
+    }
+    return null;
+  });
   const [messages, setMessages] = useState([]);
   const [isTemporary, setIsTemporary] = useState(false);
   
@@ -548,7 +553,8 @@ export const AppProvider = ({ children }) => {
             }
           }
         } else {
-          if (pathname.startsWith('/c/')) {
+          const isCurrentChatPath = pathname === `/c/${activeChatId}`;
+          if (pathname.startsWith('/c/') && !isCurrentChatPath) {
             router.push('/');
           }
         }

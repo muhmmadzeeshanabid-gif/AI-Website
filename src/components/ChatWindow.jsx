@@ -4050,16 +4050,18 @@ const GroupChatModal = ({ isOpen, onClose }) => {
             gap: 16px;
             box-sizing: border-box;
           }
+          .gchat-btn {
+            white-space: nowrap;
+            box-sizing: border-box;
+            flex-shrink: 0;
+          }
           .gchat-modal-actions {
             display: flex;
             gap: 12px;
             box-sizing: border-box;
+            flex-shrink: 0;
           }
-          .gchat-btn {
-            white-space: nowrap;
-            box-sizing: border-box;
-          }
-          @media (max-width: 520px) {
+          @media (max-width: 600px) {
             .gchat-modal-card {
               padding: 24px;
               border-radius: 24px;
@@ -4087,6 +4089,7 @@ const GroupChatModal = ({ isOpen, onClose }) => {
               display: flex !important;
               align-items: center !important;
               justify-content: center !important;
+              box-sizing: border-box;
             }
           }
         `}</style>
@@ -4235,7 +4238,7 @@ const ShareModal = ({ isOpen, onClose, chatId, showGlobalToast }) => {
               transition: { duration: 0.4, ease: [0.4, 0, 0.2, 1] } 
             }}
             style={{ 
-              position: 'relative', width: '100%', maxWidth: '540px', 
+              position: 'relative', width: 'calc(100% - 32px)', maxWidth: '540px', 
               background: resolvedTheme === 'dark' ? '#1a1a1c' : '#ffffff', 
               border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, 
               borderRadius: '32px', overflow: 'hidden', 
@@ -4256,11 +4259,10 @@ const ShareModal = ({ isOpen, onClose, chatId, showGlobalToast }) => {
                   width: 100%;
                 }
                 .share-grid {
-                  display: grid;
-                  grid-template-columns: repeat(4, 1fr);
-                  gap: 32px;
+                  display: flex;
+                  justify-content: space-around;
+                  align-items: center;
                   width: 100%;
-                  justify-items: center;
                   box-sizing: border-box;
                 }
                 .share-item {
@@ -4268,7 +4270,8 @@ const ShareModal = ({ isOpen, onClose, chatId, showGlobalToast }) => {
                   flex-direction: column;
                   align-items: center;
                   gap: 12px;
-                  width: 100%;
+                  flex: 1;
+                  min-width: 0;
                   box-sizing: border-box;
                 }
                 .share-btn {
@@ -4311,9 +4314,6 @@ const ShareModal = ({ isOpen, onClose, chatId, showGlobalToast }) => {
                   .share-modal-container {
                     padding: 24px 16px;
                   }
-                  .share-grid {
-                    gap: 12px;
-                  }
                   .share-item {
                     gap: 8px;
                   }
@@ -4336,9 +4336,6 @@ const ShareModal = ({ isOpen, onClose, chatId, showGlobalToast }) => {
                   }
                 }
                 @media (max-width: 360px) {
-                  .share-grid {
-                    gap: 8px;
-                  }
                   .share-btn {
                     width: 40px;
                     height: 40px;
@@ -4368,7 +4365,7 @@ const ShareModal = ({ isOpen, onClose, chatId, showGlobalToast }) => {
                 <X size={20} />
               </button>
 
-              <h2 style={{ fontSize: '22px', fontWeight: '700', color: resolvedTheme === 'dark' ? '#fff' : '#111', marginBottom: '32px', textAlign: 'center', width: '100%', paddingRight: '32px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '700', color: resolvedTheme === 'dark' ? '#fff' : '#111', marginBottom: '32px', textAlign: 'center', paddingRight: '32px', boxSizing: 'border-box' }}>
                 {displayTitle}
               </h2>
 
