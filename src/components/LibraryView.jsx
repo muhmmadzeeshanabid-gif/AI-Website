@@ -539,25 +539,67 @@ export default function LibraryView() {
         >
           <form 
             onSubmit={handleSendPreviewMessage}
-            className="w-full max-w-[440px] relative flex items-center rounded-full border"
             style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.04)',
-              borderColor: 'rgba(255, 255, 255, 0.08)',
-              padding: '6px 6px 6px 20px',
+              width: '100%',
+              maxWidth: '400px',
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              backgroundColor: '#1c1c1e',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '24px',
+              padding: '4px 6px 4px 16px',
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
               backdropFilter: 'blur(20px)'
             }}
           >
+            <button
+              type="button"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                color: '#ffffff',
+                marginRight: '8px',
+                cursor: 'pointer',
+                opacity: 0.6,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = 0.6}
+            >
+              <Plus size={18} />
+            </button>
+
             <input 
               type="text" 
               placeholder={`Ask about this ${isImage ? 'image' : 'file'}...`}
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              className="w-full bg-transparent text-white placeholder-white/40 border-none outline-none text-sm pr-20"
-              style={{ height: '40px' }}
+              style={{ 
+                flex: 1,
+                backgroundColor: 'transparent',
+                color: '#ffffff',
+                border: 'none',
+                outline: 'none',
+                fontSize: '14px',
+                height: '38px',
+                paddingRight: '80px'
+              }}
             />
             
-            <div className="absolute right-2 flex items-center gap-1.5">
+            <div 
+              style={{ 
+                position: 'absolute',
+                right: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
               <button 
                 type="button"
                 onClick={() => {
@@ -571,7 +613,26 @@ export default function LibraryView() {
                     }, 2000);
                   }
                 }}
-                className={`p-2.5 rounded-full hover:bg-white/10 transition-colors text-white/50 hover:text-white flex items-center justify-center ${isRecording ? 'mic-recording' : ''}`}
+                className={isRecording ? 'mic-recording' : ''}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  color: isRecording ? '#ef4444' : 'rgba(255, 255, 255, 0.5)',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isRecording) e.currentTarget.style.color = '#ffffff';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isRecording) e.currentTarget.style.color = 'rgba(255, 255, 255, 0.5)';
+                }}
               >
                 <Mic size={18} />
               </button>
@@ -579,13 +640,22 @@ export default function LibraryView() {
               <button 
                 type="submit"
                 disabled={!chatInput.trim() || isRecording}
-                className="p-2.5 rounded-full transition-all flex items-center justify-center"
                 style={{ 
-                  backgroundColor: chatInput.trim() ? '#ffffff' : 'rgba(255, 255, 255, 0.04)', 
-                  color: chatInput.trim() ? '#000000' : 'rgba(255, 255, 255, 0.2)' 
+                  backgroundColor: chatInput.trim() ? '#f15a24' : 'rgba(255, 255, 255, 0.04)',
+                  color: chatInput.trim() ? '#ffffff' : 'rgba(255, 255, 255, 0.2)', 
+                  border: 'none',
+                  outline: 'none',
+                  cursor: chatInput.trim() ? 'pointer' : 'default',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s'
                 }}
               >
-                <ArrowUp size={18} />
+                <ArrowUp size={16} />
               </button>
             </div>
           </form>
