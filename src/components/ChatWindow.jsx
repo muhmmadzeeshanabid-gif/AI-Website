@@ -3562,7 +3562,8 @@ const ChatWindow = () => {
                     color: 'var(--on-surface-muted)',
                     lineHeight: 1.5,
                     maxWidth: '520px',
-                    fontFamily: 'Outfit, sans-serif'
+                    fontFamily: 'Outfit, sans-serif',
+                    textAlign: 'center'
                   }}
                 >
                   This conversation was shared by{' '}
@@ -3594,7 +3595,7 @@ const ChatWindow = () => {
                     gap: '8px'
                   }}
                 >
-                  <Share2 size={16} strokeWidth={2.5} />
+                  <SquarePen size={16} strokeWidth={2.5} />
                   <span>Start New Chat</span>
                 </button>
               </div>
