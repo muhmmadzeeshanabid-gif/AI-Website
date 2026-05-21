@@ -420,6 +420,7 @@ const ChatWindow = () => {
     setGlobalToast(msg);
     setTimeout(() => setGlobalToast(''), 2500);
   };
+  const showGlobalToast = showToast;
   const [greeting, setGreeting] = useState("What's on your mind?");
   const [hoveredChip, setHoveredChip] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
