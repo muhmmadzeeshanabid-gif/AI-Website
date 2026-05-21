@@ -3622,7 +3622,7 @@ const ChatWindow = () => {
                     style={{
                       background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
                       borderRadius: replyingToMsg ? '0 0 24px 24px' : '24px', 
-                      padding: '4px 6px 4px 14px',
+                      padding: '4px 8px 4px 14px',
                       minHeight: '44px',
                       borderColor: 'var(--divider)'
                     }}
@@ -3687,7 +3687,12 @@ const ChatWindow = () => {
                               <button 
                                 onClick={handleStop} 
                                 type="button" 
-                                className="w-9 h-9 rounded-full flex items-center justify-center bg-hover-overlay text-on-surface"
+                                className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
+                                style={{
+                                  backgroundColor: 'var(--hover-overlay-2)',
+                                  color: 'var(--on-surface)',
+                                  border: '1px solid var(--divider)',
+                                }}
                               >
                                 <Square size={12} fill="currentColor" />
                               </button>
@@ -3717,9 +3722,11 @@ const ChatWindow = () => {
                                     toggleListening();
                                   }
                                 }}
-                                className="w-9 h-9 rounded-full flex items-center justify-center transition-all bg-hover-overlay"
+                                className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
                                 style={{ 
                                   color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                                  backgroundColor: isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)') : 'var(--hover-overlay-2)',
+                                  border: '1px solid var(--divider)',
                                 }}
                               >
                                 {isListening ? <Square size={12} fill="currentColor" /> : <Mic size={16} />}
@@ -3897,9 +3904,11 @@ const ChatWindow = () => {
                                     toggleListening();
                                   }
                                 }}
-                                className="w-10 h-10 rounded-full flex items-center justify-center transition-all bg-hover-overlay"
+                                className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
                                 style={{ 
                                   color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                                  backgroundColor: isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)') : 'var(--hover-overlay-2)',
+                                  border: '1px solid var(--divider)',
                                 }}
                               >
                                 {isListening ? <Square size={14} fill="currentColor" /> : <Mic size={18} />}
