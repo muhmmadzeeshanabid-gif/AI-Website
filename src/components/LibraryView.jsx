@@ -1331,10 +1331,13 @@ export default function LibraryView() {
             <div className="w-full flex flex-col">
               {/* Table Header */}
               <div 
-                className="list-header flex items-center px-6 pt-4 pb-3 text-xs font-semibold uppercase tracking-wider mb-3"
+                className="list-header flex items-center px-6 text-xs font-semibold uppercase tracking-wider"
                 style={{ 
                   color: 'var(--text-tertiary)',
-                  borderBottom: '1px solid var(--border-color)'
+                  borderBottom: '1px solid var(--border-color)',
+                  paddingTop: '20px',
+                  paddingBottom: '20px',
+                  marginBottom: '24px'
                 }}
               >
                 {/* Checkbox Header */}
@@ -1366,7 +1369,7 @@ export default function LibraryView() {
               </div>
 
               {/* Table Rows */}
-              <div className="flex flex-col" style={{ gap: '8px' }}>
+              <div className="flex flex-col" style={{ gap: '14px' }}>
                 {filteredFiles.map((file) => {
                   const isImage = file.type.startsWith('image/');
                   const displayUrl = localBlobUrls[file.id] || file.thumbnailUrl;
@@ -1375,9 +1378,11 @@ export default function LibraryView() {
                     <div
                       key={file.id}
                       onClick={() => handleSelectFile(file)}
-                      className="group list-row flex items-center px-6 py-3.5 rounded-xl transition-all cursor-pointer border border-transparent"
+                      className="group list-row flex items-center px-6 rounded-xl transition-all cursor-pointer border border-transparent"
                       style={{
                         backgroundColor: 'transparent',
+                        paddingTop: '16px',
+                        paddingBottom: '16px'
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
