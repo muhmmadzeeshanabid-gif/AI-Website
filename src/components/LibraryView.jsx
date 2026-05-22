@@ -952,6 +952,15 @@ export default function LibraryView() {
           display: none;
         }
 
+        /* Hide scrollbars for categories filter bar */
+        .library-filters-left::-webkit-scrollbar {
+          display: none;
+        }
+        .library-filters-left {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+
         /* Responsive Styles for Library Page */
         @media (max-width: 768px) {
           .grid-card-checkbox,
@@ -978,28 +987,22 @@ export default function LibraryView() {
             align-items: stretch !important;
             gap: 12px !important;
           }
+          .library-search-wrapper {
+            width: 100% !important;
+          }
           .library-search-input {
             width: 100% !important;
           }
-          .library-upload-button {
+          .library-header-buttons {
             width: 100% !important;
-            justify-content: center !important;
-          }
-          .library-filters-inner {
-            flex-direction: column !important;
-            align-items: stretch !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
             gap: 12px !important;
           }
-          .library-filters-left {
-            width: 100% !important;
-            justify-content: flex-start !important;
-            overflow-x: auto !important;
-            padding-bottom: 4px !important;
-            -webkit-overflow-scrolling: touch;
-          }
-          .library-filters-right {
-            width: 100% !important;
-            justify-content: space-between !important;
+          .library-upload-button {
+            flex: 1 !important;
+            justify-content: center !important;
           }
           .library-col-modified,
           .library-col-size {
@@ -1080,9 +1083,10 @@ export default function LibraryView() {
         <div className="library-header-inner" style={{ maxWidth: '1000px', margin: '0 auto', width: '100%', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <h1 className="text-3xl font-bold tracking-tight" style={{ fontSize: '32px' }}>Library</h1>
           
-          {/* Search & Upload */}
+          {/* Search & Actions */}
           <div className="library-header-actions flex items-center gap-4">
-            <div className="relative flex items-center">
+            {/* Search Input Wrapper */}
+            <div className="relative flex items-center library-search-wrapper">
               <Search size={18} className="absolute left-4" style={{ color: 'var(--text-tertiary)' }} />
               <input 
                 type="text" 
@@ -1103,19 +1107,69 @@ export default function LibraryView() {
               />
             </div>
             
-            <button 
-              onClick={handleUploadClick}
-              className="library-upload-button font-bold rounded-full flex items-center gap-2 hover:opacity-90 transition-all text-sm shadow-md"
-              style={{ 
-                fontWeight: 600,
-                backgroundColor: 'var(--text-primary)',
-                color: 'var(--bg-primary)',
-                padding: '10px 24px'
-              }}
-            >
-              <Upload size={16} strokeWidth={2.5} />
-              <span>Upload</span>
-            </button>
+            {/* Action Buttons: Layout Switcher & Upload */}
+            <div className="flex items-center gap-4 library-header-buttons">
+              {/* Grid/List toggles */}
+              <div className="flex items-center rounded-lg border" style={{ padding: '4px', gap: '4px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
+                <button 
+                  onClick={() => setViewMode('grid')}
+                  className="rounded-md transition-all"
+                  style={{
+                    padding: '6px 10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: viewMode === 'grid' ? 'var(--bg-tertiary)' : 'transparent',
+                    color: viewMode === 'grid' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (viewMode !== 'grid') e.currentTarget.style.color = 'var(--text-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (viewMode !== 'grid') e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                >
+                  <LayoutGrid size={16} />
+                </button>
+                <button 
+                  onClick={() => setViewMode('list')}
+                  className="rounded-md transition-all"
+                  style={{
+                    padding: '6px 10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: viewMode === 'list' ? 'var(--bg-tertiary)' : 'transparent',
+                    color: viewMode === 'list' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (viewMode !== 'list') e.currentTarget.style.color = 'var(--text-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (viewMode !== 'list') e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                >
+                  <List size={16} />
+                </button>
+              </div>
+
+              {/* Upload Button */}
+              <button 
+                onClick={handleUploadClick}
+                className="library-upload-button font-bold rounded-full flex items-center gap-2 hover:opacity-90 transition-all text-sm shadow-md"
+                style={{ 
+                  fontWeight: 600,
+                  backgroundColor: 'var(--text-primary)',
+                  color: 'var(--bg-primary)',
+                  padding: '10px 24px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <Upload size={16} strokeWidth={2.5} />
+                <span>Upload</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1235,8 +1289,8 @@ export default function LibraryView() {
               })}
             </div>
 
-            {/* Right sorting and layout */}
-            <div className="library-filters-right flex items-center gap-4">
+            {/* Right sorting */}
+            <div className="library-filters-right flex items-center">
               {/* Sorting */}
               <button 
                 onClick={handleSortToggle}
@@ -1258,50 +1312,6 @@ export default function LibraryView() {
                 <span>Modified</span>
                 {sortOrder === 'desc' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
               </button>
-
-              {/* Grid/List toggles */}
-              <div className="flex items-center rounded-lg border" style={{ padding: '4px', gap: '4px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-                <button 
-                  onClick={() => setViewMode('grid')}
-                  className="rounded-md transition-all"
-                  style={{
-                    padding: '6px 10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: viewMode === 'grid' ? 'var(--bg-tertiary)' : 'transparent',
-                    color: viewMode === 'grid' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (viewMode !== 'grid') e.currentTarget.style.color = 'var(--text-primary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (viewMode !== 'grid') e.currentTarget.style.color = 'var(--text-secondary)';
-                  }}
-                >
-                  <LayoutGrid size={16} />
-                </button>
-                <button 
-                  onClick={() => setViewMode('list')}
-                  className="rounded-md transition-all"
-                  style={{
-                    padding: '6px 10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: viewMode === 'list' ? 'var(--bg-tertiary)' : 'transparent',
-                    color: viewMode === 'list' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (viewMode !== 'list') e.currentTarget.style.color = 'var(--text-primary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (viewMode !== 'list') e.currentTarget.style.color = 'var(--text-secondary)';
-                  }}
-                >
-                  <List size={16} />
-                </button>
-              </div>
             </div>
           </div>
 
