@@ -845,6 +845,46 @@ const ChatWindow = () => {
       thumbnailUrl 
     });
   };
+
+  const handleChatPaste = async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    
+    let imageItem = null;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        imageItem = items[i];
+        break;
+      }
+    }
+    
+    if (imageItem) {
+      e.preventDefault();
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      
+      const blobUrl = URL.createObjectURL(file);
+      const id = 'chat-file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      
+      await saveFileToIndexedDB(id, file);
+
+      let thumbnailUrl = null;
+      if (file.type.startsWith('image/')) {
+        thumbnailUrl = await generateThumbnail(file);
+      }
+
+      const extension = file.type.split('/')[1] || 'png';
+      const name = file.name || `pasted-image-${Date.now()}.${extension}`;
+
+      setPendingAttachment({ 
+        id,
+        name, 
+        type: file.type, 
+        url: blobUrl, 
+        thumbnailUrl 
+      });
+    }
+  };
   const [showScrollButton, setShowScrollButton] = useState(false);
   const scrollContainerRef = useRef(null);
   const inputRef = useRef(null);
@@ -3327,6 +3367,7 @@ const ChatWindow = () => {
                             type="text" 
                             value={input} 
                             onChange={(e) => setInput(e.target.value)} 
+                            onPaste={handleChatPaste}
                             placeholder="Ask anything..." 
                             className="w-full bg-transparent border-none outline-none text-[16px] temp-placeholder"
                             style={{ 
@@ -3447,6 +3488,7 @@ const ChatWindow = () => {
                                     type="text" 
                                     value={input} 
                                     onChange={(e) => { const val = e.target.value; setInput(val); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                                    onPaste={handleChatPaste}
                                     onFocus={() => setIsInputFocused(true)}
                                     onBlur={() => setIsInputFocused(false)}
                                     placeholder={isSendDisabled ? "Please wait..." : (isLoading ? "Thinking..." : "Ask anything...")} 
@@ -3615,6 +3657,7 @@ const ChatWindow = () => {
                                   type="text" 
                                   value={input} 
                                   onChange={(e) => { const val = e.target.value; setInput(val); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                                  onPaste={handleChatPaste}
                                   placeholder={isSendDisabled ? "Please wait for response to complete..." : (isLoading ? "Kyra is thinking..." : "Ask anything...")} 
                                   style={{ 
                                     background: 'transparent', border: 'none', outline: 'none', 
@@ -4274,6 +4317,7 @@ const ChatWindow = () => {
                               type="text" 
                               value={input} 
                               onChange={(e) => { const val = e.target.value; setInput(val); if(val.endsWith('/')) setShowAttachmentMenu(true); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                              onPaste={handleChatPaste}
                               onFocus={() => setIsInputFocused(true)}
                               onBlur={() => setIsInputFocused(false)}
                               placeholder={isSendDisabled ? "Please wait..." : (isLoading ? "Thinking..." : "Ask anything...")} 
@@ -4455,6 +4499,7 @@ const ChatWindow = () => {
                             type="text" 
                             value={input} 
                             onChange={(e) => { const val = e.target.value; setInput(val); if(val.endsWith('/')) setShowAttachmentMenu(true); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                            onPaste={handleChatPaste}
                             placeholder={isSendDisabled ? "Please wait for response to complete..." : (isLoading ? "Kyra is thinking..." : "Ask anything...")} 
                             className="w-full bg-transparent border-none outline-none temp-placeholder"
                             style={{ 
