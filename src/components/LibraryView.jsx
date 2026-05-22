@@ -605,21 +605,21 @@ export default function LibraryView() {
           }}
         >
           {/* Left: Close/Back button & File Details */}
-          <div className="preview-header-left flex items-center gap-4 min-w-0">
+          <div className="preview-header-left flex items-center gap-4 min-w-0 flex-1">
             <button 
               onClick={() => handleSelectFile(null)}
-              className="p-2 rounded-full hover:bg-white/10 transition-colors flex items-center justify-center text-white/70 hover:text-white"
+              className="p-2 rounded-full hover:bg-white/10 transition-colors flex items-center justify-center text-white/70 hover:text-white shrink-0"
             >
               <X size={20} />
             </button>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold truncate text-white">{activeFile.name}</h2>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold truncate text-white" style={{ maxWidth: '100%' }}>{activeFile.name}</h2>
               <p className="preview-file-meta text-xs text-white/50">{formatSize(activeFile.size)} • {activeFile.type}</p>
             </div>
           </div>
 
           {/* Right: Actions */}
-          <div className="flex items-center gap-2">
+          <div className="preview-header-actions flex items-center gap-2">
             <button
               onClick={() => {
                 const msg = isImage && displayUrl 
@@ -632,13 +632,13 @@ export default function LibraryView() {
               }}
               className="preview-action-button px-4 py-2 rounded-full text-xs font-semibold bg-white text-black hover:bg-white/90 transition-colors flex items-center gap-1.5 shadow-md"
             >
-              <SquarePen size={14} />
+              <SquarePen size={14} className="shrink-0" />
               <span className="preview-action-text">Start chat</span>
             </button>
             
             <button
               onClick={() => handleDownloadFile(activeFile)}
-              className="p-2 rounded-full hover:bg-white/10 transition-colors text-white/70 hover:text-white flex items-center justify-center"
+              className="p-2 rounded-full hover:bg-white/10 transition-colors text-white/70 hover:text-white flex items-center justify-center shrink-0"
               title="Download"
             >
               <Download size={18} />
@@ -651,7 +651,7 @@ export default function LibraryView() {
                   handleSelectFile(null);
                 }
               }}
-              className="p-2 rounded-full hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors flex items-center justify-center"
+              className="p-2 rounded-full hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors flex items-center justify-center shrink-0"
               title="Delete"
             >
               <Trash2 size={18} />
@@ -844,43 +844,97 @@ export default function LibraryView() {
   return (
     <div className="w-full flex flex-col select-none" style={{ height: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>
       <style>{`
+        /* Custom styled checkboxes looking like circular radio buttons */
         .grid-card-checkbox,
-        .card-actions-trigger {
-          opacity: 0;
-          transition: opacity 0.15s ease-in-out;
-        }
-        .grid-card:hover .grid-card-checkbox,
-        .grid-card:hover .card-actions-trigger,
-        .grid-card-checkbox:checked {
-          opacity: 1 !important;
-        }
         .list-row-checkbox,
-        .list-actions-trigger {
-          opacity: 0;
-          transition: opacity 0.15s ease-in-out;
-        }
-        .list-actions-trigger:focus,
-        .list-actions-trigger:active,
-        .list-actions-trigger:focus-visible {
-          outline: none !important;
-          box-shadow: none !important;
-        }
-        .list-row:hover .list-row-checkbox,
-        .list-row:hover .list-actions-trigger,
-        .list-row-checkbox:checked {
-          opacity: 1 !important;
-        }
         .list-header-checkbox {
-          opacity: 0;
-          transition: opacity 0.15s ease-in-out;
+          appearance: none;
+          -webkit-appearance: none;
+          width: 22px;
+          height: 22px;
+          border: 2px solid rgba(255, 255, 255, 0.4);
+          border-radius: 50% !important;
+          outline: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+          background-color: rgba(0, 0, 0, 0.45);
+          position: relative;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
-        .list-header:hover .list-header-checkbox,
+
+        .grid-card-checkbox:checked,
+        .list-row-checkbox:checked,
         .list-header-checkbox:checked {
-          opacity: 1 !important;
+          background-color: var(--accent-color, #f15a24) !important;
+          border-color: var(--accent-color, #f15a24) !important;
+        }
+
+        .grid-card-checkbox:checked::after,
+        .list-row-checkbox:checked::after,
+        .list-header-checkbox:checked::after {
+          content: '';
+          position: absolute;
+          width: 9px;
+          height: 5px;
+          border-left: 2px solid #fff;
+          border-bottom: 2px solid #fff;
+          transform: rotate(-45deg) translate(0.5px, -0.5px);
+        }
+
+        /* Hover effect on desktop */
+        @media (min-width: 769px) {
+          .grid-card-checkbox,
+          .card-actions-trigger {
+            opacity: 0;
+            transition: opacity 0.15s ease-in-out;
+          }
+          .grid-card:hover .grid-card-checkbox,
+          .grid-card:hover .card-actions-trigger,
+          .grid-card-checkbox:checked {
+            opacity: 1 !important;
+          }
+          .list-row-checkbox,
+          .list-actions-trigger {
+            opacity: 0;
+            transition: opacity 0.15s ease-in-out;
+          }
+          .list-row:hover .list-row-checkbox,
+          .list-row:hover .list-actions-trigger,
+          .list-row-checkbox:checked {
+            opacity: 1 !important;
+          }
+          .list-header-checkbox {
+            opacity: 0;
+            transition: opacity 0.15s ease-in-out;
+          }
+          .list-header:hover .list-header-checkbox,
+          .list-header-checkbox:checked {
+            opacity: 1 !important;
+          }
+        }
+
+        .mobile-batch-actions-bar {
+          display: none;
         }
 
         /* Responsive Styles for Library Page */
         @media (max-width: 768px) {
+          .grid-card-checkbox,
+          .list-row-checkbox {
+            opacity: 1 !important;
+          }
+          .desktop-batch-actions-wrapper {
+            display: none !important;
+          }
+          .filters-default-wrapper {
+            display: flex !important;
+          }
+          .mobile-batch-actions-bar {
+            display: flex !important;
+          }
           .library-header-inner {
             flex-direction: column !important;
             align-items: flex-start !important;
@@ -915,25 +969,6 @@ export default function LibraryView() {
             width: 100% !important;
             justify-content: space-between !important;
           }
-          .library-batch-actions {
-            flex-direction: column !important;
-            align-items: stretch !important;
-            gap: 12px !important;
-          }
-          .library-batch-actions-left {
-            width: 100% !important;
-            justify-content: flex-start !important;
-            flex-wrap: wrap !important;
-            gap: 8px !important;
-          }
-          .library-batch-actions-left button {
-            flex: 1 1 auto !important;
-            justify-content: center !important;
-          }
-          .library-batch-actions-right {
-            width: 100% !important;
-            justify-content: space-between !important;
-          }
           .library-col-modified,
           .library-col-size {
             display: none !important;
@@ -945,14 +980,25 @@ export default function LibraryView() {
           /* Preview Mode Responsive */
           .preview-header {
             padding: 0 12px !important;
-            gap: 8px !important;
+            gap: 12px !important;
           }
           .preview-header-left {
             gap: 8px !important;
+            flex: 1 !important;
+            min-width: 0 !important;
+          }
+          .preview-header-actions {
+            flex-shrink: 0 !important;
+          }
+          .preview-action-text {
+            display: none !important;
           }
           .preview-action-button {
-            padding: 6px 12px !important;
-            white-space: nowrap !important;
+            padding: 8px !important;
+            border-radius: 50% !important;
+            width: 34px !important;
+            height: 34px !important;
+            justify-content: center !important;
           }
           .preview-file-meta {
             display: none !important;
@@ -1045,7 +1091,12 @@ export default function LibraryView() {
       {/* Categories / Filters row */}
       <div className="w-full" style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border-color)', padding: '12px 0' }}>
         <div className="library-filters-inner" style={{ maxWidth: '1000px', margin: '0 auto', width: '100%', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {selectedFileIds.length > 0 ? (
+          
+          {/* Desktop-only Batch Actions wrapper */}
+          <div 
+            className="desktop-batch-actions-wrapper w-full" 
+            style={{ display: selectedFileIds.length > 0 ? 'block' : 'none' }}
+          >
             <div className="library-batch-actions flex items-center justify-between w-full">
               {/* Left: Buttons styled as "Start chat", "Download", "Delete" */}
               <div className="library-batch-actions-left flex items-center gap-3">
@@ -1111,112 +1162,117 @@ export default function LibraryView() {
                 </button>
               </div>
             </div>
-          ) : (
-            <>
-              {/* Left Tabs */}
-              <div className="library-filters-left flex items-center gap-2">
-                {['All', 'Images', 'Files'].map((tab) => {
-                  const isActive = filter === tab;
-                  return (
-                    <button
-                      key={tab}
-                      onClick={() => setFilter(tab)}
-                      className="rounded-full text-sm font-medium transition-all"
-                      style={{
-                        padding: '6px 16px',
-                        backgroundColor: isActive ? 'var(--text-primary)' : 'transparent',
-                        color: isActive ? 'var(--bg-primary)' : 'var(--text-secondary)',
-                        border: isActive ? 'none' : '1px solid var(--border-color)'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.color = 'var(--text-primary)';
-                          e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.color = 'var(--text-secondary)';
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }
-                      }}
-                    >
-                      {tab}
-                    </button>
-                  );
-                })}
+          </div>
+
+          {/* Default Filters and Sorting wrapper */}
+          <div 
+            className="filters-default-wrapper w-full flex items-center justify-between"
+            style={{ display: selectedFileIds.length > 0 ? 'none' : 'flex' }}
+          >
+            {/* Left Tabs */}
+            <div className="library-filters-left flex items-center gap-2">
+              {['All', 'Images', 'Files'].map((tab) => {
+                const isActive = filter === tab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setFilter(tab)}
+                    className="rounded-full text-sm font-medium transition-all"
+                    style={{
+                      padding: '6px 16px',
+                      backgroundColor: isActive ? 'var(--text-primary)' : 'transparent',
+                      color: isActive ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                      border: isActive ? 'none' : '1px solid var(--border-color)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.color = 'var(--text-primary)';
+                        e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.color = 'var(--text-secondary)';
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  >
+                    {tab}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Right sorting and layout */}
+            <div className="library-filters-right flex items-center gap-4">
+              {/* Sorting */}
+              <button 
+                onClick={handleSortToggle}
+                className="flex items-center gap-1.5 px-3 rounded-lg text-sm transition-all"
+                style={{
+                  padding: '6px 12px',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'transparent'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                  e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <span>Modified</span>
+                {sortOrder === 'desc' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
+              </button>
+
+              {/* Grid/List toggles */}
+              <div className="flex items-center rounded-lg border" style={{ padding: '4px', gap: '4px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
+                <button 
+                  onClick={() => setViewMode('grid')}
+                  className="rounded-md transition-all"
+                  style={{
+                    padding: '6px 10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: viewMode === 'grid' ? 'var(--bg-tertiary)' : 'transparent',
+                    color: viewMode === 'grid' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (viewMode !== 'grid') e.currentTarget.style.color = 'var(--text-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (viewMode !== 'grid') e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                >
+                  <LayoutGrid size={16} />
+                </button>
+                <button 
+                  onClick={() => setViewMode('list')}
+                  className="rounded-md transition-all"
+                  style={{
+                    padding: '6px 10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: viewMode === 'list' ? 'var(--bg-tertiary)' : 'transparent',
+                    color: viewMode === 'list' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (viewMode !== 'list') e.currentTarget.style.color = 'var(--text-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (viewMode !== 'list') e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                >
+                  <List size={16} />
+                </button>
               </div>
-            </>
-          )}
-
-          {/* Right sorting and layout */}
-          <div className="library-filters-right flex items-center gap-4">
-            {/* Sorting */}
-            <button 
-              onClick={handleSortToggle}
-              className="flex items-center gap-1.5 px-3 rounded-lg text-sm transition-all"
-              style={{
-                padding: '6px 12px',
-                color: 'var(--text-secondary)',
-                backgroundColor: 'transparent'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = 'var(--text-primary)';
-                e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'var(--text-secondary)';
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              <span>Modified</span>
-              {sortOrder === 'desc' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
-            </button>
-
-            {/* Grid/List toggles */}
-            <div className="flex items-center rounded-lg border" style={{ padding: '4px', gap: '4px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-              <button 
-                onClick={() => setViewMode('grid')}
-                className="rounded-md transition-all"
-                style={{
-                  padding: '6px 10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: viewMode === 'grid' ? 'var(--bg-tertiary)' : 'transparent',
-                  color: viewMode === 'grid' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                }}
-                onMouseEnter={(e) => {
-                  if (viewMode !== 'grid') e.currentTarget.style.color = 'var(--text-primary)';
-                }}
-                onMouseLeave={(e) => {
-                  if (viewMode !== 'grid') e.currentTarget.style.color = 'var(--text-secondary)';
-                }}
-              >
-                <LayoutGrid size={16} />
-              </button>
-              <button 
-                onClick={() => setViewMode('list')}
-                className="rounded-md transition-all"
-                style={{
-                  padding: '6px 10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: viewMode === 'list' ? 'var(--bg-tertiary)' : 'transparent',
-                  color: viewMode === 'list' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                }}
-                onMouseEnter={(e) => {
-                  if (viewMode !== 'list') e.currentTarget.style.color = 'var(--text-primary)';
-                }}
-                onMouseLeave={(e) => {
-                  if (viewMode !== 'list') e.currentTarget.style.color = 'var(--text-secondary)';
-                }}
-              >
-                <List size={16} />
-              </button>
             </div>
           </div>
+
         </div>
       </div>
 
@@ -1523,6 +1579,70 @@ export default function LibraryView() {
           )}
         </div>
       </div>
+
+      {/* Mobile Floating Batch Actions Bar */}
+      {selectedFileIds.length > 0 && (
+        <div 
+          className="mobile-batch-actions-bar"
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(28, 28, 30, 0.85)',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            borderRadius: '24px',
+            padding: '10px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(20px)',
+            zIndex: 999,
+            maxWidth: 'calc(100% - 32px)',
+            width: 'max-content'
+          }}
+        >
+          <span style={{ fontSize: '13px', fontWeight: '500', color: 'rgba(255, 255, 255, 0.8)', whiteSpace: 'nowrap' }}>
+            {selectedFileIds.length} Selected
+          </span>
+          <div style={{ width: '1px', height: '16px', backgroundColor: 'rgba(255, 255, 255, 0.15)' }} />
+          <button
+            onClick={handleBatchDelete}
+            style={{
+              backgroundColor: '#e11d48',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '16px',
+              padding: '6px 14px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 4px 12px rgba(225, 29, 72, 0.3)'
+            }}
+          >
+            <Trash2 size={14} />
+            <span>Delete</span>
+          </button>
+          <button
+            onClick={() => setSelectedFileIds([])}
+            style={{
+              backgroundColor: 'transparent',
+              color: 'rgba(255, 255, 255, 0.6)',
+              border: 'none',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              padding: '4px 8px'
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
     </div>
   );
