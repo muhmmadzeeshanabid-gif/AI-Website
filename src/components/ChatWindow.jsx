@@ -3416,6 +3416,58 @@ const ChatWindow = () => {
                   </div>
                 ) : (
                   <div className={`w-full ${isMobile ? 'mt-auto' : 'max-w-[840px] relative group'} px-0`}>
+                    {/* Pending attachment preview chip on landing page */}
+                    <AnimatePresence>
+                      {pendingAttachment && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 8, scale: 0.97 }}
+                          transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '8px 14px',
+                            background: 'var(--surface-2)',
+                            border: '1px solid var(--divider)',
+                            borderRadius: '16px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                            marginBottom: '12px'
+                          }}
+                        >
+                          {pendingAttachment.url && (
+                            <img
+                              src={pendingAttachment.url}
+                              alt="attachment"
+                              style={{
+                                width: '44px', height: '44px', objectFit: 'cover',
+                                borderRadius: '10px', flexShrink: 0,
+                                border: '1px solid var(--divider)',
+                              }}
+                            />
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pendingAttachment.name}</p>
+                            <p style={{ margin: 0, fontSize: '11px', color: 'var(--on-surface-muted)' }}>{pendingAttachment.type}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPendingAttachment(null)}
+                            style={{
+                              flexShrink: 0, width: 28, height: 28, borderRadius: '50%',
+                              background: 'var(--hover-overlay)', border: 'none', cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              color: 'var(--on-surface-muted)',
+                            }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
                     {isMobile ? (
                       <div className="w-full flex items-center gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
                         <div className="flex-shrink-0" ref={attachmentRefLanding}>
