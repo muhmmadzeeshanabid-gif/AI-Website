@@ -604,18 +604,14 @@ export default function LibraryView() {
             zIndex: 10
           }}
         >
-          {/* Left: Close/Back button & File Details */}
-          <div className="preview-header-left flex items-center gap-4 min-w-0 flex-1">
+          {/* Left: Close/Back button */}
+          <div className="preview-header-left flex items-center gap-4">
             <button 
               onClick={() => handleSelectFile(null)}
               className="p-2 rounded-full hover:bg-white/10 transition-colors flex items-center justify-center text-white/70 hover:text-white shrink-0"
             >
               <X size={20} />
             </button>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-semibold truncate text-white" style={{ maxWidth: '100%' }}>{activeFile.name}</h2>
-              <p className="preview-file-meta text-xs text-white/50">{formatSize(activeFile.size)} • {activeFile.type}</p>
-            </div>
           </div>
 
           {/* Right: Actions */}
@@ -703,6 +699,42 @@ export default function LibraryView() {
               <p className="text-sm font-medium">Preview not available for this file type</p>
             </div>
           )}
+        </div>
+
+        {/* Centered File Info */}
+        <div 
+          className="preview-file-info text-center px-6 py-2.5 shrink-0 select-text animate-fade-in"
+          style={{ 
+            zIndex: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: '-8px',
+            marginBottom: '8px'
+          }}
+        >
+          <h2 
+            className="text-base font-semibold text-white truncate max-w-[85vw] sm:max-w-md md:max-w-lg"
+            style={{ 
+              fontSize: '16px', 
+              fontWeight: 600, 
+              color: '#ffffff',
+              lineHeight: '1.4'
+            }}
+            title={activeFile.name}
+          >
+            {activeFile.name}
+          </h2>
+          <p 
+            className="text-xs text-white/40 mt-1 font-medium"
+            style={{ 
+              color: 'rgba(255, 255, 255, 0.4)', 
+              fontSize: '12px' 
+            }}
+          >
+            {formatSize(activeFile.size)} • {activeFile.type}
+          </p>
         </div>
 
         {/* Bottom Capsule Input Bar */}
@@ -1289,14 +1321,14 @@ export default function LibraryView() {
             <div className="w-full flex flex-col">
               {/* Table Header */}
               <div 
-                className="list-header flex items-center px-4 py-2 text-xs font-semibold uppercase tracking-wider mb-2"
+                className="list-header flex items-center px-6 pt-4 pb-3 text-xs font-semibold uppercase tracking-wider mb-3"
                 style={{ 
                   color: 'var(--text-tertiary)',
                   borderBottom: '1px solid var(--border-color)'
                 }}
               >
                 {/* Checkbox Header */}
-                <div style={{ width: '40px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                <div style={{ width: '48px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                   <input 
                     type="checkbox"
                     checked={filteredFiles.length > 0 && filteredFiles.every(f => selectedFileIds.includes(f.id))}
@@ -1313,7 +1345,7 @@ export default function LibraryView() {
                       }
                     }}
                     className="list-header-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                    style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--accent-color)' }}
+                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--accent-color)' }}
                   />
                 </div>
                 <div style={{ width: '40px', flexShrink: 0 }} />
@@ -1333,7 +1365,7 @@ export default function LibraryView() {
                     <div
                       key={file.id}
                       onClick={() => handleSelectFile(file)}
-                      className="group list-row flex items-center px-4 py-3.5 rounded-xl transition-all cursor-pointer border border-transparent"
+                      className="group list-row flex items-center px-6 py-3.5 rounded-xl transition-all cursor-pointer border border-transparent"
                       style={{
                         backgroundColor: 'transparent',
                       }}
@@ -1349,7 +1381,7 @@ export default function LibraryView() {
                       {/* Checkbox Column */}
                       <div 
                         onClick={(e) => e.stopPropagation()} 
-                        style={{ width: '40px', flexShrink: 0, display: 'flex', alignItems: 'center' }}
+                        style={{ width: '48px', flexShrink: 0, display: 'flex', alignItems: 'center' }}
                       >
                         <input 
                           type="checkbox"
@@ -1362,7 +1394,7 @@ export default function LibraryView() {
                             }
                           }}
                           className="list-row-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--accent-color)' }}
+                          style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--accent-color)' }}
                         />
                       </div>
 
