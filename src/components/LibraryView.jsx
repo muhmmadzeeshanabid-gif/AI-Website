@@ -175,6 +175,12 @@ export default function LibraryView() {
   const [sidebarWasOpen, setSidebarWasOpen] = useState(true);
   const [chatInput, setChatInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState({
+    isOpen: false,
+    type: 'single', // 'single' | 'batch'
+    targetId: null,
+    fileName: ''
+  });
   const fileInputRef = useRef(null);
 
   // Helper to format file size
@@ -511,14 +517,29 @@ export default function LibraryView() {
     setSelectedFileIds([]);
   };
 
-  const handleBatchDelete = async () => {
-    if (confirm(`Are you sure you want to delete ${selectedFileIds.length} files?`)) {
-      // Use for...of to ensure sequential deletion and correct local state updates
+  const handleBatchDelete = () => {
+    setDeleteConfirmation({
+      isOpen: true,
+      type: 'batch',
+      targetId: null,
+      fileName: ''
+    });
+  };
+
+  const executeDelete = async () => {
+    if (deleteConfirmation.type === 'single') {
+      const id = deleteConfirmation.targetId;
+      await handleDeleteFile(id);
+      if (activeFile?.id === id) {
+        handleSelectFile(null);
+      }
+    } else if (deleteConfirmation.type === 'batch') {
       for (const id of selectedFileIds) {
         await handleDeleteFile(id);
       }
       setSelectedFileIds([]);
     }
+    setDeleteConfirmation({ isOpen: false, type: 'single', targetId: null, fileName: '' });
   };
 
   // Filter and Search logic
@@ -641,11 +662,13 @@ export default function LibraryView() {
             </button>
 
             <button
-              onClick={async () => {
-                if (confirm('Are you sure you want to delete this file?')) {
-                  await handleDeleteFile(activeFile.id);
-                  handleSelectFile(null);
-                }
+              onClick={() => {
+                setDeleteConfirmation({
+                  isOpen: true,
+                  type: 'single',
+                  targetId: activeFile.id,
+                  fileName: activeFile.name
+                });
               }}
               className="p-2 rounded-full hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors flex items-center justify-center shrink-0"
               title="Delete"
@@ -876,6 +899,14 @@ export default function LibraryView() {
   return (
     <div className="w-full flex flex-col select-none" style={{ height: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>
       <style>{`
+        @keyframes scaleUp {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-scale-up {
+          animation: scaleUp 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
         /* Custom styled checkboxes looking like circular radio buttons */
         .grid-card-checkbox,
         .list-row-checkbox,
@@ -949,7 +980,7 @@ export default function LibraryView() {
         }
 
         .mobile-batch-actions-bar {
-          display: none;
+          display: none !important;
         }
 
         /* Hide scrollbars for categories filter bar */
@@ -1520,7 +1551,13 @@ export default function LibraryView() {
 
                               <button
                                 onClick={(e) => {
-                                  handleDeleteFile(file.id, e);
+                                  e.stopPropagation();
+                                  setDeleteConfirmation({
+                                    isOpen: true,
+                                    type: 'single',
+                                    targetId: file.id,
+                                    fileName: file.name
+                                  });
                                   setActiveDropdownFileId(null);
                                 }}
                                 className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl transition-all w-full text-left"
@@ -1688,6 +1725,135 @@ export default function LibraryView() {
           >
             Cancel
           </button>
+        </div>
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {deleteConfirmation.isOpen && (
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center animate-fade-in"
+          style={{
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(8px)',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+          onClick={() => setDeleteConfirmation(prev => ({ ...prev, isOpen: false }))}
+        >
+          <div 
+            className="rounded-3xl border shadow-2xl flex flex-col p-6 max-w-sm w-full animate-scale-up"
+            style={{
+              backgroundColor: 'var(--bg-secondary)',
+              borderColor: 'var(--border-color)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              position: 'relative'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top Close Button */}
+            <button
+              onClick={() => setDeleteConfirmation(prev => ({ ...prev, isOpen: false }))}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                color: 'var(--text-tertiary)',
+                cursor: 'pointer',
+                borderRadius: '50%',
+                padding: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-overlay)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <X size={16} />
+            </button>
+
+            {/* Warning Icon Banner */}
+            <div className="flex flex-col items-center text-center mt-2">
+              <div 
+                className="w-12 h-12 rounded-full flex items-center justify-center mb-4"
+                style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  color: '#ef4444'
+                }}
+              >
+                <Trash2 size={24} />
+              </div>
+
+              {/* Title */}
+              <h3 
+                className="text-lg font-bold mb-2"
+                style={{
+                  color: 'var(--text-primary)',
+                  fontSize: '18px',
+                  fontWeight: '700',
+                  lineHeight: '1.2'
+                }}
+              >
+                {deleteConfirmation.type === 'single' ? 'Delete File?' : 'Delete Selected Files?'}
+              </h3>
+
+              {/* Description */}
+              <p 
+                className="text-sm mb-6"
+                style={{
+                  color: 'var(--text-secondary)',
+                  fontSize: '14px',
+                  lineHeight: '1.5',
+                  marginTop: '6px'
+                }}
+              >
+                {deleteConfirmation.type === 'single' ? (
+                  <>
+                    Are you sure you want to permanently delete <strong style={{ color: 'var(--text-primary)', wordBreak: 'break-all' }}>{deleteConfirmation.fileName}</strong>? This action cannot be undone.
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to permanently delete <strong>{selectedFileIds.length}</strong> selected files? This action cannot be undone.
+                  </>
+                )}
+              </p>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3 w-full">
+                <button
+                  onClick={() => setDeleteConfirmation(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 py-2.5 rounded-full text-sm font-semibold border transition-all"
+                  style={{
+                    borderColor: 'var(--border-color)',
+                    color: 'var(--text-primary)',
+                    backgroundColor: 'transparent'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-overlay)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeDelete}
+                  className="flex-1 py-2.5 rounded-full text-sm font-semibold transition-all"
+                  style={{
+                    backgroundColor: '#ef4444',
+                    color: '#ffffff'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ef4444'}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
