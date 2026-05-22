@@ -21,11 +21,11 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-const AttachmentMenu = ({ isOpen, onClose, position = 'bottom' }) => {
+const AttachmentMenu = ({ isOpen, onClose, position = 'bottom', onSelectFile }) => {
   const [hoveredMore, setHoveredMore] = useState(false);
 
   const menuItems = [
-    { icon: <Paperclip size={18} strokeWidth={2.2} />, text: 'Add photos & files' },
+    { icon: <Paperclip size={18} strokeWidth={2.2} />, text: 'Add photos & files', action: 'file' },
     { icon: <Image size={18} strokeWidth={2.2} />, text: 'Create image' },
     { icon: <Lightbulb size={18} strokeWidth={2.2} />, text: 'Thinking' },
     { icon: <Telescope size={18} strokeWidth={2.2} />, text: 'Deep research' },
@@ -74,8 +74,11 @@ const AttachmentMenu = ({ isOpen, onClose, position = 'bottom' }) => {
               >
                 <button
                   onClick={(e) => {
+                    e.stopPropagation();
+                    if (item.action === 'file' && onSelectFile) {
+                      onSelectFile();
+                    }
                     if (!item.hasSubmenu) {
-                      e.stopPropagation();
                       onClose();
                     }
                   }}
@@ -114,6 +117,209 @@ const AttachmentMenu = ({ isOpen, onClose, position = 'bottom' }) => {
           </motion.div>
       )}
     </AnimatePresence>
+  );
+};
+
+// Helper: parse user messages for embedded image markdown
+const parseUserImageMessage = (content) => {
+  if (typeof content !== 'string') return { hasImage: false, text: content };
+  const match = content.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+  if (match) {
+    const imgUrl = match[2];
+    let cleanText = content.replace(match[0], '').trim();
+    cleanText = cleanText.replace(/^(Ask about this image:|Ask about this file:)\s*/i, '').trim();
+    
+    // Support fileId parsing from alt tag: ![filename|fileId]
+    const altValue = match[1] || '';
+    const pipeIdx = altValue.indexOf('|');
+    const alt = pipeIdx !== -1 ? altValue.substring(0, pipeIdx) : altValue;
+    const fileId = pipeIdx !== -1 ? altValue.substring(pipeIdx + 1) : null;
+    
+    return { hasImage: true, imgUrl, text: cleanText, alt, fileId };
+  }
+  return { hasImage: false, text: content };
+};
+
+// IndexedDB setup for persisting raw original files
+const dbName = 'aura-library-db';
+const storeName = 'files-data';
+const dbVersion = 3;
+
+const openAuraDB = () => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') {
+      reject(new Error("IndexedDB is not available on server-side"));
+      return;
+    }
+    const request = indexedDB.open(dbName, dbVersion);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName);
+      }
+    };
+    request.onsuccess = (e) => {
+      resolve(e.target.result);
+    };
+    request.onerror = (e) => {
+      reject(e.target.error || new Error("Failed to open IndexedDB"));
+    };
+  });
+};
+
+const saveFileToIndexedDB = async (id, fileObj) => {
+  try {
+    const db = await openAuraDB();
+    return new Promise((resolve) => {
+      let resolved = false;
+      const done = (val) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(val);
+          try { db.close(); } catch (e) {}
+        }
+      };
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+      const putReq = store.put(fileObj, id);
+      putReq.onsuccess = () => done(true);
+      putReq.onerror = () => done(false);
+      transaction.oncomplete = () => done(true);
+      transaction.onerror = () => done(false);
+    });
+  } catch (err) {
+    console.error("IndexedDB save error:", err);
+    return false;
+  }
+};
+
+const generateThumbnail = (file) => {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith('image/')) {
+      resolve(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+// Component to dynamically resolve high-resolution original image from IndexedDB
+const ChatImage = ({ fileId, fallbackUrl, alt, onImageClick }) => {
+  const [src, setSrc] = React.useState(fallbackUrl);
+
+  React.useEffect(() => {
+    setSrc(fallbackUrl);
+    if (!fileId || typeof window === 'undefined') return;
+
+    let active = true;
+    let localUrl = null;
+
+    const loadOriginal = async () => {
+      const getFile = () => {
+        return new Promise((resolve) => {
+          const request = indexedDB.open(dbName, dbVersion);
+          request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(storeName)) {
+              db.createObjectStore(storeName);
+            }
+          };
+          request.onsuccess = (e) => {
+            const db = e.target.result;
+            let resolved = false;
+            const done = (val) => {
+              if (!resolved) {
+                resolved = true;
+                resolve(val);
+                try { db.close(); } catch (ev) {}
+              }
+            };
+            try {
+              if (!db.objectStoreNames.contains(storeName)) {
+                done(null);
+                return;
+              }
+              const transaction = db.transaction(storeName, 'readonly');
+              const store = transaction.objectStore(storeName);
+              const getReq = store.get(fileId);
+              getReq.onsuccess = () => done(getReq.result || null);
+              getReq.onerror = () => done(null);
+              transaction.oncomplete = () => done(null);
+              transaction.onerror = () => done(null);
+            } catch (err) {
+              done(null);
+            }
+          };
+          request.onerror = () => resolve(null);
+        });
+      };
+
+      const fileObj = await getFile();
+      if (fileObj && active) {
+        try {
+          localUrl = URL.createObjectURL(fileObj);
+          setSrc(localUrl);
+        } catch (err) {
+          console.error("Failed to create URL for chat image:", err);
+        }
+      }
+    };
+
+    loadOriginal();
+
+    return () => {
+      active = false;
+      if (localUrl) {
+        try {
+          URL.revokeObjectURL(localUrl);
+        } catch (e) {}
+      }
+    };
+  }, [fileId, fallbackUrl]);
+
+  return (
+    <img
+      src={src}
+      alt={alt || 'attachment'}
+      onClick={() => onImageClick && onImageClick(src)}
+      style={{
+        width: '100%',
+        height: 'auto',
+        maxHeight: '300px',
+        objectFit: 'contain',
+        display: 'block',
+      }}
+    />
   );
 };
 
@@ -176,29 +382,71 @@ const CodeCopyButton = ({ code }) => {
   );
 };
 
-const TypewriterMessage = ({ content, isUser = false, onDone }) => {
+const TypewriterMessage = ({ content, isUser = false, isGenerating = false, onDone }) => {
   const { resolvedTheme } = useAppContext();
   const [displayed, setDisplayed] = useState('');
   const idxRef = useRef(0);
-  const rafRef = useRef(null);
-  // User messages type faster — feel more like real-time chat
-  const CHARS_PER_FRAME = isUser ? 5 : 3;
+  const contentRef = useRef(content);
+  const onDoneRef = useRef(onDone);
+  const isGeneratingRef = useRef(isGenerating);
 
   useEffect(() => {
-    idxRef.current = 0;
-    setDisplayed('');
-    const animate = () => {
-      idxRef.current = Math.min(idxRef.current + CHARS_PER_FRAME, content.length);
-      setDisplayed(content.slice(0, idxRef.current));
-      if (idxRef.current < content.length) {
-        rafRef.current = requestAnimationFrame(animate);
-      } else {
-        onDone?.();
-      }
-    };
-    rafRef.current = requestAnimationFrame(animate);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    contentRef.current = content;
+    if (idxRef.current > content.length) {
+      idxRef.current = content.length;
+      setDisplayed(content);
+    }
   }, [content]);
+
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
+  useEffect(() => {
+    isGeneratingRef.current = isGenerating;
+  }, [isGenerating]);
+
+  useEffect(() => {
+    let active = true;
+    let rafId = null;
+    const animate = () => {
+      if (!active) return;
+      
+      const currentLength = contentRef.current.length;
+      const typedLength = idxRef.current;
+      
+      if (typedLength < currentLength) {
+        const baseSpeed = isUser ? 5 : 3;
+        const remaining = currentLength - typedLength;
+        
+        // Dynamically speed up typing if we're lagging far behind the streaming response
+        let charsToType = baseSpeed;
+        if (remaining > 300) {
+          charsToType = Math.ceil(remaining / 8);
+        } else if (remaining > 100) {
+          charsToType = Math.ceil(remaining / 12);
+        } else if (remaining > 30) {
+          charsToType = 6;
+        }
+        
+        idxRef.current = Math.min(typedLength + charsToType, currentLength);
+        setDisplayed(contentRef.current.slice(0, idxRef.current));
+      }
+      
+      if (idxRef.current >= currentLength) {
+        if (!isGeneratingRef.current) {
+          onDoneRef.current?.();
+        }
+      }
+      
+      rafId = requestAnimationFrame(animate);
+    };
+    rafId = requestAnimationFrame(animate);
+    return () => {
+      active = false;
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [isUser]);
 
   if (isUser) {
     return <p className="leading-relaxed whitespace-pre-wrap font-medium">{displayed}</p>;
@@ -393,6 +641,59 @@ const MessageContent = ({ content, isUser }) => {
   );
 };
 
+const cleanChatTitle = (text) => {
+  if (!text) return 'New Chat';
+  
+  // If it's a markdown image or contains base64/blob image content
+  if (text.includes('data:image/') || text.includes('blob:http') || text.startsWith('![')) {
+    // Replace markdown image syntax but capture filename if possible
+    // e.g. ![image (1).png](data:...) or ![photo.jpg](blob:...)
+    const filenameMatch = text.match(/!\[(.*?)\]/);
+    const filename = filenameMatch ? filenameMatch[1] : '';
+    
+    // Extract everything after the markdown image block
+    let cleanText = text.replace(/!\[.*?\]\(.*?\)/g, '').trim();
+    
+    // Remove headers like "Ask about this image:" or "Ask about this file:"
+    cleanText = cleanText.replace(/Ask about this image:\s*/i, '');
+    cleanText = cleanText.replace(/Ask about this file:\s*/i, '');
+    cleanText = cleanText.trim();
+    
+    if (cleanText) {
+      return cleanText.length > 35 ? cleanText.slice(0, 35) + '...' : cleanText;
+    }
+    
+    // If filename is generic or too short/empty, return "Image design request"
+    if (filename && !filename.startsWith('image') && !filename.startsWith('file') && filename.length > 2) {
+      return `Image: ${filename}`;
+    }
+    return 'Image design request';
+  }
+  
+  // If it's a file placeholder
+  if (text.startsWith('📄 **')) {
+    let cleanText = text.replace(/📄 \*\*(.*?)\*\*/, '$1').trim();
+    cleanText = cleanText.replace(/Ask about this file:\s*/i, '');
+    cleanText = cleanText.trim();
+    
+    if (cleanText) {
+      return cleanText.length > 35 ? cleanText.slice(0, 35) + '...' : cleanText;
+    }
+    return 'File Analysis';
+  }
+  
+  return text;
+};
+
+const cleanInputForPrompt = (text) => {
+  if (!text) return '';
+  return text
+    .replace(/!\[(.*?)\]\(data:image\/[a-zA-Z+.-]+;base64,[^)]*\)/g, '[Image: $1]')
+    .replace(/!\[(.*?)\]\(blob:[^)]*\)/g, '[Image: $1]')
+    .replace(/!\[(.*?)\]\([^)]*\)/g, '[Image: $1]')
+    .trim();
+};
+
 const ChatWindow = () => {
   const { 
     isSidebarOpen, appView, resolvedTheme, activeChatId, chats, 
@@ -510,6 +811,40 @@ const ChatWindow = () => {
   const [showModelSwitcher, setShowModelSwitcher] = useState(false);
   const [showModelSwitcherLanding, setShowModelSwitcherLanding] = useState(false);
   const [hoveredPlus, setHoveredPlus] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState(null); // { name, type, url, dataUrl }
+  const [fullscreenImageUrl, setFullscreenImageUrl] = useState(null);
+  const chatFileInputRef = useRef(null);
+
+  const handleChatFileSelect = () => {
+    chatFileInputRef.current?.click();
+  };
+
+  const handleChatFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const blobUrl = URL.createObjectURL(file);
+    
+    // Generate a unique ID for this chat attachment
+    const id = 'chat-file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    
+    // Persist raw file to IndexedDB for high-res load recovery
+    await saveFileToIndexedDB(id, file);
+
+    // Generate high-resolution thumbnail (1200x1200px max) for Firestore backup
+    let thumbnailUrl = null;
+    if (file.type.startsWith('image/')) {
+      thumbnailUrl = await generateThumbnail(file);
+    }
+
+    setPendingAttachment({ 
+      id,
+      name: file.name, 
+      type: file.type, 
+      url: blobUrl, 
+      thumbnailUrl 
+    });
+  };
   const [showScrollButton, setShowScrollButton] = useState(false);
   const scrollContainerRef = useRef(null);
   const inputRef = useRef(null);
@@ -830,6 +1165,7 @@ const ChatWindow = () => {
     const isMe = msg.role === 'user' && (msg.sender?.email === profile?.email || !msg.sender?.email || isSharedReadOnly);
     const isOtherUser = msg.role === 'user' && !isMe;
     const isGroup = chats.find(c => c.id === activeChatId)?.isGroup;
+    const parsedImage = msg.role === 'user' ? parseUserImageMessage(msg.content) : { hasImage: false };
 
     // 1. Handle Deletion State
     const isDeletedForMe = msg.deletedBy?.includes(user?.uid);
@@ -947,25 +1283,27 @@ const ChatWindow = () => {
              animate={{ opacity: 1, scale: 1, y: 0 }} 
              transition={{ duration: 0.2, ease: "easeOut" }}
            className={`relative transition-all duration-300 min-w-0 ${
-              isMe 
-                ? 'px-6 py-3 rounded-[24px] font-medium shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] border border-white/5' 
-                : isOtherUser
-                  ? 'px-6 py-3 rounded-[24px] bg-surface-2 border border-divider'
-                  : 'px-0 py-2'
+              parsedImage.hasImage
+                ? 'px-0 py-0'
+                : isMe 
+                  ? 'px-6 py-3 rounded-[24px] font-medium shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] border border-white/5' 
+                  : isOtherUser
+                    ? 'px-6 py-3 rounded-[24px] bg-surface-2 border border-divider'
+                    : 'px-0 py-2'
             }`}
            style={{ 
              maxWidth: msg.isVoice ? '340px' : isMe ? '78%' : isOtherUser ? '78%' : '100%',
-             overflow: 'hidden',
+             overflow: parsedImage.hasImage ? 'visible' : 'hidden',
              wordBreak: 'break-word',
-             background: isMe ? accentColor : isOtherUser ? 'var(--surface-2)' : 'transparent',
+             background: parsedImage.hasImage ? 'transparent' : (isMe ? accentColor : isOtherUser ? 'var(--surface-2)' : 'transparent'),
              color: isMe ? '#ffffff' : 'var(--on-surface)',
-             border: isMe ? `1px solid ${accentColor}` : isOtherUser ? '1px solid var(--divider)' : 'none',
-             borderRadius: msg.isVoice ? '20px' : isMe ? '24px 24px 4px 24px' : isOtherUser ? '4px 24px 24px 24px' : '0',
+             border: parsedImage.hasImage ? 'none' : (isMe ? `1px solid ${accentColor}` : isOtherUser ? '1px solid var(--divider)' : 'none'),
+             borderRadius: parsedImage.hasImage ? '0' : (msg.isVoice ? '20px' : isMe ? '24px 24px 4px 24px' : isOtherUser ? '4px 24px 24px 24px' : '0'),
              fontSize: fontSize === 'Small' ? '12.5px' : fontSize === 'Large' ? '16px' : '14px', 
              lineHeight: '1.7',
-             boxShadow: (isMe || isOtherUser) && resolvedTheme === 'dark' ? '0 10px 20px -5px rgba(0,0,0,0.2)' : 'none',
+             boxShadow: !parsedImage.hasImage && (isMe || isOtherUser) && resolvedTheme === 'dark' ? '0 10px 20px -5px rgba(0,0,0,0.2)' : 'none',
              overflowWrap: 'anywhere',
-             padding: msg.isVoice ? '12px 16px' : (isMe || isOtherUser ? undefined : '0px')
+             padding: parsedImage.hasImage ? '0px' : (msg.isVoice ? '12px 16px' : (isMe || isOtherUser ? undefined : '0px'))
            }}
           >
        {msg.isVoice ? 
@@ -1014,17 +1352,90 @@ const ChatWindow = () => {
                  color: isMe ? 'rgba(255,255,255,0.9)' : 'var(--on-surface-muted)',
                }}
              >
-               <p className="line-clamp-2 leading-relaxed">
-                 <span className="opacity-40 mr-1 font-serif text-[15px]">"</span>
-                 {msg.replyTo.content}
-                 <span className="opacity-40 ml-1 font-serif text-[15px]">"</span>
-               </p>
+                <p className="line-clamp-2 leading-relaxed">
+                  <span className="opacity-40 mr-1 font-serif text-[15px]">"</span>
+                  {msg.replyTo.content}
+                  <span className="opacity-40 ml-1 font-serif text-[15px]">"</span>
+                </p>
             </div>
           }
-          {msg._typewriter && !msg.isPlaceholder
-            ? <TypewriterMessage content={msg.content} isUser={msg.role === 'user'} onDone={() => setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, _typewriter: false } : m))} />
-            : <MessageContent content={msg.content} isUser={msg.role === 'user'} />
-          }
+          {/* Render embedded image card for user messages */}
+          {msg.role === 'user' && (() => {
+            const parsed = parseUserImageMessage(msg.content);
+            if (parsed.hasImage) {
+              const imgSrc = msg.attachment?.thumbnailUrl || parsed.imgUrl || msg.attachment?.url;
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {/* Image card */}
+                  <div
+                    style={{
+                      borderRadius: '16px',
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      maxWidth: '340px',
+                      width: '100%',
+                      position: 'relative',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                      flexShrink: 0,
+                      backgroundColor: 'transparent',
+                    }}
+                    title="Click to view full size"
+                  >
+                    <ChatImage
+                      fileId={parsed.fileId}
+                      fallbackUrl={imgSrc}
+                      alt={parsed.alt}
+                      onImageClick={(resolvedSrc) => setFullscreenImageUrl(resolvedSrc)}
+                    />
+                    <div style={{
+                      position: 'absolute', top: 8, right: 8,
+                      background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+                      borderRadius: '8px', padding: '4px 8px',
+                      fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.8)',
+                      letterSpacing: '0.05em',
+                    }}>IMAGE</div>
+                  </div>
+                  {/* Text bubble below image */}
+                  {parsed.text && (
+                    <div 
+                      className={`font-medium ${
+                        isMe 
+                          ? 'px-6 py-3 shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] border border-white/5' 
+                          : isOtherUser
+                            ? 'px-6 py-3 bg-surface-2 border border-divider'
+                            : 'px-0 py-2'
+                      }`}
+                      style={{ 
+                        margin: 0,
+                        background: isMe ? accentColor : isOtherUser ? 'var(--surface-2)' : 'transparent',
+                        color: isMe ? '#ffffff' : 'var(--on-surface)',
+                        border: isMe ? `1px solid ${accentColor}` : isOtherUser ? '1px solid var(--divider)' : 'none',
+                        borderRadius: isMe ? '24px 24px 4px 24px' : isOtherUser ? '4px 24px 24px 24px' : '0',
+                        boxShadow: (isMe || isOtherUser) && resolvedTheme === 'dark' ? '0 10px 20px -5px rgba(0,0,0,0.2)' : 'none',
+                        alignSelf: isMe ? 'flex-end' : 'flex-start',
+                        maxWidth: '100%',
+                      }}
+                    >
+                      <p className="leading-relaxed whitespace-pre-wrap" style={{ margin: 0 }}>{parsed.text}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <>
+                {msg._typewriter && msg.content
+                  ? <TypewriterMessage content={msg.content} isUser={true} isGenerating={msg.isPlaceholder} onDone={() => setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, _typewriter: false } : m))} />
+                  : <p className="leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
+                }
+              </>
+            );
+          })()}
+          {msg.role !== 'user' && (
+            msg._typewriter && msg.content
+              ? <TypewriterMessage content={msg.content} isUser={false} isGenerating={msg.isPlaceholder} onDone={() => setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, _typewriter: false } : m))} />
+              : <MessageContent content={msg.content} isUser={false} />
+          )}
         </>
       }
       </motion.div>
@@ -1518,12 +1929,22 @@ const ChatWindow = () => {
 
   const handleSend = async (e, overrideInput, isVoice = false) => {
     if (e) e.preventDefault();
-    const textToSend = overrideInput || input;
+    const rawTextToSend = overrideInput || input;
     
+    // If there's a pending attachment, embed it into the message
+    let textToSend = rawTextToSend;
+    let attachmentForMessage = null;
+    if (pendingAttachment && !overrideInput) {
+      const imgMarkdown = `![${pendingAttachment.name}|${pendingAttachment.id}](${pendingAttachment.thumbnailUrl || pendingAttachment.url})`;
+      textToSend = `${imgMarkdown}\nAsk about this image: ${rawTextToSend}`.trim();
+      attachmentForMessage = { ...pendingAttachment };
+      setPendingAttachment(null);
+    }
+
     const currentChat = chats.find(c => c.id === activeChatId);
     const isGroup = currentChat?.isGroup;
     const isGeneratingRemote = isGroup && currentChat?.isGenerating;
-    if (!textToSend.trim() || isLoading || isGeneratingRemote) return;
+    if ((!textToSend.trim() && !attachmentForMessage) || isLoading || isGeneratingRemote) return;
 
     // Snapshot history immediately to isolate this request from parallel messages
     const historySnapshot = [...messages]; 
@@ -1557,6 +1978,13 @@ const ChatWindow = () => {
         role: replyingToMsg.role,
         content: replyingToMsg.content
       } : null,
+      attachment: attachmentForMessage ? {
+        id: attachmentForMessage.id,
+        name: attachmentForMessage.name,
+        type: attachmentForMessage.type,
+        url: attachmentForMessage.url,
+        thumbnailUrl: attachmentForMessage.thumbnailUrl
+      } : null,
       sender: profile || { displayName: 'Guest', avatar: null },
       timestamp: new Date().toISOString()
     };
@@ -1568,7 +1996,8 @@ const ChatWindow = () => {
       id: aiMessageId, 
       isPlaceholder: true,
       respondingTo: userMessage.id,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      _typewriter: true
     };
 
     // Clear reply state
@@ -1591,9 +2020,11 @@ const ChatWindow = () => {
     if (isFirstMessage && !isTemporary) {
       const newChatId = Date.now().toString();
       // Set a generic initial title to avoid "hello" etc. showing up
-      const initialTitle = textToSend.trim().length > 30 
-        ? textToSend.trim().slice(0, 30) + '...' 
-        : "New Chat";
+      // Use raw text (not image content) for title generation
+      const cleanTitleText = cleanChatTitle(rawTextToSend.trim());
+      const initialTitle = cleanTitleText.length > 30 
+        ? cleanTitleText.slice(0, 30) + '...' 
+        : cleanTitleText.length > 0 ? cleanTitleText : (attachmentForMessage ? 'Image design request' : 'New Chat');
       
       const newChat = { id: newChatId, title: initialTitle, messages: [userMessage], timestamp: new Date().toISOString() };
       setChats(prev => [newChat, ...prev.filter(c => c.messages.length > 0)]);
@@ -1622,8 +2053,10 @@ const ChatWindow = () => {
     if (isFirstMessage && !isTemporary) {
       (async () => {
         try {
+          const cleanedInputForPrompt = cleanInputForPrompt(currentInput);
           const titlePrompt = `Analyze this user's first message and generate a highly descriptive, professional, and concise title (2-5 words) for the conversation. 
-          First Message: "${currentInput}"
+          First Message: "${attachmentForMessage ? `[Image: ${attachmentForMessage.name}] ${rawTextToSend}` : cleanedInputForPrompt}"
+          
           
           Guidelines:
           - Identify the core topic, task, or intent of the message.
@@ -1651,16 +2084,17 @@ const ChatWindow = () => {
     }
 
     try {
-      let finalPrompt = currentInput;
+      let finalPrompt = textToSend;
       
-      // Check if it's an image request and force Gemini to use the specific image format
-      if (currentInput.toLowerCase().includes('generate an image') || currentInput.toLowerCase().includes('create an image') || currentInput.toLowerCase().includes('draw')) {
-        finalPrompt = `${currentInput}. 
+      // Check if it's an image GENERATION request (only on raw text, not on attached images)
+      if (!attachmentForMessage && (rawTextToSend.toLowerCase().includes('generate an image') || rawTextToSend.toLowerCase().includes('create an image') || rawTextToSend.toLowerCase().includes('draw'))) {
+        finalPrompt = `${rawTextToSend}. 
         IMPORTANT: To generate an image, you MUST return a markdown image link in this EXACT format: ![description](https://image.pollinations.ai/prompt/YOUR_PROMPT_HERE?width=1024&height=1024&nologo=true). 
         Replace YOUR_PROMPT_HERE with a highly detailed, descriptive, and artistic prompt based on the user's request. 
         The prompt in the URL must be URL-encoded (use %20 for spaces). 
         Do NOT add any other text unless necessary.`;
       }
+
 
       setGeneratingId(aiMessageId);
       setMessages(prev => [...prev, aiPlaceholder]);
@@ -1689,7 +2123,7 @@ const ChatWindow = () => {
       
       // Always update local state with final response to clear placeholder status
       setMessages(prev => prev.map(m => 
-        m.id === aiMessageId ? { ...m, content: aiResponse, isPlaceholder: false, _typewriter: false } : m
+        m.id === aiMessageId ? { ...m, content: aiResponse, isPlaceholder: false } : m
       ));
 
       if (isGroup) {
@@ -1718,7 +2152,7 @@ const ChatWindow = () => {
         
         // Always update local state
         setMessages(prev => prev.map(m => 
-          m.id === aiMessageId ? { ...m, content: partialText, isPlaceholder: false, isStopped: true } : m
+          m.id === aiMessageId ? { ...m, content: partialText, isPlaceholder: false, isStopped: true, _typewriter: false } : m
         ));
 
         if (isGroup) {
@@ -1794,7 +2228,9 @@ const ChatWindow = () => {
           ...aiMsg,
           content: '', // Clear for new streaming
           versions: newAiVersions,
-          currentVersionIndex: newVerIdx
+          currentVersionIndex: newVerIdx,
+          isPlaceholder: true,
+          _typewriter: true
         };
       }
       
@@ -1820,7 +2256,14 @@ const ChatWindow = () => {
       if (!isNextAI) {
         setMessages(prev => {
           const updated = [...prev];
-          updated.splice(userMsgIdx + 1, 0, { role: 'ai', content: '', id: aiMessageId, timestamp: new Date().toISOString() });
+          updated.splice(userMsgIdx + 1, 0, { 
+            role: 'ai', 
+            content: '', 
+            id: aiMessageId, 
+            timestamp: new Date().toISOString(),
+            isPlaceholder: true,
+            _typewriter: true
+          });
           return updated;
         });
       }
@@ -1853,7 +2296,8 @@ const ChatWindow = () => {
             ...aiMsg, 
             content: aiResponse, 
             versions: newAiVersions, 
-            currentVersionIndex: targetVerIdx 
+            currentVersionIndex: targetVerIdx,
+            isPlaceholder: false
           };
         }
         return updated;
@@ -1862,6 +2306,18 @@ const ChatWindow = () => {
     } catch (error) {
       if (error.name === 'AbortError') {
         console.log("AI generation for edit was stopped by user.");
+        setMessages(prev => {
+          const updated = [...prev];
+          const targetIdx = userMsgIdx + 1;
+          if (updated[targetIdx] && updated[targetIdx].role === 'ai') {
+            updated[targetIdx] = {
+              ...updated[targetIdx],
+              isPlaceholder: false,
+              _typewriter: false
+            };
+          }
+          return updated;
+        });
       } else {
         console.error("Failed to generate AI response for edit:", error);
       }
@@ -3041,7 +3497,7 @@ const ChatWindow = () => {
                                     </button>
                                   ) : (
                                     <button 
-                                      type={input.trim() ? "submit" : "button"}
+                                      type={(input.trim() || pendingAttachment) ? "submit" : "button"}
                                       disabled={isSendDisabled}
                                       onClick={(e) => {
                                         if (isSendDisabled) {
@@ -3068,7 +3524,7 @@ const ChatWindow = () => {
                                         border: 'none',
                                       }}
                                     >
-                                      {input.trim() ? <ArrowUp size={14} strokeWidth={2.5} /> : <AudioLines size={14} strokeWidth={2.5} />}
+                                      {(input.trim() || pendingAttachment) ? <ArrowUp size={14} strokeWidth={2.5} /> : <AudioLines size={14} strokeWidth={2.5} />}
                                     </button>
                                   )}
                                 </div>
@@ -3244,7 +3700,7 @@ const ChatWindow = () => {
                                     <button onClick={handleStop} type="button" className="w-10 h-10 rounded-full flex items-center justify-center bg-hover-overlay text-on-surface"><Square size={16} fill="currentColor" /></button>
                                   ) : (
                                     <button 
-                                      type={input.trim() ? "submit" : "button"}
+                                      type={(input.trim() || pendingAttachment) ? "submit" : "button"}
                                       disabled={isSendDisabled}
                                       onClick={(e) => {
                                         if (isSendDisabled) {
@@ -3271,7 +3727,7 @@ const ChatWindow = () => {
                                        }}
                                       title={isSendDisabled ? "Please wait for current response to complete" : ""}
                                     >
-                                      {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
+                                      {(input.trim() || pendingAttachment) ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
                                     </button>
                                   )}
                                 </div>
@@ -3526,6 +3982,64 @@ const ChatWindow = () => {
     </main>
 
 
+      {/* Hidden file input for chat image attachment */}
+      <input
+        ref={chatFileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleChatFileChange}
+      />
+
+      {/* Fullscreen image lightbox */}
+      <AnimatePresence>
+        {fullscreenImageUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 999999,
+              background: 'rgba(0,0,0,0.92)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'zoom-out',
+            }}
+            onClick={() => setFullscreenImageUrl(null)}
+          >
+            <motion.img
+              initial={{ scale: 0.88, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.88, opacity: 0 }}
+              transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+              src={fullscreenImageUrl}
+              alt="Fullscreen preview"
+              style={{
+                width: '100%',
+                height: '100%',
+                maxWidth: '90vw',
+                maxHeight: '85vh',
+                objectFit: 'contain',
+                borderRadius: '16px',
+                boxShadow: '0 32px 80px rgba(0,0,0,0.6)'
+              }}
+              onClick={e => e.stopPropagation()}
+            />
+            <button
+              onClick={() => setFullscreenImageUrl(null)}
+              style={{
+                position: 'fixed', top: 20, right: 20, width: 44, height: 44,
+                borderRadius: '50%', background: 'rgba(255,255,255,0.12)',
+                backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.18)',
+                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', fontSize: 20, zIndex: 1000000,
+              }}
+            >
+              <X size={20} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {messages.length > 0 && (
         <footer style={{ padding: '16px 20px', background: 'var(--bg-primary)', position: 'relative' }}>
           <AnimatePresence>
@@ -3557,6 +4071,55 @@ const ChatWindow = () => {
             )}
           </AnimatePresence>
           <div className={`max-w-3xl mx-auto w-full flex flex-col items-center ${replyingToMsg ? 'gap-0' : 'gap-3'} px-2 md:px-4`}>
+            {/* Pending attachment preview chip */}
+            <AnimatePresence>
+              {pendingAttachment && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.97 }}
+                  transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 14px',
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--divider)',
+                    borderRadius: '16px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                  }}
+                >
+                  {pendingAttachment.url && (
+                    <img
+                      src={pendingAttachment.url}
+                      alt="attachment"
+                      style={{
+                        width: '44px', height: '44px', objectFit: 'cover',
+                        borderRadius: '10px', flexShrink: 0,
+                        border: '1px solid var(--divider)',
+                      }}
+                    />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pendingAttachment.name}</p>
+                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--on-surface-muted)' }}>{pendingAttachment.type}</p>
+                  </div>
+                  <button
+                    onClick={() => setPendingAttachment(null)}
+                    style={{
+                      flexShrink: 0, width: 28, height: 28, borderRadius: '50%',
+                      background: 'var(--hover-overlay)', border: 'none', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: 'var(--on-surface-muted)',
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <AnimatePresence>
               {replyingToMsg && (
                 <motion.div
@@ -3654,7 +4217,7 @@ const ChatWindow = () => {
                     >
                       <Plus size={16} strokeWidth={2.5} />
                     </button>
-                    <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
+                    <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" onSelectFile={handleChatFileSelect} />
                   </div>
 
                   <div className="flex-1 flex items-center border border-divider shadow-md transition-all duration-300"
@@ -3766,7 +4329,7 @@ const ChatWindow = () => {
                                 )}
 
                                 <button 
-                                  type={input.trim() ? "submit" : "button"}
+                                  type={(input.trim() || pendingAttachment) ? "submit" : "button"}
                                   disabled={isSendDisabled}
                                   onClick={(e) => {
                                     if (isSendDisabled) {
@@ -3793,7 +4356,7 @@ const ChatWindow = () => {
                                     border: 'none',
                                   }}
                                 >
-                                  {input.trim() ? <ArrowUp size={14} strokeWidth={2.5} /> : <AudioLines size={14} strokeWidth={2.5} />}
+                                  {(input.trim() || pendingAttachment) ? <ArrowUp size={14} strokeWidth={2.5} /> : <AudioLines size={14} strokeWidth={2.5} />}
                                 </button>
                               </>
                             )}
@@ -3831,7 +4394,7 @@ const ChatWindow = () => {
                     <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
                       Attach
                     </div>
-                    <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" />
+                    <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" onSelectFile={handleChatFileSelect} />
                   </div>
 
                   <form onSubmit={handleSend} className="w-full flex flex-1 items-center gap-3" style={{ flex: 1 }}>
@@ -4005,7 +4568,7 @@ const ChatWindow = () => {
                                </div>
                              ) : (
                                <button 
-                                 type={input.trim() ? "submit" : "button"}
+                                 type={(input.trim() || pendingAttachment) ? "submit" : "button"}
                                  disabled={isSendDisabled}
                                  onClick={(e) => {
                                    if (isSendDisabled) {
@@ -4033,7 +4596,7 @@ const ChatWindow = () => {
                                  }}
                                  title={isSendDisabled ? "Please wait for current response to complete" : ""}
                                >
-                                 {input.trim() ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
+                                 {(input.trim() || pendingAttachment) ? <ArrowUp size={20} strokeWidth={2.5} /> : <AudioLines size={20} strokeWidth={2.5} />}
                                </button>
                             )}
                           </div>

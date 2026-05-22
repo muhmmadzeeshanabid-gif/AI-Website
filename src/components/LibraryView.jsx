@@ -56,6 +56,111 @@ const defaultFiles = [
   }
 ];
 
+// IndexedDB setup for persisting raw original files
+const dbName = 'aura-library-db';
+const storeName = 'files-data';
+const dbVersion = 3;
+
+const openAuraDB = () => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') {
+      reject(new Error("IndexedDB is not available on server-side"));
+      return;
+    }
+    const request = indexedDB.open(dbName, dbVersion);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName);
+      }
+    };
+    request.onsuccess = (e) => {
+      resolve(e.target.result);
+    };
+    request.onerror = (e) => {
+      reject(e.target.error || new Error("Failed to open IndexedDB"));
+    };
+  });
+};
+
+const getFileFromIndexedDB = async (id) => {
+  try {
+    const db = await openAuraDB();
+    return new Promise((resolve) => {
+      let resolved = false;
+      const done = (val) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(val);
+          try { db.close(); } catch (e) {}
+        }
+      };
+      const transaction = db.transaction(storeName, 'readonly');
+      const store = transaction.objectStore(storeName);
+      const getReq = store.get(id);
+      getReq.onsuccess = () => done(getReq.result || null);
+      getReq.onerror = () => done(null);
+      transaction.oncomplete = () => done(null);
+      transaction.onerror = () => done(null);
+    });
+  } catch (err) {
+    console.error("IndexedDB get error:", err);
+    return null;
+  }
+};
+
+const saveFileToIndexedDB = async (id, fileObj) => {
+  try {
+    const db = await openAuraDB();
+    return new Promise((resolve) => {
+      let resolved = false;
+      const done = (val) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(val);
+          try { db.close(); } catch (e) {}
+        }
+      };
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+      const putReq = store.put(fileObj, id);
+      putReq.onsuccess = () => done(true);
+      putReq.onerror = () => done(false);
+      transaction.oncomplete = () => done(true);
+      transaction.onerror = () => done(false);
+    });
+  } catch (err) {
+    console.error("IndexedDB save error:", err);
+    return false;
+  }
+};
+
+const deleteFileFromIndexedDB = async (id) => {
+  try {
+    const db = await openAuraDB();
+    return new Promise((resolve) => {
+      let resolved = false;
+      const done = (val) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(val);
+          try { db.close(); } catch (e) {}
+        }
+      };
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+      const delReq = store.delete(id);
+      delReq.onsuccess = () => done(true);
+      delReq.onerror = () => done(false);
+      transaction.oncomplete = () => done(true);
+      transaction.onerror = () => done(false);
+    });
+  } catch (err) {
+    console.error("IndexedDB delete error:", err);
+    return false;
+  }
+};
+
 export default function LibraryView() {
   const { user, isSidebarOpen, setIsSidebarOpen, createNewChat, setAppView } = useAppContext();
   const [files, setFiles] = useState([]);
@@ -146,6 +251,40 @@ export default function LibraryView() {
     return () => unsubscribe();
   }, [user]);
 
+  // Load raw files from IndexedDB to restore local high-res blob URLs
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const loadFromIDB = async () => {
+      const newBlobUrls = {};
+      let updated = false;
+
+      for (const file of files) {
+        if (file.isSeed) continue;
+        if (!localBlobUrls[file.id]) {
+          const rawFile = await getFileFromIndexedDB(file.id);
+          if (rawFile) {
+            try {
+              const url = URL.createObjectURL(rawFile);
+              newBlobUrls[file.id] = url;
+              updated = true;
+            } catch (err) {
+              console.error("Failed to create object URL for cached file:", err);
+            }
+          }
+        }
+      }
+
+      if (updated) {
+        setLocalBlobUrls(prev => ({ ...prev, ...newBlobUrls }));
+      }
+    };
+
+    if (files.length > 0) {
+      loadFromIDB();
+    }
+  }, [files]);
+
   const loadFromLocalStorage = () => {
     try {
       const saved = localStorage.getItem('aura-library-files');
@@ -188,8 +327,8 @@ export default function LibraryView() {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 120;
-          const MAX_HEIGHT = 120;
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
           let width = img.width;
           let height = img.height;
           
@@ -209,7 +348,7 @@ export default function LibraryView() {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.7));
+          resolve(canvas.toDataURL('image/jpeg', 0.75));
         };
         img.src = e.target.result;
       };
@@ -231,6 +370,9 @@ export default function LibraryView() {
 
     // Save full blobUrl to local cache for session-based high-res preview
     setLocalBlobUrls(prev => ({ ...prev, [id]: blobUrl }));
+
+    // Persist raw file to IndexedDB for device-local reload recovery
+    await saveFileToIndexedDB(id, uploadedFile);
 
     let thumbnailUrl = null;
     if (uploadedFile.type.startsWith('image/')) {
@@ -280,6 +422,21 @@ export default function LibraryView() {
     const updatedFiles = files.filter(f => f.id !== id);
     setFiles(updatedFiles);
     saveToLocalStorage(updatedFiles);
+
+    // Clean up local blob URL and IndexedDB
+    if (localBlobUrls[id]) {
+      try {
+        URL.revokeObjectURL(localBlobUrls[id]);
+      } catch (err) {
+        console.error("Failed to revoke blob URL:", err);
+      }
+      setLocalBlobUrls(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+    await deleteFileFromIndexedDB(id);
 
     // Firestore deletion
     if (user?.uid) {
@@ -394,7 +551,7 @@ export default function LibraryView() {
 
       let contentToSend = '';
       if (isImage && displayUrl) {
-        contentToSend = `![${activeFile.name}](${displayUrl})\n\nAsk about this image: ${chatInput}`;
+        contentToSend = `![${activeFile.name}|${activeFile.id}](${displayUrl})\n\nAsk about this image: ${chatInput}`;
       } else {
         contentToSend = `📄 **${activeFile.name}**\n\nAsk about this file: ${chatInput}`;
       }
@@ -434,6 +591,7 @@ export default function LibraryView() {
 
         {/* Top Header */}
         <div 
+          className="preview-header"
           style={{ 
             height: '64px',
             borderBottom: '1px solid rgba(255, 255, 255, 0.08)', 
@@ -447,7 +605,7 @@ export default function LibraryView() {
           }}
         >
           {/* Left: Close/Back button & File Details */}
-          <div className="flex items-center gap-4 min-w-0">
+          <div className="preview-header-left flex items-center gap-4 min-w-0">
             <button 
               onClick={() => handleSelectFile(null)}
               className="p-2 rounded-full hover:bg-white/10 transition-colors flex items-center justify-center text-white/70 hover:text-white"
@@ -456,7 +614,7 @@ export default function LibraryView() {
             </button>
             <div className="min-w-0">
               <h2 className="text-sm font-semibold truncate text-white">{activeFile.name}</h2>
-              <p className="text-xs text-white/50">{formatSize(activeFile.size)} • {activeFile.type}</p>
+              <p className="preview-file-meta text-xs text-white/50">{formatSize(activeFile.size)} • {activeFile.type}</p>
             </div>
           </div>
 
@@ -465,17 +623,17 @@ export default function LibraryView() {
             <button
               onClick={() => {
                 const msg = isImage && displayUrl 
-                  ? `![${activeFile.name}](${displayUrl})\n\nAsk about this image:` 
+                  ? `![${activeFile.name}|${activeFile.id}](${displayUrl})\n\nAsk about this image:` 
                   : `📄 **${activeFile.name}**\n\nAsk about this file:`;
                 localStorage.setItem('aura-pending-message', msg);
                 createNewChat();
                 handleSelectFile(null);
                 setAppView('chat');
               }}
-              className="px-4 py-2 rounded-full text-xs font-semibold bg-white text-black hover:bg-white/90 transition-colors flex items-center gap-1.5 shadow-md"
+              className="preview-action-button px-4 py-2 rounded-full text-xs font-semibold bg-white text-black hover:bg-white/90 transition-colors flex items-center gap-1.5 shadow-md"
             >
               <SquarePen size={14} />
-              <span>Start chat</span>
+              <span className="preview-action-text">Start chat</span>
             </button>
             
             <button
@@ -503,7 +661,7 @@ export default function LibraryView() {
 
         {/* Centered Media Content */}
         <div 
-          className="flex-1 flex items-center justify-center p-8 overflow-hidden relative"
+          className="preview-media-content flex-1 flex items-center justify-center p-8 overflow-hidden relative"
           style={{ 
             backgroundColor: '#0c0c0d',
             display: 'flex',
@@ -519,12 +677,12 @@ export default function LibraryView() {
             <img 
               src={displayUrl} 
               alt={activeFile.name} 
-              className="animate-fade-in"
+              className="preview-image animate-fade-in"
               style={{ 
-                maxWidth: '95%',
-                maxHeight: '80vh',
-                width: 'auto',
-                height: 'auto',
+                width: '100%',
+                height: '100%',
+                maxWidth: '90%',
+                maxHeight: '65vh',
                 objectFit: 'contain',
                 borderRadius: '16px',
                 boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.5)',
@@ -549,17 +707,18 @@ export default function LibraryView() {
 
         {/* Bottom Capsule Input Bar */}
         <div 
-          className="w-full pb-8 pt-4 px-6 flex justify-center"
+          className="preview-input-container w-full pb-12 pt-4 px-6 flex justify-center"
           style={{
             background: 'linear-gradient(to top, #0c0c0d 80%, transparent)',
-            zIndex: 10
+            zIndex: 10,
+            paddingBottom: '48px'
           }}
         >
           <form 
             onSubmit={handleSendPreviewMessage}
             style={{
               width: '100%',
-              maxWidth: '400px',
+              maxWidth: '560px',
               position: 'relative',
               display: 'flex',
               alignItems: 'center',
@@ -700,6 +859,12 @@ export default function LibraryView() {
           opacity: 0;
           transition: opacity 0.15s ease-in-out;
         }
+        .list-actions-trigger:focus,
+        .list-actions-trigger:active,
+        .list-actions-trigger:focus-visible {
+          outline: none !important;
+          box-shadow: none !important;
+        }
         .list-row:hover .list-row-checkbox,
         .list-row:hover .list-actions-trigger,
         .list-row-checkbox:checked {
@@ -713,6 +878,116 @@ export default function LibraryView() {
         .list-header-checkbox:checked {
           opacity: 1 !important;
         }
+
+        /* Responsive Styles for Library Page */
+        @media (max-width: 768px) {
+          .library-header-inner {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 16px !important;
+          }
+          .library-header-actions {
+            width: 100% !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+          }
+          .library-search-input {
+            width: 100% !important;
+          }
+          .library-upload-button {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          .library-filters-inner {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+          }
+          .library-filters-left {
+            width: 100% !important;
+            justify-content: flex-start !important;
+            overflow-x: auto !important;
+            padding-bottom: 4px !important;
+            -webkit-overflow-scrolling: touch;
+          }
+          .library-filters-right {
+            width: 100% !important;
+            justify-content: space-between !important;
+          }
+          .library-batch-actions {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+          }
+          .library-batch-actions-left {
+            width: 100% !important;
+            justify-content: flex-start !important;
+            flex-wrap: wrap !important;
+            gap: 8px !important;
+          }
+          .library-batch-actions-left button {
+            flex: 1 1 auto !important;
+            justify-content: center !important;
+          }
+          .library-batch-actions-right {
+            width: 100% !important;
+            justify-content: space-between !important;
+          }
+          .library-col-modified,
+          .library-col-size {
+            display: none !important;
+          }
+          .library-col-actions {
+            width: 60px !important;
+          }
+          
+          /* Preview Mode Responsive */
+          .preview-header {
+            padding: 0 12px !important;
+            gap: 8px !important;
+          }
+          .preview-header-left {
+            gap: 8px !important;
+          }
+          .preview-action-button {
+            padding: 6px 12px !important;
+            white-space: nowrap !important;
+          }
+          .preview-file-meta {
+            display: none !important;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .library-main-content {
+            padding: 16px 16px 30px 16px !important;
+          }
+          .library-grid {
+            --grid-item-min-width: 130px !important;
+            gap: 16px !important;
+          }
+          /* Preview Mode Responsive */
+          .preview-media-content {
+            padding: 16px !important;
+          }
+          .preview-input-container {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+          .preview-image {
+            width: 100% !important;
+            height: 100% !important;
+            max-height: 55vh !important;
+            max-width: 95% !important;
+            object-fit: contain !important;
+          }
+        }
+        @media (max-height: 700px) {
+          .preview-image {
+            max-height: 48vh !important;
+          }
+        }
       `}</style>
       {/* Hidden file input */}
       <input 
@@ -724,11 +999,11 @@ export default function LibraryView() {
 
       {/* Header Container */}
       <div className="w-full" style={{ borderBottom: '1px solid var(--border-color)', paddingTop: '48px', paddingBottom: '20px' }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto', width: '100%', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="library-header-inner" style={{ maxWidth: '1000px', margin: '0 auto', width: '100%', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <h1 className="text-3xl font-bold tracking-tight" style={{ fontSize: '32px' }}>Library</h1>
           
           {/* Search & Upload */}
-          <div className="flex items-center gap-4">
+          <div className="library-header-actions flex items-center gap-4">
             <div className="relative flex items-center">
               <Search size={18} className="absolute left-4" style={{ color: 'var(--text-tertiary)' }} />
               <input 
@@ -736,7 +1011,7 @@ export default function LibraryView() {
                 placeholder="Search library" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="border border-transparent rounded-full text-sm outline-none"
+                className="library-search-input border border-transparent rounded-full text-sm outline-none"
                 style={{
                   width: '260px',
                   padding: '10px 20px 10px 44px',
@@ -752,7 +1027,7 @@ export default function LibraryView() {
             
             <button 
               onClick={handleUploadClick}
-              className="font-bold rounded-full flex items-center gap-2 hover:opacity-90 transition-all text-sm shadow-md"
+              className="library-upload-button font-bold rounded-full flex items-center gap-2 hover:opacity-90 transition-all text-sm shadow-md"
               style={{ 
                 fontWeight: 600,
                 backgroundColor: 'var(--text-primary)',
@@ -769,11 +1044,11 @@ export default function LibraryView() {
 
       {/* Categories / Filters row */}
       <div className="w-full" style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border-color)', padding: '12px 0' }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto', width: '100%', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="library-filters-inner" style={{ maxWidth: '1000px', margin: '0 auto', width: '100%', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {selectedFileIds.length > 0 ? (
-            <div className="flex items-center justify-between w-full">
+            <div className="library-batch-actions flex items-center justify-between w-full">
               {/* Left: Buttons styled as "Start chat", "Download", "Delete" */}
-              <div className="flex items-center gap-3">
+              <div className="library-batch-actions-left flex items-center gap-3">
                 {/* Start Chat Button */}
                 <button
                   onClick={handleBatchStartChat}
@@ -823,7 +1098,7 @@ export default function LibraryView() {
               </div>
 
               {/* Right: Selected count and Clear selection */}
-              <div className="flex items-center gap-4">
+              <div className="library-batch-actions-right flex items-center gap-4">
                 <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
                   {selectedFileIds.length} {selectedFileIds.length === 1 ? 'file' : 'files'} selected
                 </span>
@@ -839,7 +1114,7 @@ export default function LibraryView() {
           ) : (
             <>
               {/* Left Tabs */}
-              <div className="flex items-center gap-2">
+              <div className="library-filters-left flex items-center gap-2">
                 {['All', 'Images', 'Files'].map((tab) => {
                   const isActive = filter === tab;
                   return (
@@ -875,7 +1150,7 @@ export default function LibraryView() {
           )}
 
           {/* Right sorting and layout */}
-          <div className="flex items-center gap-4">
+          <div className="library-filters-right flex items-center gap-4">
             {/* Sorting */}
             <button 
               onClick={handleSortToggle}
@@ -946,7 +1221,7 @@ export default function LibraryView() {
       </div>
 
       {/* Main Files Display Area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ padding: '24px 32px 40px 32px', backgroundColor: 'var(--bg-primary)' }}>
+      <div className="library-main-content flex-1 overflow-y-auto custom-scrollbar" style={{ padding: '24px 32px 40px 32px', backgroundColor: 'var(--bg-primary)' }}>
         <div style={{ maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
           {filteredFiles.length === 0 ? (
             <div className="w-full h-80 flex flex-col items-center justify-center gap-3" style={{ color: 'var(--text-secondary)' }}>
@@ -987,9 +1262,9 @@ export default function LibraryView() {
                 </div>
                 <div style={{ width: '40px', flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0, paddingLeft: '16px' }}>Name</div>
-                <div style={{ width: '150px', flexShrink: 0, paddingLeft: '16px' }}>Modified</div>
-                <div style={{ width: '100px', flexShrink: 0, textAlign: 'right', paddingRight: '24px' }}>Size</div>
-                <div style={{ width: '120px', flexShrink: 0 }} />
+                <div className="library-col-modified" style={{ width: '150px', flexShrink: 0, paddingLeft: '16px' }}>Modified</div>
+                <div className="library-col-size" style={{ width: '100px', flexShrink: 0, textAlign: 'right', paddingRight: '24px' }}>Size</div>
+                <div className="library-col-actions" style={{ width: '120px', flexShrink: 0 }} />
               </div>
 
               {/* Table Rows */}
@@ -1067,81 +1342,95 @@ export default function LibraryView() {
                       </div>
 
                       {/* Modified Date */}
-                      <div className="text-sm" style={{ width: '150px', flexShrink: 0, color: 'var(--text-secondary)', paddingLeft: '16px' }}>
+                      <div className="library-col-modified text-sm" style={{ width: '150px', flexShrink: 0, color: 'var(--text-secondary)', paddingLeft: '16px' }}>
                         {getRelativeDate(file.timestamp)}
                       </div>
 
                       {/* Size */}
-                      <div className="text-sm" style={{ width: '100px', flexShrink: 0, color: 'var(--text-secondary)', textAlign: 'right', paddingRight: '24px' }}>
+                      <div className="library-col-size text-sm" style={{ width: '100px', flexShrink: 0, color: 'var(--text-secondary)', textAlign: 'right', paddingRight: '24px' }}>
                         {formatSize(file.size)}
                       </div>
 
                       {/* Actions Menu Trigger */}
                       <div 
-                        className="relative dropdown-container"
+                        className="library-col-actions dropdown-container"
                         onClick={(e) => e.stopPropagation()}
-                        style={{ width: '120px', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}
+                        style={{ width: '120px', flexShrink: 0, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}
                       >
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveDropdownFileId(activeDropdownFileId === file.id ? null : file.id);
-                          }}
-                          className="list-actions-trigger p-2 rounded-lg transition-colors"
-                          style={{ 
-                            color: 'var(--text-secondary)', 
-                            backgroundColor: 'transparent',
-                            opacity: activeDropdownFileId === file.id ? 1 : undefined
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = 'var(--text-primary)';
-                            e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
-                          }}
-                          onMouseLeave={(e) => {
-                            if (activeDropdownFileId !== file.id) {
-                              e.currentTarget.style.color = 'var(--text-secondary)';
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }
-                          }}
-                        >
-                          <MoreHorizontal size={18} />
-                        </button>
-
-                        {activeDropdownFileId === file.id && (
-                          <div 
-                            className="absolute right-0 top-full mt-1 z-50 rounded-xl border shadow-xl flex flex-col overflow-hidden animate-fade-in"
-                            style={{
-                              backgroundColor: 'var(--bg-secondary)',
-                              borderColor: 'var(--border-color)',
-                              minWidth: '130px',
-                              backdropFilter: 'blur(10px)',
-                              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.1)'
+                        <div className="relative">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDropdownFileId(activeDropdownFileId === file.id ? null : file.id);
+                            }}
+                            className="list-actions-trigger p-2 rounded-lg transition-colors"
+                            style={{ 
+                              color: activeDropdownFileId === file.id ? 'var(--text-primary)' : 'var(--text-secondary)', 
+                              backgroundColor: activeDropdownFileId === file.id ? 'var(--bg-tertiary)' : 'transparent',
+                              opacity: activeDropdownFileId === file.id ? 1 : undefined,
+                              outline: 'none',
+                              border: 'none',
+                              boxShadow: 'none'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = 'var(--text-primary)';
+                              e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                            }}
+                            onMouseLeave={(e) => {
+                              if (activeDropdownFileId !== file.id) {
+                                e.currentTarget.style.color = 'var(--text-secondary)';
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }
                             }}
                           >
-                            <button
-                              onClick={(e) => {
-                                handleDownloadFile(file, e);
-                                setActiveDropdownFileId(null);
+                            <MoreHorizontal size={18} />
+                          </button>
+
+                          {activeDropdownFileId === file.id && (
+                            <div 
+                              className="absolute right-0 top-full mt-2 z-50 rounded-2xl border shadow-2xl flex flex-col animate-fade-in"
+                              style={{
+                                backgroundColor: 'var(--bg-secondary)',
+                                borderColor: 'var(--border-color)',
+                                minWidth: '170px',
+                                padding: '6px',
+                                backdropFilter: 'blur(10px)',
+                                boxShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(255, 255, 255, 0.05) inset',
+                                gap: '4px'
                               }}
-                              className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-white/5 transition-colors w-full text-left"
-                              style={{ color: 'var(--text-primary)' }}
                             >
-                              <Download size={14} />
-                              <span>Download</span>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                handleDeleteFile(file.id, e);
-                                setActiveDropdownFileId(null);
-                              }}
-                              className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-rose-500/10 transition-colors w-full text-left"
-                              style={{ color: '#f43f5e', borderTop: '1px solid var(--border-color)' }}
-                            >
-                              <Trash2 size={14} />
-                              <span>Delete</span>
-                            </button>
-                          </div>
-                        )}
+                              <button
+                                onClick={(e) => {
+                                  handleDownloadFile(file, e);
+                                  setActiveDropdownFileId(null);
+                                }}
+                                className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl transition-all w-full text-left"
+                                style={{ color: 'var(--text-primary)', outline: 'none', border: 'none' }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-overlay)'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                <Download size={16} style={{ color: 'var(--text-secondary)' }} />
+                                <span>Download</span>
+                              </button>
+
+                              <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '2px 6px' }} />
+
+                              <button
+                                onClick={(e) => {
+                                  handleDeleteFile(file.id, e);
+                                  setActiveDropdownFileId(null);
+                                }}
+                                className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl transition-all w-full text-left"
+                                style={{ color: '#ef4444', outline: 'none', border: 'none' }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                <Trash2 size={16} style={{ color: '#ef4444' }} />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -1151,9 +1440,9 @@ export default function LibraryView() {
           ) : (
             /* Grid Layout */
             <div 
-              className="grid"
+              className="library-grid grid"
               style={{
-                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(var(--grid-item-min-width, 220px), 1fr))',
                 gap: '24px'
               }}
             >

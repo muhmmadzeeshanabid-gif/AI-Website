@@ -4,6 +4,139 @@ const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || "";
 
 /**
+ * Extract image data from a message that may contain markdown image syntax.
+ * Returns { hasImage, base64, mimeType, cleanText }
+ */
+async function extractImageFromPrompt(prompt) {
+  if (typeof prompt !== 'string') return { hasImage: false, cleanText: prompt };
+  
+  const mdImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/;
+  const match = prompt.match(mdImageRegex);
+  if (!match) return { hasImage: false, cleanText: prompt };
+
+  const imgUrl = match[2];
+  let cleanText = prompt.replace(match[0], '').replace(/^(Ask about this image:|Ask about this file:)\s*/im, '').trim();
+  if (!cleanText) cleanText = "What is in this image?";
+
+  const altValue = match[1] || '';
+  const pipeIdx = altValue.indexOf('|');
+  const fileId = pipeIdx !== -1 ? altValue.substring(pipeIdx + 1) : null;
+
+  // 1. Try to load from IndexedDB first if fileId is present and running in browser
+  if (fileId && typeof window !== 'undefined') {
+    try {
+      const fileObj = await new Promise((resolve) => {
+        const request = window.indexedDB.open('aura-library-db', 3);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('files-data')) {
+            db.createObjectStore('files-data');
+          }
+        };
+        request.onsuccess = (e) => {
+          const db = e.target.result;
+          try {
+            if (!db.objectStoreNames.contains('files-data')) {
+              resolve(null);
+              db.close();
+              return;
+            }
+            const transaction = db.transaction('files-data', 'readonly');
+            const store = transaction.objectStore('files-data');
+            const getReq = store.get(fileId);
+            getReq.onsuccess = () => {
+              resolve(getReq.result || null);
+              db.close();
+            };
+            getReq.onerror = () => {
+              resolve(null);
+              db.close();
+            };
+          } catch (err) {
+            resolve(null);
+            try { db.close(); } catch (ev) {}
+          }
+        };
+        request.onerror = () => resolve(null);
+      });
+
+      if (fileObj) {
+        const mimeType = fileObj.type || 'image/jpeg';
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result;
+            const b64 = dataUrl.split(',')[1];
+            resolve(b64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(fileObj);
+        });
+        return { hasImage: true, base64, mimeType, cleanText };
+      }
+    } catch (err) {
+      console.warn('Failed to retrieve image from IndexedDB inside gemini.js:', err);
+    }
+  }
+
+  // 2. Fallback to processing data URLs, blob URLs, or remote HTTP URLs
+  try {
+    if (imgUrl.startsWith('data:')) {
+      // Data URL already: data:<mimeType>;base64,<data>
+      const [meta, base64] = imgUrl.split(',');
+      const mimeType = meta.split(':')[1].split(';')[0];
+      return { hasImage: true, base64, mimeType, cleanText };
+    } else if (imgUrl.startsWith('blob:')) {
+      // Blob URL - fetch and convert to base64
+      const response = await fetch(imgUrl);
+      const blob = await response.blob();
+      const mimeType = blob.type || 'image/jpeg';
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result;
+          const b64 = dataUrl.split(',')[1];
+          resolve(b64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      return { hasImage: true, base64, mimeType, cleanText };
+    } else if (imgUrl.startsWith('http')) {
+      // Remote URL - fetch and convert
+      const response = await fetch(imgUrl);
+      const blob = await response.blob();
+      const mimeType = blob.type || 'image/jpeg';
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result;
+          const b64 = dataUrl.split(',')[1];
+          resolve(b64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      return { hasImage: true, base64, mimeType, cleanText };
+    }
+  } catch (e) {
+    console.warn('Failed to extract image data:', e);
+  }
+
+  return { hasImage: false, cleanText: prompt };
+}
+
+/**
+ * Clean message history by stripping out base64 image data to keep history lean.
+ */
+function cleanHistoryContent(content) {
+  if (typeof content !== 'string') return content;
+  // Strip markdown image syntax from history
+  return content.replace(/!\[([^\]]*)\]\(data:[^)]+\)/g, '[image]')
+                .replace(/!\[([^\]]*)\]\(blob:[^)]+\)/g, '[image]');
+}
+
+/**
  * Smart Multi-Model Fallback System (Kyra Engine)
  * This function tries multiple models and failover strategies to ensure the user always gets a response.
  */
@@ -11,20 +144,30 @@ export const getGeminiResponse = async (prompt, history = [], personalization = 
   const isCodingTask = /code|javascript|python|html|css|debug|function|api|react|next|node/i.test(prompt);
   const isShortChat = prompt.length < 50;
 
-  // Define the hierarchy of models
-  const modelChain = [
-    // User Preferred Models
-    { id: "openai/gpt-4o", type: "openrouter", priority: preferredModel === 'GPT-4' ? -1 : 1 },
-    { id: "deepseek/deepseek-chat", type: "openrouter", priority: preferredModel === 'DeepSeek' ? -1 : 2 },
-    { id: "meta-llama/llama-3.1-405b-instruct:free", type: "openrouter", priority: preferredModel === 'Llama' ? -1 : 3 },
-    { id: "gemini-pro", type: "gemini", priority: preferredModel === 'Gemini' ? -1 : 4 },
-    
-    // Fallbacks
-    { id: "meta-llama/llama-3.1-8b-instruct:free", type: "openrouter", priority: 10 },
-    { id: "mistralai/mistral-7b-instruct:free", type: "openrouter", priority: 11 },
-    { id: "google/gemma-7b-it:free", type: "openrouter", priority: 12 },
-    { id: "pollinations/any", type: "pollinations", priority: 15 }
-  ];
+  // Extract image data before selecting model chain
+  const imageData = await extractImageFromPrompt(prompt);
+
+  // Define the hierarchy of models — vision models prioritized when image is present
+  let modelChain;
+  if (imageData.hasImage) {
+    modelChain = [
+      { id: "google/gemini-2.5-flash", type: "openrouter", priority: preferredModel === 'Gemini' ? -1 : 1 },
+      { id: "openai/gpt-4o-mini", type: "openrouter", priority: preferredModel === 'GPT-4' ? -1 : 2 },
+      { id: "meta-llama/llama-3.2-11b-vision-instruct", type: "openrouter", priority: preferredModel === 'Llama' ? -1 : 3 },
+      { id: "openai/gpt-4o", type: "openrouter", priority: preferredModel === 'GPT-4' ? -2 : 4 },
+      { id: "gemini-1.5-flash", type: "gemini", priority: 5 },
+      { id: "pollinations/any", type: "pollinations", priority: 15 }
+    ];
+  } else {
+    modelChain = [
+      { id: "deepseek/deepseek-chat", type: "openrouter", priority: preferredModel === 'DeepSeek' ? -1 : 1 },
+      { id: "google/gemini-2.5-flash", type: "openrouter", priority: preferredModel === 'Gemini' ? -1 : 2 },
+      { id: "openai/gpt-4o-mini", type: "openrouter", priority: preferredModel === 'GPT-4' ? -1 : 3 },
+      { id: "openai/gpt-4o", type: "openrouter", priority: preferredModel === 'GPT-4' ? -2 : 4 },
+      { id: "gemini-pro", type: "gemini", priority: preferredModel === 'Gemini' ? -2 : 5 },
+      { id: "pollinations/any", type: "pollinations", priority: 15 }
+    ];
+  }
 
   // Sort by priority
   const sortedChain = modelChain.sort((a, b) => a.priority - b.priority);
@@ -34,13 +177,13 @@ export const getGeminiResponse = async (prompt, history = [], personalization = 
       let result = null;
 
       if (model.type === "openrouter" && OPENROUTER_API_KEY) {
-        result = await tryOpenRouter(model.id, prompt, history, signal, onUpdate);
+        result = await tryOpenRouter(model.id, prompt, history, signal, onUpdate, imageData);
       } else if (model.type === "gemini" && GEMINI_API_KEY) {
-        result = await tryGeminiSDK(prompt, history, signal, onUpdate);
+        result = await tryGeminiSDK(prompt, history, signal, onUpdate, imageData, model.id);
       } else if (model.type === "ollama") {
         result = await tryOllama(model.id, prompt, history, signal, onUpdate);
       } else if (model.type === "pollinations") {
-        result = await tryPollinations(prompt, history, signal, onUpdate);
+        result = await tryPollinations(imageData.cleanText || prompt, history, signal, onUpdate);
       }
 
       if (result) return result;
@@ -56,7 +199,26 @@ export const getGeminiResponse = async (prompt, history = [], personalization = 
 
 // --- Strategy Implementations ---
 
-async function tryOpenRouter(modelId, prompt, history, signal, onUpdate) {
+async function tryOpenRouter(modelId, prompt, history, signal, onUpdate, imageData = { hasImage: false }) {
+  // Build message content — multimodal if image present
+  let userContent;
+  if (imageData.hasImage) {
+    userContent = [
+      {
+        type: "image_url",
+        image_url: {
+          url: `data:${imageData.mimeType};base64,${imageData.base64}`,
+        }
+      },
+      {
+        type: "text",
+        text: imageData.cleanText || "What is in this image?"
+      }
+    ];
+  } else {
+    userContent = prompt;
+  }
+
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     signal,
@@ -69,14 +231,15 @@ async function tryOpenRouter(modelId, prompt, history, signal, onUpdate) {
     body: JSON.stringify({
       model: modelId,
       messages: [
-        { role: "system", content: "You are Kyra, a professional and helpful intelligence assistant." },
+        { role: "system", content: "You are Kyra, a professional and helpful intelligence assistant. When shown an image, describe and analyze its contents in detail." },
         ...history.map(msg => ({
           role: msg.role === 'user' ? 'user' : 'assistant',
-          content: msg.content
+          content: cleanHistoryContent(msg.content)
         })),
-        { role: "user", content: prompt }
+        { role: "user", content: userContent }
       ],
       temperature: 0.7,
+      max_tokens: 4000,
       stream: true
     })
   });
@@ -113,18 +276,36 @@ async function tryOpenRouter(modelId, prompt, history, signal, onUpdate) {
   return fullText || null;
 }
 
-async function tryGeminiSDK(prompt, history, signal, onUpdate) {
+async function tryGeminiSDK(prompt, history, signal, onUpdate, imageData = { hasImage: false }, modelName = "gemini-pro") {
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  
+  // Use multimodal model if image is present
+  const effectiveModel = imageData.hasImage ? "gemini-1.5-flash" : modelName;
+  const model = genAI.getGenerativeModel({ model: effectiveModel });
 
   const chat = model.startChat({
     history: history.filter(msg => msg.role === 'user' || msg.role === 'ai').map(msg => ({
       role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }],
+      parts: [{ text: cleanHistoryContent(msg.content) }],
     })),
   });
 
-  const result = await chat.sendMessageStream(prompt);
+  let messageParts;
+  if (imageData.hasImage) {
+    messageParts = [
+      {
+        inlineData: {
+          data: imageData.base64,
+          mimeType: imageData.mimeType
+        }
+      },
+      { text: imageData.cleanText || "What is in this image?" }
+    ];
+  } else {
+    messageParts = prompt;
+  }
+
+  const result = await chat.sendMessageStream(messageParts);
   let fullText = "";
   for await (const chunk of result.stream) {
     if (signal?.aborted) break;

@@ -183,10 +183,12 @@ export const AppProvider = ({ children }) => {
   }, [activeChatId]);
 
   // Reset appView to chat when switching active chats
+  const prevActiveChatIdRef = useRef(activeChatId);
   useEffect(() => {
-    if (activeChatId) {
+    if (activeChatId && prevActiveChatIdRef.current !== activeChatId) {
       setAppView('chat');
     }
+    prevActiveChatIdRef.current = activeChatId;
   }, [activeChatId]);
 
   // Reset shared read-only states when starting/switching to a non-shared chat
@@ -441,49 +443,29 @@ export const AppProvider = ({ children }) => {
         }
       } catch (e) {}
 
+      const savedAppView = localStorage.getItem('aura-app-view') || 'chat';
+      setAppView(savedAppView);
+
       // Initialize activeChatId from pathname or localStorage
       const path = window.location.pathname;
-      const isSessionActive = sessionStorage.getItem('aura-session-active');
+      sessionStorage.setItem('aura-session-active', 'true');
       
-      if (!isSessionActive) {
-        sessionStorage.setItem('aura-session-active', 'true');
-        if (path.startsWith('/c/')) {
-          const pathId = path.split('/c/')[1];
-          if (pathId) {
-            setActiveChatId(pathId);
-            const chat = loadedChats.find(c => c.id === pathId);
-            if (chat) {
-              setMessages(chat.messages || []);
-              setIsSharedReadOnly(!!chat.isSharedReadOnly);
-              setSharedChatData(chat.isSharedReadOnly ? chat : null);
-            } else {
-              fetchSharedChat(pathId);
-            }
+      if (path.startsWith('/c/')) {
+        const pathId = path.split('/c/')[1];
+        if (pathId) {
+          setActiveChatId(pathId);
+          const chat = loadedChats.find(c => c.id === pathId);
+          if (chat) {
+            setMessages(chat.messages || []);
+            setIsSharedReadOnly(!!chat.isSharedReadOnly);
+            setSharedChatData(chat.isSharedReadOnly ? chat : null);
+          } else {
+            fetchSharedChat(pathId);
           }
-        } else if (path !== '/') {
-          router.replace('/');
-          setActiveChatId(null);
-          setMessages([]);
         }
       } else {
-        // Page refresh or in-app navigation: preserve path state
-        if (path.startsWith('/c/')) {
-          const pathId = path.split('/c/')[1];
-          if (pathId) {
-            setActiveChatId(pathId);
-            const chat = loadedChats.find(c => c.id === pathId);
-            if (chat) {
-              setMessages(chat.messages || []);
-              setIsSharedReadOnly(!!chat.isSharedReadOnly);
-              setSharedChatData(chat.isSharedReadOnly ? chat : null);
-            } else {
-              fetchSharedChat(pathId);
-            }
-          }
-        } else {
-          setActiveChatId(null);
-          setMessages([]);
-        }
+        setActiveChatId(null);
+        setMessages([]);
       }
     }
 
@@ -668,6 +650,12 @@ export const AppProvider = ({ children }) => {
       }
     }
   }, [chats, isInitializing, user, isTemporary]);
+
+  useEffect(() => {
+    if (!isInitializing) {
+      localStorage.setItem('aura-app-view', appView);
+    }
+  }, [appView, isInitializing]);
 
   useEffect(() => {
     if (!isInitializing) {
