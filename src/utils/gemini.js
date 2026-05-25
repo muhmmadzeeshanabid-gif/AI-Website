@@ -177,13 +177,13 @@ export const getGeminiResponse = async (prompt, history = [], personalization = 
       let result = null;
 
       if (model.type === "openrouter" && OPENROUTER_API_KEY) {
-        result = await tryOpenRouter(model.id, prompt, history, signal, onUpdate, imageData);
+        result = await tryOpenRouter(model.id, prompt, history, signal, onUpdate, imageData, personalization);
       } else if (model.type === "gemini" && GEMINI_API_KEY) {
-        result = await tryGeminiSDK(prompt, history, signal, onUpdate, imageData, model.id);
+        result = await tryGeminiSDK(prompt, history, signal, onUpdate, imageData, model.id, personalization);
       } else if (model.type === "ollama") {
-        result = await tryOllama(model.id, prompt, history, signal, onUpdate);
+        result = await tryOllama(model.id, prompt, history, signal, onUpdate, personalization);
       } else if (model.type === "pollinations") {
-        result = await tryPollinations(imageData.cleanText || prompt, history, signal, onUpdate);
+        result = await tryPollinations(imageData.cleanText || prompt, history, signal, onUpdate, personalization);
       }
 
       if (result) return result;
@@ -199,7 +199,7 @@ export const getGeminiResponse = async (prompt, history = [], personalization = 
 
 // --- Strategy Implementations ---
 
-async function tryOpenRouter(modelId, prompt, history, signal, onUpdate, imageData = { hasImage: false }) {
+async function tryOpenRouter(modelId, prompt, history, signal, onUpdate, imageData = { hasImage: false }, personalization = {}) {
   // Build message content — multimodal if image present
   let userContent;
   if (imageData.hasImage) {
@@ -231,7 +231,7 @@ async function tryOpenRouter(modelId, prompt, history, signal, onUpdate, imageDa
     body: JSON.stringify({
       model: modelId,
       messages: [
-        { role: "system", content: "You are Kyra, a professional and helpful intelligence assistant. When shown an image, describe and analyze its contents in detail." },
+        { role: "system", content: personalization?.systemPrompt || "You are Kyra, a professional and helpful intelligence assistant. When shown an image, describe and analyze its contents in detail." },
         ...history.map(msg => ({
           role: msg.role === 'user' ? 'user' : 'assistant',
           content: cleanHistoryContent(msg.content)
@@ -276,12 +276,15 @@ async function tryOpenRouter(modelId, prompt, history, signal, onUpdate, imageDa
   return fullText || null;
 }
 
-async function tryGeminiSDK(prompt, history, signal, onUpdate, imageData = { hasImage: false }, modelName = "gemini-pro") {
+async function tryGeminiSDK(prompt, history, signal, onUpdate, imageData = { hasImage: false }, modelName = "gemini-pro", personalization = {}) {
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
   
   // Use multimodal model if image is present
   const effectiveModel = imageData.hasImage ? "gemini-1.5-flash" : modelName;
-  const model = genAI.getGenerativeModel({ model: effectiveModel });
+  const model = genAI.getGenerativeModel({ 
+    model: effectiveModel,
+    systemInstruction: personalization?.systemPrompt || "You are Kyra, a professional and helpful intelligence assistant."
+  });
 
   const chat = model.startChat({
     history: history.filter(msg => msg.role === 'user' || msg.role === 'ai').map(msg => ({
@@ -316,7 +319,7 @@ async function tryGeminiSDK(prompt, history, signal, onUpdate, imageData = { has
   return fullText || null;
 }
 
-async function tryOllama(modelId, prompt, history, signal, onUpdate) {
+async function tryOllama(modelId, prompt, history, signal, onUpdate, personalization = {}) {
   try {
     const response = await fetch("http://localhost:11434/api/chat", {
       method: "POST",
@@ -325,6 +328,7 @@ async function tryOllama(modelId, prompt, history, signal, onUpdate) {
       body: JSON.stringify({
         model: modelId,
         messages: [
+          { role: "system", content: personalization?.systemPrompt || "You are Kyra, a professional and helpful intelligence assistant." },
           ...history.map(msg => ({
             role: msg.role === 'user' ? 'user' : 'assistant',
             content: msg.content
@@ -361,10 +365,10 @@ async function tryOllama(modelId, prompt, history, signal, onUpdate) {
   } catch (e) { return null; }
 }
 
-async function tryPollinations(prompt, history, signal, onUpdate) {
+async function tryPollinations(prompt, history, signal, onUpdate, personalization = {}) {
   // Use GET request with URL parameters as it seems to bypass the "authenticated users" POST block
   const encodedPrompt = encodeURIComponent(prompt);
-  const encodedSystem = encodeURIComponent("You are Kyra, a helpful and friendly assistant.");
+  const encodedSystem = encodeURIComponent(personalization?.systemPrompt || "You are Kyra, a helpful and friendly assistant.");
   const response = await fetch(`https://text.pollinations.ai/${encodedPrompt}?system=${encodedSystem}&private=true`, {
     method: "GET",
     signal,

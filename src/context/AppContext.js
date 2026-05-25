@@ -823,6 +823,7 @@ export const AppProvider = ({ children }) => {
         if (isExistingChat) {
           createNewChat();
         }
+        setAppView('chat');
       } else if (pathname.startsWith('/c/')) {
         const pathId = pathname.split('/c/')[1];
         if (pathId && pathId !== activeChatId) {
@@ -836,6 +837,7 @@ export const AppProvider = ({ children }) => {
             fetchSharedChat(pathId);
           }
         }
+        setAppView('chat');
       }
     }
   }, [pathname, chats, activeChatId, isInitializing, createNewChat, setActiveChatId, setMessages, fetchSharedChat]);
@@ -935,6 +937,7 @@ export const AppProvider = ({ children }) => {
         setMessages(chat.messages || []); 
         setIsSharedReadOnly(!!chat.isSharedReadOnly);
         setSharedChatData(chat.isSharedReadOnly ? chat : null);
+        setAppView('chat');
       }
       return prev;
     });

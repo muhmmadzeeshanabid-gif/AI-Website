@@ -16,10 +16,20 @@ import { db } from '@/lib/firebase';
 import { doc, updateDoc, arrayUnion, onSnapshot, getDoc, setDoc } from 'firebase/firestore';
 import AuthModal from './AuthModal';
 import LibraryView from './LibraryView';
+import AppsView from './AppsView';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+const APP_SYSTEM_PROMPTS = {
+  canva: "You are Canva Assistant, a creative design companion. You help users create visually stunning flyers, social media posts, logos, and layouts. Give guidance on canvas sizes, typography, visual hierarchy, modern color palettes, and step-by-step design layout ideas. Do not write generic programming code unless specifically requested; keep replies highly focused on aesthetics, copy layouts, visual elements, and creative design suggestions.",
+  photoshop: "You are Adobe Photoshop Assistant, an expert image editor and graphic design companion. Help the user with photo manipulations, layer styling, blend modes, pen tool selections, masking, color grading, and filter adjustments. Provide clear, step-by-step instructions on how to use specific Photoshop tools and panels to achieve their editing goals.",
+  figma: "You are Figma Assistant, a UI/UX layout and wireframing expert. Assist the user in designing clean interfaces, organizing design systems, utilizing Auto Layout, components, variants, variables, interactive prototyping, and framing systems. Focus on UI best practices, usability, modern design patterns, and clean organization.",
+  airtable: "You are Airtable Assistant, a relational database modeler. Help the user structure relational database tables, design schemas, write complex Airtable formulas, set up trigger-based automations, and compose scripts to interface with the Airtable API. Focus on clean data structures, relational fields, and optimal database organization.",
+  booking: "You are Booking.com Travel Assistant, an expert travel planner. Help the user discover beautiful destinations, recommend optimal hotel stay criteria, structure holiday itineraries, and organize rental cars or travel logistics. Provide detailed, engaging, and structured travel guides and vacation itineraries.",
+  lovable: "You are Lovable Assistant, a modern web development companion. Help the user build clean, responsive, and aesthetically outstanding React components, HTML structures, and CSS/Tailwind layouts. Focus on modern frontend aesthetics, clean structure, component reusability, and interactive micro-animations."
+};
 
 const AttachmentMenu = ({ isOpen, onClose, position = 'bottom', onSelectFile }) => {
   const [hoveredMore, setHoveredMore] = useState(false);
@@ -1121,6 +1131,19 @@ const ChatWindow = () => {
     }
   };
 
+  const cancelListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      stopAudioVisualizer();
+      setIsListening(false);
+    }
+    setInput('');
+    setIsVoiceMessageMode(false);
+    if (voiceModeRef) {
+      voiceModeRef.current = false;
+    }
+  };
+
   const speak = (text, id = null) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       if (currentlySpeakingId === id && id !== null) {
@@ -2159,7 +2182,15 @@ const ChatWindow = () => {
         }
       };
 
-      const aiResponse = await getGeminiResponse(finalPrompt, historySnapshot, personalization, abortControllerRef.current.signal, onUpdate, aiModel);
+      let activePersonalization = { ...personalization };
+      if (currentChat?.isAppChat && currentChat?.appId) {
+        const appSystemPrompt = APP_SYSTEM_PROMPTS[currentChat.appId];
+        if (appSystemPrompt) {
+          activePersonalization.systemPrompt = appSystemPrompt;
+        }
+      }
+
+      const aiResponse = await getGeminiResponse(finalPrompt, historySnapshot, activePersonalization, abortControllerRef.current.signal, onUpdate, aiModel);
       
       // Always update local state with final response to clear placeholder status
       setMessages(prev => prev.map(m => 
@@ -2225,6 +2256,21 @@ const ChatWindow = () => {
       }
     }
   };
+
+  useEffect(() => {
+    if (!activeChatId || isLoading) return;
+    const currentChat = chats.find(c => c.id === activeChatId);
+    if (currentChat?.isAppChat && currentChat?.needsIntro) {
+      // 1. Remove the flag immediately to prevent duplicate triggers
+      setChats(prev => prev.map(chat => 
+        chat.id === activeChatId ? { ...chat, needsIntro: false } : chat
+      ));
+      
+      // 2. Trigger direct send
+      const prompt = `Introduce ${currentChat.title} assistant: what is it, what does it do, and how can I use it?`;
+      handleSend(null, prompt);
+    }
+  }, [activeChatId, chats, isLoading]);
 
   const handleSaveEdit = async (id) => {
     if (!editValue.trim() || isLoading) return;
@@ -2319,7 +2365,16 @@ const ChatWindow = () => {
         });
       };
 
-      const aiResponse = await getGeminiResponse(editValue, history, personalization, abortControllerRef.current.signal, onUpdate, aiModel);
+      let activePersonalization = { ...personalization };
+      const currentChat = chats.find(c => c.id === activeChatId);
+      if (currentChat?.isAppChat && currentChat?.appId) {
+        const appSystemPrompt = APP_SYSTEM_PROMPTS[currentChat.appId];
+        if (appSystemPrompt) {
+          activePersonalization.systemPrompt = appSystemPrompt;
+        }
+      }
+
+      const aiResponse = await getGeminiResponse(editValue, history, activePersonalization, abortControllerRef.current.signal, onUpdate, aiModel);
       
       setMessages(prev => {
         const updated = [...prev];
@@ -2438,6 +2493,14 @@ const ChatWindow = () => {
     return (
       <div className="flex-1 min-w-0 flex flex-col relative bg-primary transition-colors duration-500" style={{ overflow: 'hidden', height: '100dvh' }}>
         <LibraryView />
+      </div>
+    );
+  }
+
+  if (appView === 'apps') {
+    return (
+      <div className="flex-1 min-w-0 flex flex-col relative bg-primary transition-colors duration-500" style={{ overflow: 'hidden', height: '100dvh' }}>
+        <AppsView />
       </div>
     );
   }
@@ -3416,57 +3479,7 @@ const ChatWindow = () => {
                   </div>
                 ) : (
                   <div className={`w-full ${isMobile ? 'mt-auto' : 'max-w-[840px] relative group'} px-0`}>
-                    {/* Pending attachment preview chip on landing page */}
-                    <AnimatePresence>
-                      {pendingAttachment && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 8, scale: 0.97 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 8, scale: 0.97 }}
-                          transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
-                          style={{
-                            width: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '8px 14px',
-                            background: 'var(--surface-2)',
-                            border: '1px solid var(--divider)',
-                            borderRadius: '16px',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                            marginBottom: '12px'
-                          }}
-                        >
-                          {pendingAttachment.url && (
-                            <img
-                              src={pendingAttachment.url}
-                              alt="attachment"
-                              style={{
-                                width: '44px', height: '44px', objectFit: 'cover',
-                                borderRadius: '10px', flexShrink: 0,
-                                border: '1px solid var(--divider)',
-                              }}
-                            />
-                          )}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pendingAttachment.name}</p>
-                            <p style={{ margin: 0, fontSize: '11px', color: 'var(--on-surface-muted)' }}>{pendingAttachment.type}</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setPendingAttachment(null)}
-                            style={{
-                              flexShrink: 0, width: 28, height: 28, borderRadius: '50%',
-                              background: 'var(--hover-overlay)', border: 'none', cursor: 'pointer',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              color: 'var(--on-surface-muted)',
-                            }}
-                          >
-                            <X size={14} />
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+
 
                     {isMobile ? (
                       <div className="w-full flex items-center gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
@@ -3486,16 +3499,50 @@ const ChatWindow = () => {
                           <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
                         </div>
 
-                        <div className="flex-1 flex items-center border border-divider shadow-md transition-all duration-300"
+                        <div className="flex-1 flex flex-col items-stretch border border-divider shadow-md transition-all duration-300"
                           style={{
                             background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
                             borderRadius: '24px', 
-                            padding: '4px 4px 4px 14px',
-                            height: '48px',
+                            padding: pendingAttachment ? '10px 4px 4px 14px' : '4px 4px 4px 14px',
+                            height: 'auto',
                             minHeight: '48px',
                             borderColor: 'var(--divider)'
                           }}
                         >
+                          {pendingAttachment && (
+                            <div className="flex px-1 pb-2">
+                              <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '140px', height: '140px' }}>
+                                {pendingAttachment.url && (
+                                  <img 
+                                    src={pendingAttachment.url} 
+                                    alt="attachment" 
+                                    className="w-full h-full object-cover rounded-xl"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
+                                )}
+                                <button 
+                                  type="button" 
+                                  onClick={(e) => { e.stopPropagation(); setPendingAttachment(null); }}
+                                  className="absolute rounded-full flex items-center justify-center shadow-md transition-all"
+                                  style={{
+                                    position: 'absolute',
+                                    top: '6px',
+                                    right: '6px',
+                                    backgroundColor: '#ffffff',
+                                    color: '#000000',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    width: '20px',
+                                    height: '20px',
+                                    zIndex: 10
+                                  }}
+                                >
+                                  <X size={11} strokeWidth={3} />
+                                </button>
+                              </div>
+                            </div>
+                          )}
                           <form onSubmit={handleSend} className="w-full flex items-center gap-2">
                             {isListening && isVoiceMessageMode ? (
                               <div className="flex-1 flex items-center pr-1 h-10 animate-in fade-in duration-200">
@@ -3628,34 +3675,69 @@ const ChatWindow = () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="w-full relative flex items-center border border-divider shadow-2xl transition-all duration-300" 
+                      <div className="w-full relative flex flex-col items-stretch border border-divider shadow-2xl transition-all duration-300" 
                         style={{ 
                           background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
                           borderRadius: '32px', 
-                          padding: '4px 6px 4px 16px',
+                          padding: pendingAttachment ? '12px 12px 6px 16px' : '4px 6px 4px 16px',
                           borderColor: isTemporary ? 'transparent' : 'var(--divider)'
                         }}>
-                        <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefLanding}>
-                          <button 
-                            type="button"
-                            className="w-10 h-10 flex items-center justify-center rounded-full transition-all"
-                            style={{ 
-                              color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                              backgroundColor: 'transparent'
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.backgroundColor = isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)'}
-                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                            onClick={(e) => { e.stopPropagation(); setShowAttachmentMenuLanding(!showAttachmentMenuLanding); }}
-                          >
-                            <Plus size={22} />
-                          </button>
-                          <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                            Attach
+                        {pendingAttachment && (
+                          <div className="flex px-1 pb-2">
+                            <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '140px', height: '140px' }}>
+                              {pendingAttachment.url && (
+                                <img 
+                                  src={pendingAttachment.url} 
+                                  alt="attachment" 
+                                  className="w-full h-full object-cover rounded-xl"
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              )}
+                              <button 
+                                type="button" 
+                                onClick={(e) => { e.stopPropagation(); setPendingAttachment(null); }}
+                                className="absolute rounded-full flex items-center justify-center shadow-md transition-all"
+                                style={{
+                                  position: 'absolute',
+                                  top: '6px',
+                                  right: '6px',
+                                  backgroundColor: '#ffffff',
+                                  color: '#000000',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                  width: '20px',
+                                  height: '20px',
+                                  zIndex: 10
+                                }}
+                              >
+                                <X size={11} strokeWidth={3} />
+                              </button>
+                            </div>
                           </div>
-                          <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
-                        </div>
-                        
-                        <form onSubmit={handleSend} className="w-full flex flex-1 items-center gap-3">
+                        )}
+                        <div className="w-full flex items-center gap-3">
+                          <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefLanding}>
+                            <button 
+                              type="button"
+                              className="w-10 h-10 flex items-center justify-center rounded-full transition-all"
+                              style={{ 
+                                color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                                backgroundColor: 'transparent'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.backgroundColor = isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)'}
+                              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                              onClick={(e) => { e.stopPropagation(); setShowAttachmentMenuLanding(!showAttachmentMenuLanding); }}
+                            >
+                              <Plus size={22} />
+                            </button>
+                            <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                              Attach
+                            </div>
+                            <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
+                          </div>
+                          
+                          <form onSubmit={handleSend} className="w-full flex flex-1 items-center gap-3">
                           {isListening && isVoiceMessageMode ? (
                             <div className="flex-1 flex items-center pr-1 pl-4 h-12 animate-in fade-in duration-200">
                               <div className="flex-1 flex items-center h-full" style={{ gap: 3, padding: '0 8px' }}>
@@ -3830,6 +3912,7 @@ const ChatWindow = () => {
                             </>
                           )}
                         </form>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -4166,55 +4249,7 @@ const ChatWindow = () => {
             )}
           </AnimatePresence>
           <div className={`max-w-3xl mx-auto w-full flex flex-col items-center ${replyingToMsg ? 'gap-0' : 'gap-3'} px-2 md:px-4`}>
-            {/* Pending attachment preview chip */}
-            <AnimatePresence>
-              {pendingAttachment && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.97 }}
-                  transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '8px 14px',
-                    background: 'var(--surface-2)',
-                    border: '1px solid var(--divider)',
-                    borderRadius: '16px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                  }}
-                >
-                  {pendingAttachment.url && (
-                    <img
-                      src={pendingAttachment.url}
-                      alt="attachment"
-                      style={{
-                        width: '44px', height: '44px', objectFit: 'cover',
-                        borderRadius: '10px', flexShrink: 0,
-                        border: '1px solid var(--divider)',
-                      }}
-                    />
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pendingAttachment.name}</p>
-                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--on-surface-muted)' }}>{pendingAttachment.type}</p>
-                  </div>
-                  <button
-                    onClick={() => setPendingAttachment(null)}
-                    style={{
-                      flexShrink: 0, width: 28, height: 28, borderRadius: '50%',
-                      background: 'var(--hover-overlay)', border: 'none', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'var(--on-surface-muted)',
-                    }}
-                  >
-                    <X size={14} />
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+
             <AnimatePresence>
               {replyingToMsg && (
                 <motion.div
@@ -4315,16 +4350,50 @@ const ChatWindow = () => {
                     <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" onSelectFile={handleChatFileSelect} />
                   </div>
 
-                  <div className="flex-1 flex items-center border border-divider shadow-md transition-all duration-300"
+                  <div className="flex-1 flex flex-col items-stretch border border-divider shadow-md transition-all duration-300"
                     style={{
                       background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
                       borderRadius: replyingToMsg ? '0 0 24px 24px' : '24px', 
-                      padding: '4px 4px 4px 14px',
-                      height: '48px',
+                      padding: pendingAttachment ? '10px 4px 4px 14px' : '4px 4px 4px 14px',
+                      height: 'auto',
                       minHeight: '48px',
                       borderColor: 'var(--divider)'
                     }}
                   >
+                    {pendingAttachment && (
+                      <div className="flex px-1 pb-2">
+                        <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '140px', height: '140px' }}>
+                          {pendingAttachment.url && (
+                            <img 
+                              src={pendingAttachment.url} 
+                              alt="attachment" 
+                              className="w-full h-full object-cover rounded-xl"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          )}
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); setPendingAttachment(null); }}
+                            className="absolute rounded-full flex items-center justify-center shadow-md transition-all"
+                            style={{
+                              position: 'absolute',
+                              top: '6px',
+                              right: '6px',
+                              backgroundColor: '#ffffff',
+                              color: '#000000',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: 0,
+                              width: '20px',
+                              height: '20px',
+                              zIndex: 10
+                            }}
+                          >
+                            <X size={11} strokeWidth={3} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <form onSubmit={handleSend} className="w-full flex items-center gap-2">
                       {isListening && isVoiceMessageMode ? (
                         <div className="flex-1 flex items-center pr-1 h-10 animate-in fade-in duration-200">
@@ -4463,37 +4532,72 @@ const ChatWindow = () => {
                   </div>
                 </div>
               ) : (
-                <div className="w-full relative flex items-center transition-all duration-300"
+                <div className="w-full relative flex flex-col items-stretch transition-all duration-300"
                   style={{ 
                     width: '100%', 
                     background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
                     borderRadius: replyingToMsg ? '0 0 26px 26px' : '26px', 
-                    padding: '4px 6px 4px 16px', border: '1px solid var(--divider)',
+                    padding: pendingAttachment ? '12px 12px 6px 16px' : '4px 6px 4px 16px', border: '1px solid var(--divider)',
                     borderTop: replyingToMsg ? 'none' : '1px solid var(--divider)',
                     transition: 'all 0.3s ease'
                   }}
                 >
-                  <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefFooter}>
-                    <button 
-                      type="button"
-                      onMouseEnter={() => setHoveredPlus(true)} 
-                      onMouseLeave={() => setHoveredPlus(false)} 
-                      onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }} 
-                      className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
-                      style={{
-                        color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
-                        backgroundColor: hoveredPlus ? (isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)') : 'transparent'
-                      }}
-                    >
-                      <Plus size={20} />
-                    </button>
-                    <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
-                      Attach
+                  {pendingAttachment && (
+                    <div className="flex px-1 pb-2">
+                      <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '140px', height: '140px' }}>
+                        {pendingAttachment.url && (
+                          <img 
+                            src={pendingAttachment.url} 
+                            alt="attachment" 
+                            className="w-full h-full object-cover rounded-xl"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        )}
+                        <button 
+                          type="button" 
+                          onClick={(e) => { e.stopPropagation(); setPendingAttachment(null); }}
+                          className="absolute rounded-full flex items-center justify-center shadow-md transition-all"
+                          style={{
+                            position: 'absolute',
+                            top: '6px',
+                            right: '6px',
+                            backgroundColor: '#ffffff',
+                            color: '#000000',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: 0,
+                            width: '20px',
+                            height: '20px',
+                            zIndex: 10
+                          }}
+                        >
+                          <X size={11} strokeWidth={3} />
+                        </button>
+                      </div>
                     </div>
-                    <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" onSelectFile={handleChatFileSelect} />
-                  </div>
+                  )}
+                  <div className="w-full flex items-center gap-3">
+                    <div className="relative group/tooltip flex items-center justify-center" ref={attachmentRefFooter}>
+                      <button 
+                        type="button"
+                        onMouseEnter={() => setHoveredPlus(true)} 
+                        onMouseLeave={() => setHoveredPlus(false)} 
+                        onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }} 
+                        className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
+                        style={{
+                          color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)',
+                          backgroundColor: hoveredPlus ? (isTemporary ? (resolvedTheme === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)') : 'var(--hover-overlay)') : 'transparent'
+                        }}
+                      >
+                        <Plus size={20} />
+                      </button>
+                      <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
+                        Attach
+                      </div>
+                      <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" onSelectFile={handleChatFileSelect} />
+                    </div>
 
-                  <form onSubmit={handleSend} className="w-full flex flex-1 items-center gap-3" style={{ flex: 1 }}>
+                    <form onSubmit={handleSend} className="w-full flex flex-1 items-center gap-3" style={{ flex: 1 }}>
                     {isListening && isVoiceMessageMode ? (
                       <div className="flex-1 flex items-center pr-1 pl-4 h-[48px] animate-in fade-in duration-200">
                          <div className="flex-1 flex items-center h-full mr-4 relative overflow-hidden">
@@ -4701,6 +4805,7 @@ const ChatWindow = () => {
                       </>
                     )}
                   </form>
+                  </div>
                 </div>
               )
             )}

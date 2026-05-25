@@ -1733,8 +1733,7 @@ export default function LibraryView() {
         <div 
           className="fixed inset-0 z-[9999] flex items-center justify-center animate-fade-in"
           style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.65)',
-            backdropFilter: 'blur(8px)',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
             position: 'fixed',
             top: 0,
             left: 0,
@@ -1743,17 +1742,25 @@ export default function LibraryView() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '16px'
+            padding: '20px'
           }}
           onClick={() => setDeleteConfirmation(prev => ({ ...prev, isOpen: false }))}
         >
           <div 
-            className="rounded-3xl border shadow-2xl flex flex-col p-6 max-w-sm w-full animate-scale-up"
+            className="animate-scale-up"
             style={{
               backgroundColor: 'var(--bg-secondary)',
-              borderColor: 'var(--border-color)',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-              position: 'relative'
+              border: '1px solid var(--border-color)',
+              boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.5)',
+              position: 'relative',
+              borderRadius: '24px',
+              padding: '24px 28px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              width: '100%',
+              maxWidth: '360px',
+              boxSizing: 'border-box'
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -1767,6 +1774,8 @@ export default function LibraryView() {
                 color: 'var(--text-tertiary)',
                 cursor: 'pointer',
                 borderRadius: '50%',
+                border: 'none',
+                backgroundColor: 'transparent',
                 padding: '6px',
                 display: 'flex',
                 alignItems: 'center',
@@ -1779,10 +1788,25 @@ export default function LibraryView() {
             </button>
 
             {/* Warning Icon Banner */}
-            <div className="flex flex-col items-center text-center mt-2">
+            <div 
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center',
+                width: '100%',
+                marginTop: '8px'
+              }}
+            >
               <div 
-                className="w-12 h-12 rounded-full flex items-center justify-center mb-4"
                 style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '16px',
                   backgroundColor: 'rgba(239, 68, 68, 0.1)',
                   color: '#ef4444'
                 }}
@@ -1792,12 +1816,12 @@ export default function LibraryView() {
 
               {/* Title */}
               <h3 
-                className="text-lg font-bold mb-2"
                 style={{
                   color: 'var(--text-primary)',
                   fontSize: '18px',
                   fontWeight: '700',
-                  lineHeight: '1.2'
+                  lineHeight: '1.2',
+                  margin: '0 0 8px 0'
                 }}
               >
                 {deleteConfirmation.type === 'single' ? 'Delete File?' : 'Delete Selected Files?'}
@@ -1805,12 +1829,12 @@ export default function LibraryView() {
 
               {/* Description */}
               <p 
-                className="text-sm mb-6"
                 style={{
                   color: 'var(--text-secondary)',
                   fontSize: '14px',
                   lineHeight: '1.5',
-                  marginTop: '6px'
+                  margin: '0 0 24px 0',
+                  textAlign: 'center'
                 }}
               >
                 {deleteConfirmation.type === 'single' ? (
@@ -1825,14 +1849,28 @@ export default function LibraryView() {
               </p>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-3 w-full">
+              <div 
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  width: '100%'
+                }}
+              >
                 <button
                   onClick={() => setDeleteConfirmation(prev => ({ ...prev, isOpen: false }))}
-                  className="flex-1 py-2.5 rounded-full text-sm font-semibold border transition-all"
                   style={{
-                    borderColor: 'var(--border-color)',
+                    flex: 1,
+                    paddingTop: '10px',
+                    paddingBottom: '10px',
+                    borderRadius: '9999px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    border: '1px solid var(--border-color)',
                     color: 'var(--text-primary)',
-                    backgroundColor: 'transparent'
+                    backgroundColor: 'transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease-in-out'
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-overlay)'}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -1841,10 +1879,18 @@ export default function LibraryView() {
                 </button>
                 <button
                   onClick={executeDelete}
-                  className="flex-1 py-2.5 rounded-full text-sm font-semibold transition-all"
                   style={{
+                    flex: 1,
+                    paddingTop: '10px',
+                    paddingBottom: '10px',
+                    borderRadius: '9999px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    border: 'none',
                     backgroundColor: '#ef4444',
-                    color: '#ffffff'
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease-in-out'
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ef4444'}
