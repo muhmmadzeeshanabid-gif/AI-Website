@@ -4,7 +4,77 @@ import { auth, googleProvider, db } from '@/lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove, deleteDoc, collection, query, where, orderBy, limit, enableNetwork } from 'firebase/firestore';
 import { usePathname, useRouter } from 'next/navigation';
+import { safeSetLocalStorageItem } from '@/utils/storage';
 
+
+
+const cropImageToRatio = (imgUrl, ratioStr, callback) => {
+  if (typeof window === 'undefined') {
+    callback(imgUrl);
+    return;
+  }
+  const img = new window.Image();
+  img.crossOrigin = 'anonymous';
+  img.src = imgUrl;
+  img.onload = () => {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      const parts = ratioStr.split(':').map(Number);
+      const wRatio = parts[0] || 1;
+      const hRatio = parts[1] || 1;
+      const targetRatio = wRatio / hRatio;
+      
+      const srcW = img.naturalWidth;
+      const srcH = img.naturalHeight;
+      const srcRatio = srcW / srcH;
+      
+      let drawW = srcW;
+      let drawH = srcH;
+      let startX = 0;
+      let startY = 0;
+      
+      if (srcRatio > targetRatio) {
+        // Source is wider than target ratio: crop horizontally
+        drawW = srcH * targetRatio;
+        startX = (srcW - drawW) / 2;
+      } else {
+        // Source is taller than target ratio: crop vertically
+        drawH = srcW / targetRatio;
+        startY = (srcH - drawH) / 2;
+      }
+      
+      // Limit resolution to a max dimension of 800px for space efficiency in localStorage
+      const maxDimension = 800;
+      let targetW = drawW;
+      let targetH = drawH;
+      if (drawW > maxDimension || drawH > maxDimension) {
+        if (drawW > drawH) {
+          targetW = maxDimension;
+          targetH = (drawH / drawW) * maxDimension;
+        } else {
+          targetH = maxDimension;
+          targetW = (drawW / drawH) * maxDimension;
+        }
+      }
+      
+      canvas.width = targetW;
+      canvas.height = targetH;
+      
+      ctx.drawImage(img, startX, startY, drawW, drawH, 0, 0, targetW, targetH);
+      // Export as JPEG at 0.85 quality to save massive local storage space
+      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      callback(croppedDataUrl);
+    } catch (e) {
+      console.error("Error cropping image client-side:", e);
+      callback(imgUrl);
+    }
+  };
+  img.onerror = () => {
+    callback(imgUrl);
+  };
+};
 
 const AppContext = createContext();
 
@@ -18,7 +88,15 @@ export const AppProvider = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpenState] = useState(true);
   const [isSidebarInitializing, setIsSidebarInitializing] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [appView, setAppView] = useState('chat');
+  const [appView, setAppView] = useState(() => {
+    if (typeof window === 'undefined') return 'chat';
+    const path = window.location.pathname;
+    if (path === '/library') return 'library';
+    if (path === '/research') return 'research';
+    if (path === '/apps') return 'apps';
+    if (path === '/images') return 'images';
+    return localStorage.getItem('aura-app-view') || 'chat';
+  });
   const [resolvedTheme, setResolvedTheme] = useState('dark');
   const [chats, setChats] = useState([]);
   const [archivedChats, setArchivedChatsState] = useState([]);
@@ -61,6 +139,9 @@ export const AppProvider = ({ children }) => {
   const [isSharedReadOnly, setIsSharedReadOnly] = useState(false);
   const [sharedChatData, setSharedChatData] = useState(null);
 
+  const [editingImage, setEditingImage] = useState(null);
+  const [activeEditImage, setActiveEditImage] = useState(null);
+
   const lastSyncedChatsRef = useRef({});
   const unsubscribeRef = useRef(null);
 
@@ -91,12 +172,12 @@ export const AppProvider = ({ children }) => {
       setArchivedChatsState(a => {
         if (a.find(c => c.id === id)) return a;
         const updated = [{ ...chat, archivedAt: Date.now() }, ...a];
-        localStorage.setItem('aura-archived-chats', JSON.stringify(updated));
-        return updated;
+        const result = safeSetLocalStorageItem('aura-archived-chats', updated);
+        return result || updated;
       });
       const filtered = prev.filter(c => c.id !== id);
-      localStorage.setItem('aura-chats', JSON.stringify(filtered));
-      return filtered;
+      const resultChats = safeSetLocalStorageItem('aura-chats', filtered);
+      return resultChats || filtered;
     });
   }, [user]);
 
@@ -116,8 +197,8 @@ export const AppProvider = ({ children }) => {
         setChats(c => {
           if (c.find(x => x.id === id)) return c; // Avoid duplicate
           const updatedChats = [rest, ...c];
-          localStorage.setItem('aura-chats', JSON.stringify(updatedChats));
-          return updatedChats;
+          const resultChats = safeSetLocalStorageItem('aura-chats', updatedChats);
+          return resultChats || updatedChats;
         });
         
         // If we are currently viewing this archived chat, close the archive view
@@ -130,8 +211,8 @@ export const AppProvider = ({ children }) => {
         });
       }
       const updated = prev.filter(c => c.id !== id);
-      localStorage.setItem('aura-archived-chats', JSON.stringify(updated));
-      return updated;
+      const resultArchived = safeSetLocalStorageItem('aura-archived-chats', updated);
+      return resultArchived || updated;
     });
   }, [user]);
 
@@ -182,10 +263,11 @@ export const AppProvider = ({ children }) => {
     setIsTemporary(false);
   }, [activeChatId]);
 
-  // Reset appView to chat when switching active chats
+  // Reset appView to chat when switching active chats (not on initial load)
   const prevActiveChatIdRef = useRef(activeChatId);
   useEffect(() => {
-    if (activeChatId && prevActiveChatIdRef.current !== activeChatId) {
+    // Only reset if previous chat was also non-null (genuine switch, not initial load)
+    if (activeChatId && prevActiveChatIdRef.current && prevActiveChatIdRef.current !== activeChatId) {
       setAppView('chat');
     }
     prevActiveChatIdRef.current = activeChatId;
@@ -245,8 +327,8 @@ export const AppProvider = ({ children }) => {
             return timeB - timeA;
           });
 
-          localStorage.setItem('aura-chats', JSON.stringify(combined));
-          return combined;
+          const result = safeSetLocalStorageItem('aura-chats', combined);
+          return result || combined;
         });
       });
     }
@@ -443,11 +525,23 @@ export const AppProvider = ({ children }) => {
         }
       } catch (e) {}
 
-      const savedAppView = localStorage.getItem('aura-app-view') || 'chat';
-      setAppView(savedAppView);
+      // Initialize appView based on pathname first, fallback to saved local storage
+      const path = window.location.pathname;
+      let initialView = 'chat';
+      if (path === '/library') {
+        initialView = 'library';
+      } else if (path === '/research') {
+        initialView = 'research';
+      } else if (path === '/apps') {
+        initialView = 'apps';
+      } else if (path === '/images') {
+        initialView = 'images';
+      } else {
+        initialView = localStorage.getItem('aura-app-view') || 'chat';
+      }
+      setAppView(initialView);
 
       // Initialize activeChatId from pathname or localStorage
-      const path = window.location.pathname;
       sessionStorage.setItem('aura-session-active', 'true');
       
       if (path.startsWith('/c/')) {
@@ -588,8 +682,8 @@ export const AppProvider = ({ children }) => {
             return timeB - timeA;
           });
 
-          localStorage.setItem('aura-chats', JSON.stringify(combined));
-          return combined;
+          const result = safeSetLocalStorageItem('aura-chats', combined);
+          return result || combined;
         });
 
         // Update archived chats in state
@@ -603,8 +697,8 @@ export const AppProvider = ({ children }) => {
               combined[existingIdx] = apc;
             }
           });
-          localStorage.setItem('aura-archived-chats', JSON.stringify(combined));
-          return combined;
+          const resultArchived = safeSetLocalStorageItem('aura-archived-chats', combined);
+          return resultArchived || combined;
         });
 
         // Unsubscribe immediately so it behaves like a one-time fetch
@@ -620,7 +714,10 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => {
     if (!isInitializing) {
-      localStorage.setItem('aura-chats', JSON.stringify(chats));
+      const savedChats = safeSetLocalStorageItem('aura-chats', chats);
+      if (savedChats && JSON.stringify(savedChats) !== JSON.stringify(chats)) {
+        setChats(savedChats);
+      }
 
       if (user?.uid) {
         chats.forEach(chat => {
@@ -657,8 +754,130 @@ export const AppProvider = ({ children }) => {
     }
   }, [appView, isInitializing]);
 
+  const autoCompleteGeneration = useCallback((chatId, msg) => {
+    cropImageToRatio(msg.imageUrl, msg.ratio, (croppedDataUrl) => {
+      // 1. Save to My Images list in localStorage
+      try {
+        const saved = localStorage.getItem('aura-my-images');
+        let currentImages = [];
+        if (saved) {
+          try {
+            currentImages = JSON.parse(saved);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        if (currentImages.length === 0) {
+          currentImages = [
+            { id: 'img-1', url: '/my_ai_assistant.png', prompt: 'Futuristic dark blue cybernetic AI robot assistant logo layout' },
+            { id: 'img-2', url: '/my_couple_heart.png', prompt: 'Romantic portrait of a couple inside a decorated golden heart frame' },
+            { id: 'img-3', url: '/app_design.png', prompt: 'Sleek colorful mobile UI app dashboard layout mockup' },
+            { id: 'img-4', url: '/my_pizza.png', prompt: 'Delicious gourmet Italian pizza with melting mozzarella cheese' },
+            { id: 'img-5', url: '/wanderlust.png', prompt: 'Wanderlust explorer mountain landscape painting' },
+            { id: 'img-6', url: '/my_zypher_logo.png', prompt: 'Modern futuristic brand logo with a glowing purple and cyan Z' },
+            { id: 'img-7', url: '/chibi_stickers.png', prompt: 'Cute chibi style sticker pack designs' },
+            { id: 'img-8', url: '/makeup_guide.png', prompt: 'High-fashion beauty makeup guide eyeshadow palette details' }
+          ];
+        }
+
+        if (!currentImages.some(img => img.url === croppedDataUrl)) {
+          const newImgObj = {
+            id: `img-gen-aspect-${Date.now()}`,
+            url: croppedDataUrl,
+            prompt: msg.prompt || `Cropped to aspect ratio ${msg.ratio}`
+          };
+          const updated = [newImgObj, ...currentImages];
+          safeSetLocalStorageItem('aura-my-images', updated);
+        }
+      } catch (err) {
+        console.error("Error saving image to my images in background:", err);
+      }
+
+      // 2. Update the message in the chats list
+      setChats(prev => prev.map(chat => {
+        if (chat.id === chatId) {
+          const updatedMessages = chat.messages?.map(m => 
+            m.id === msg.id ? { ...m, aspectGenDone: true, imageUrl: croppedDataUrl } : m
+          ) || [];
+          return { ...chat, messages: updatedMessages };
+        }
+        return chat;
+      }));
+
+      // 3. Update the active messages state if this is the active chat
+      if (activeChatId === chatId) {
+        setMessages(prev => prev.map(m => 
+          m.id === msg.id ? { ...m, aspectGenDone: true, imageUrl: croppedDataUrl } : m
+        ));
+      }
+    });
+  }, [activeChatId, setMessages]);
+
+  // Background aspect ratio generation manager
   useEffect(() => {
-    if (!isInitializing) {
+    if (isInitializing || !chats) return;
+
+    const inProgressGenerations = [];
+    chats.forEach(chat => {
+      if (chat.isGroup || chat.isSharedReadOnly) return;
+      chat.messages?.forEach(msg => {
+        if (msg.isAspectGeneration && !msg.aspectGenDone) {
+          const elapsed = Date.now() - new Date(msg.timestamp || new Date()).getTime();
+          if (elapsed < 40000) {
+            inProgressGenerations.push({
+              chatId: chat.id,
+              msgId: msg.id,
+              imageUrl: msg.imageUrl,
+              ratio: msg.ratio,
+              prompt: msg.prompt,
+              timestamp: msg.timestamp,
+              remainingTime: 40000 - elapsed
+            });
+          } else {
+            // Already should be done! Let's auto-complete it in the background if we haven't yet
+            autoCompleteGeneration(chat.id, msg);
+          }
+        }
+      });
+    });
+
+    // Schedule timeouts for in-progress ones
+    const timers = inProgressGenerations.map(gen => {
+      return setTimeout(() => {
+        autoCompleteGeneration(gen.chatId, {
+          id: gen.msgId,
+          imageUrl: gen.imageUrl,
+          ratio: gen.ratio,
+          prompt: gen.prompt
+        });
+      }, gen.remainingTime);
+    });
+
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+  }, [chats, isInitializing, autoCompleteGeneration]);
+
+  useEffect(() => {
+    if (isInitializing) return;
+
+    if (appView === 'library') {
+      if (pathname !== '/library') {
+        router.push('/library');
+      }
+    } else if (appView === 'research') {
+      if (pathname !== '/research') {
+        router.push('/research');
+      }
+    } else if (appView === 'apps') {
+      if (pathname !== '/apps') {
+        router.push('/apps');
+      }
+    } else if (appView === 'images') {
+      if (pathname !== '/images') {
+        router.push('/images');
+      }
+    } else if (appView === 'chat') {
       if (activeChatId) {
         localStorage.setItem('aura-active-chat-id', activeChatId);
         const chatExists = chats.some(c => c.id === activeChatId);
@@ -680,12 +899,12 @@ export const AppProvider = ({ children }) => {
         }
       } else {
         localStorage.removeItem('aura-active-chat-id');
-        if (pathname.startsWith('/c/')) {
+        if (pathname.startsWith('/c/') || pathname === '/library' || pathname === '/research' || pathname === '/apps' || pathname === '/images') {
           router.push('/');
         }
       }
     }
-  }, [activeChatId, isInitializing, chats, pathname, router]);
+  }, [appView, activeChatId, isInitializing, chats, pathname, router]);
 
   const setAccentColor = (color) => {
     setAccentColorState(color);
@@ -824,6 +1043,12 @@ export const AppProvider = ({ children }) => {
           createNewChat();
         }
         setAppView('chat');
+      } else if (pathname === '/library') {
+        setAppView('library');
+      } else if (pathname === '/research') {
+        setAppView('research');
+      } else if (pathname === '/apps') {
+        setAppView('apps');
       } else if (pathname.startsWith('/c/')) {
         const pathId = pathname.split('/c/')[1];
         if (pathId && pathId !== activeChatId) {
@@ -884,8 +1109,8 @@ export const AppProvider = ({ children }) => {
 
     setArchivedChatsState(prev => {
       const updated = prev.filter(chat => chat.id !== id);
-      localStorage.setItem('aura-archived-chats', JSON.stringify(updated));
-      return updated;
+      const result = safeSetLocalStorageItem('aura-archived-chats', updated);
+      return result || updated;
     });
   }, [activeChatId, chats, archivedChats, profile, user]);
 
@@ -916,12 +1141,12 @@ export const AppProvider = ({ children }) => {
       // 3. Local cleanup
       setChats(prev => {
         const updated = prev.filter(c => c.id !== id);
-        localStorage.setItem('aura-chats', JSON.stringify(updated));
+        const result = safeSetLocalStorageItem('aura-chats', updated);
         if (activeChatId === id) {
           setActiveChatId(null);
           setMessages([]);
         }
-        return updated;
+        return result || updated;
       });
       
     } catch (err) {
@@ -946,8 +1171,8 @@ export const AppProvider = ({ children }) => {
   const renameChat = useCallback(async (id, newTitle) => {
     setChats(prev => {
       const updated = prev.map(c => c.id === id ? { ...c, title: newTitle } : c);
-      localStorage.setItem('aura-chats', JSON.stringify(updated));
-      return updated;
+      const result = safeSetLocalStorageItem('aura-chats', updated);
+      return result || updated;
     });
 
     const chat = chats.find(c => c.id === id);
@@ -978,8 +1203,8 @@ export const AppProvider = ({ children }) => {
 
     setChats(prev => {
       const updated = prev.map(c => c.id === id ? groupData : c);
-      localStorage.setItem('aura-chats', JSON.stringify(updated));
-      return updated;
+      const result = safeSetLocalStorageItem('aura-chats', updated);
+      return result || updated;
     });
 
     // Save to Firestore for multi-user access
@@ -1027,8 +1252,8 @@ export const AppProvider = ({ children }) => {
           setChats(prev => {
             if (prev.find(c => c.id === id)) return prev;
             const updated = [chatData, ...prev];
-            localStorage.setItem('aura-chats', JSON.stringify(updated));
-            return updated;
+            const result = safeSetLocalStorageItem('aura-chats', updated);
+            return result || updated;
           });
           setActiveChatId(id);
           return { success: true };
@@ -1061,8 +1286,8 @@ export const AppProvider = ({ children }) => {
         setChats(prev => {
           if (prev.find(c => c.id === id)) return prev;
           const updated = [chatData, ...prev];
-          localStorage.setItem('aura-chats', JSON.stringify(updated));
-          return updated;
+          const result = safeSetLocalStorageItem('aura-chats', updated);
+          return result || updated;
         });
 
         setActiveChatId(id);
@@ -1083,6 +1308,8 @@ export const AppProvider = ({ children }) => {
       chatTheme, updateChatTheme,
       isSidebarOpen, setIsSidebarOpen,
       appView, setAppView,
+      editingImage, setEditingImage,
+      activeEditImage, setActiveEditImage,
       messages, setMessages,
       chats, setChats,
       activeChatId, setActiveChatId,

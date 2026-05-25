@@ -634,6 +634,11 @@ const Sidebar = () => {
                      <span>Library</span>
                   </button>
                   <button 
+                    onClick={() => {
+                      setAppView('research');
+                      setIsMoreMenuOpen(false);
+                      if (isMobile) setIsSidebarOpen(false);
+                    }}
                     style={{
                       width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                       padding: '10px 14px', borderRadius: 12, background: 'transparent',

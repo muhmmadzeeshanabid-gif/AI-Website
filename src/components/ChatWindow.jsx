@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppContext } from '@/context/AppContext';
+import { safeSetLocalStorageItem } from '@/utils/storage';
 import { 
   Send, Bot, User, Sparkles, Languages, Moon, Sun, Palette, Edit2, 
   Check, Copy, ThumbsUp, ThumbsDown, Share, Share2, RefreshCcw, MoreHorizontal, MoreVertical,
@@ -17,6 +18,8 @@ import { doc, updateDoc, arrayUnion, onSnapshot, getDoc, setDoc } from 'firebase
 import AuthModal from './AuthModal';
 import LibraryView from './LibraryView';
 import AppsView from './AppsView';
+import ResearchView from './ResearchView';
+import ImagesView from './ImagesView';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -511,6 +514,408 @@ const TypewriterMessage = ({ content, isUser = false, isGenerating = false, onDo
   );
 };
 
+const cropImageToRatio = (imgUrl, ratioStr, callback) => {
+  const img = new window.Image();
+  img.crossOrigin = 'anonymous';
+  img.src = imgUrl;
+  img.onload = () => {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      const parts = ratioStr.split(':').map(Number);
+      const wRatio = parts[0] || 1;
+      const hRatio = parts[1] || 1;
+      const targetRatio = wRatio / hRatio;
+      
+      const srcW = img.naturalWidth;
+      const srcH = img.naturalHeight;
+      const srcRatio = srcW / srcH;
+      
+      let drawW = srcW;
+      let drawH = srcH;
+      let startX = 0;
+      let startY = 0;
+      
+      if (srcRatio > targetRatio) {
+        // Source is wider than target ratio: crop horizontally
+        drawW = srcH * targetRatio;
+        startX = (srcW - drawW) / 2;
+      } else {
+        // Source is taller than target ratio: crop vertically
+        drawH = srcW / targetRatio;
+        startY = (srcH - drawH) / 2;
+      }
+      
+      // Limit resolution to a max dimension of 800px for space efficiency in localStorage
+      const maxDimension = 800;
+      let targetW = drawW;
+      let targetH = drawH;
+      if (drawW > maxDimension || drawH > maxDimension) {
+        if (drawW > drawH) {
+          targetW = maxDimension;
+          targetH = (drawH / drawW) * maxDimension;
+        } else {
+          targetH = maxDimension;
+          targetW = (drawW / drawH) * maxDimension;
+        }
+      }
+      
+      canvas.width = targetW;
+      canvas.height = targetH;
+      
+      ctx.drawImage(img, startX, startY, drawW, drawH, 0, 0, targetW, targetH);
+      // Export as JPEG at 0.85 quality to save massive local storage space
+      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      callback(croppedDataUrl);
+    } catch (e) {
+      console.error("Error cropping image client-side:", e);
+      callback(imgUrl);
+    }
+  };
+  img.onerror = () => {
+    callback(imgUrl);
+  };
+};
+
+const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInitially, setMessages, timestamp }) => {
+  const { setEditingImage, setActiveEditImage, setAppView } = useAppContext();
+  const startTime = React.useMemo(() => new Date(timestamp || new Date().toISOString()).getTime(), [timestamp]);
+
+  const [phase, setPhase] = useState(() => {
+    if (isDoneInitially) return 'done';
+    const elapsed = Date.now() - startTime;
+    if (elapsed >= 40000) return 'done';
+    if (elapsed >= 15000) return 'revealing';
+    return 'sketching';
+  });
+
+  const [maskHeight, setMaskHeight] = useState(() => {
+    if (isDoneInitially) return '0%';
+    const elapsed = Date.now() - startTime;
+    if (elapsed >= 40000) return '0%';
+    return '100%';
+  });
+
+  const [transitionDuration, setTransitionDuration] = useState('25s cubic-bezier(0.4, 0, 0.2, 1)');
+
+  useEffect(() => {
+    if (isDoneInitially || phase === 'done') return;
+
+    const elapsed = Date.now() - startTime;
+
+    // Timer to transition from sketching to revealing
+    let sketchTimer;
+    if (phase === 'sketching') {
+      const remainingSketch = 15000 - elapsed;
+      sketchTimer = setTimeout(() => {
+        setPhase('revealing');
+        // Start revealing
+        setTimeout(() => {
+          setTransitionDuration('25s cubic-bezier(0.4, 0, 0.2, 1)');
+          setMaskHeight('0%');
+        }, 50);
+      }, Math.max(0, remainingSketch));
+    } else if (phase === 'revealing') {
+      // If we mounted already in revealing phase
+      const remainingReveal = 40000 - elapsed;
+      const remainingRevealSec = Math.max(0.1, remainingReveal / 1000).toFixed(2);
+      setTransitionDuration(`${remainingRevealSec}s cubic-bezier(0.4, 0, 0.2, 1)`);
+      // Trigger transition on next tick
+      const transitionTimer = setTimeout(() => {
+        setMaskHeight('0%');
+      }, 50);
+    }
+
+    // Timer to mark as complete
+    const remainingTotal = 40000 - elapsed;
+    const doneTimer = setTimeout(() => {
+      setPhase('done');
+
+      // Center crop the image client-side and save to My Images gallery
+      cropImageToRatio(imageUrl, ratio, (croppedDataUrl) => {
+        try {
+          const saved = localStorage.getItem('aura-my-images');
+          let currentImages = [];
+          if (saved) {
+            try {
+              currentImages = JSON.parse(saved);
+            } catch (e) {
+              console.error(e);
+            }
+          }
+          if (currentImages.length === 0) {
+            currentImages = [
+              { id: 'img-1', url: '/my_ai_assistant.png', prompt: 'Futuristic dark blue cybernetic AI robot assistant logo layout' },
+              { id: 'img-2', url: '/my_couple_heart.png', prompt: 'Romantic portrait of a couple inside a decorated golden heart frame' },
+              { id: 'img-3', url: '/app_design.png', prompt: 'Sleek colorful mobile UI app dashboard layout mockup' },
+              { id: 'img-4', url: '/my_pizza.png', prompt: 'Delicious gourmet Italian pizza with melting mozzarella cheese' },
+              { id: 'img-5', url: '/wanderlust.png', prompt: 'Wanderlust explorer mountain landscape painting' },
+              { id: 'img-6', url: '/my_zypher_logo.png', prompt: 'Modern futuristic brand logo with a glowing purple and cyan Z' },
+              { id: 'img-7', url: '/chibi_stickers.png', prompt: 'Cute chibi style sticker pack designs' },
+              { id: 'img-8', url: '/makeup_guide.png', prompt: 'High-fashion beauty makeup guide eyeshadow palette details' }
+            ];
+          }
+
+          const newImgObj = {
+            id: `img-gen-aspect-${Date.now()}`,
+            url: croppedDataUrl,
+            prompt: prompt || `Cropped to aspect ratio ${ratio}`
+          };
+          const updated = [newImgObj, ...currentImages];
+          safeSetLocalStorageItem('aura-my-images', updated);
+        } catch (err) {
+          console.error("Error saving image to my images:", err);
+        }
+
+        if (setMessages && messageId) {
+          setMessages(prev => prev.map(m => m.id === messageId ? { ...m, aspectGenDone: true, imageUrl: croppedDataUrl } : m));
+        }
+      });
+    }, Math.max(0, remainingTotal));
+
+    return () => {
+      if (sketchTimer) clearTimeout(sketchTimer);
+      clearTimeout(doneTimer);
+    };
+  }, [phase, startTime, isDoneInitially, messageId, setMessages, imageUrl, prompt, ratio]);
+
+  const cssRatio = ratio.replace(':', '/');
+
+  if (phase === 'sketching') {
+    return (
+      <div
+        style={{
+          width: '320px',
+          aspectRatio: cssRatio,
+          background: '#232325',
+          borderRadius: '20px',
+          padding: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          position: 'relative',
+          overflow: 'hidden',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.4)'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#e5e7eb' }}>
+          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+          <span style={{ fontSize: '13px', fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>
+            Sketching it out
+          </span>
+        </div>
+        
+        {/* Dot Matrix Grid */}
+        <div 
+          style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(12, 1fr)', 
+            gridTemplateRows: 'repeat(12, 1fr)', 
+            gap: '8px',
+            width: '100%',
+            height: '70%',
+            justifyContent: 'center',
+            alignContent: 'center',
+            margin: 'auto'
+          }}
+        >
+          {Array.from({ length: 144 }).map((_, i) => {
+            const row = Math.floor(i / 12);
+            const col = i % 12;
+            const delay = (row + col) * 0.04;
+            return (
+              <div 
+                key={i} 
+                style={{ 
+                  width: '4px', 
+                  height: '4px', 
+                  borderRadius: '50%', 
+                  background: '#ffffff', 
+                  opacity: 0.15,
+                  animation: `pulse-dots 1.5s infinite ease-in-out`,
+                  animationDelay: `${delay}s`
+                }} 
+              />
+            );
+          })}
+        </div>
+        
+        <style>{`
+          @keyframes pulse-dots {
+            0%, 100% { transform: scale(1); opacity: 0.15; }
+            50% { transform: scale(2.2); opacity: 0.75; background-color: #3b82f6; }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        background: 'transparent',
+        padding: '0',
+        borderRadius: '0',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+        width: '460px',
+        maxWidth: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        border: 'none'
+      }}
+    >
+      <div
+        style={{
+          background: '#000000',
+          borderRadius: '0',
+          overflow: 'hidden',
+          position: 'relative',
+          width: '100%',
+          aspectRatio: cssRatio
+        }}
+      >
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={prompt || ''}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover'
+            }}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', background: '#0a0a0b' }} />
+        )}
+
+        {/* Wiping Black Background Mask */}
+        {phase === 'revealing' && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              width: '100%',
+              height: maskHeight,
+              background: '#232325',
+              transition: `height ${transitionDuration}`,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 5
+            }}
+          >
+            <div style={{ color: '#ffffff', opacity: 0.3, fontSize: '12px', fontWeight: 500, position: 'absolute', top: '16px', left: '16px' }}>
+              Revealing...
+            </div>
+          </div>
+        )}
+
+        {/* Floating action overlay only when phase is 'done' */}
+        {phase === 'done' && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 40%)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-end',
+              padding: '12px',
+              zIndex: 10
+            }}
+          >
+            <button
+              onClick={() => {
+                setEditingImage({ id: imageId, url: imageUrl, prompt });
+                setActiveEditImage({ id: imageId, url: imageUrl, prompt });
+                setAppView('images');
+              }}
+              style={{
+                background: 'rgba(10, 10, 12, 0.8)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                borderRadius: '16px',
+                padding: '4px 10px',
+                color: '#ffffff',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(10, 10, 12, 0.8)'}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+              <span>Edit</span>
+            </button>
+
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const link = document.createElement('a');
+                  link.href = imageUrl;
+                  link.download = `cropped_${ratio}.png`;
+                  link.click();
+                }}
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  background: 'rgba(10, 10, 12, 0.8)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0
+                }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </button>
+              <button
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  background: 'rgba(10, 10, 12, 0.8)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0
+                }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                  <polyline points="16 6 12 2 8 6" />
+                  <line x1="12" y1="2" x2="12" y2="15" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const MessageContent = ({ content, isUser }) => {
   const { resolvedTheme } = useAppContext();
   
@@ -706,7 +1111,7 @@ const cleanInputForPrompt = (text) => {
 
 const ChatWindow = () => {
   const { 
-    isSidebarOpen, appView, resolvedTheme, activeChatId, chats, 
+    isSidebarOpen, appView, setAppView, resolvedTheme, activeChatId, chats, 
     isShareModalOpen, setIsShareModalOpen, shareChatId, setShareChatId,
     isReportModalOpen, setIsReportModalOpen,
     isGroupChatModalOpen, setIsGroupChatModalOpen, 
@@ -790,7 +1195,12 @@ const ChatWindow = () => {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [copyingId, setCopyingId] = useState(null);
-  const [ratings, setRatings] = useState({});
+  const [ratings, setRatings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aura-msg-ratings');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
   const [msgReactions, setMsgReactions] = useState({});
   const [hoveredReactionMsgId, setHoveredReactionMsgId] = useState(null);
   const [activeReactionPickerMsgId, setActiveReactionPickerMsgId] = useState(null);
@@ -814,6 +1224,15 @@ const ChatWindow = () => {
       localStorage.setItem('msgReactions', JSON.stringify(msgReactions));
     }
   }, [msgReactions, mounted]);
+
+  // Ratings Persistence
+  useEffect(() => {
+    if (mounted) {
+      try {
+        localStorage.setItem('aura-msg-ratings', JSON.stringify(ratings));
+      } catch {}
+    }
+  }, [ratings, mounted]);
   const [isMobile, setIsMobile] = useState(false);
   const [isSmallMobile, setIsSmallMobile] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
@@ -952,6 +1371,12 @@ const ChatWindow = () => {
       }
     }
   }, [mounted, appView, activeChatId]);
+
+  // Reset input and attachments when switching chats
+  useEffect(() => {
+    setInput('');
+    setPendingAttachment(null);
+  }, [activeChatId]);
 
   // Handle real-time typing status in Firestore for group chats
   const typingTimeoutRef = useRef(null);
@@ -1325,8 +1750,86 @@ const ChatWindow = () => {
 
     return (
       <div className={`w-full flex flex-col ${isMe ? 'items-end' : msg.isVoice ? 'items-center' : 'items-start'}`}>
+        {/* Reply preview if it contains an image */}
+        {msg.replyTo && (() => {
+          const parsedReply = parseUserImageMessage(msg.replyTo.content);
+          if (parsedReply.hasImage) {
+            return (
+              <div 
+                className="mb-1 flex items-center gap-1.5 p-1 px-2 rounded-md text-[11px] opacity-80"
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  color: 'var(--on-surface-muted)',
+                  alignSelf: isMe ? 'flex-end' : 'flex-start',
+                  marginRight: isMe ? '4px' : '0px',
+                  marginLeft: !isMe && isOtherUser ? '44px' : '0px',
+                  width: 'fit-content'
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
+                  <polyline points="15 10 20 15 15 20" />
+                  <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+                </svg>
+                <img 
+                  src={parsedReply.imgUrl} 
+                  alt="Thumbnail" 
+                  style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)' }} 
+                />
+              </div>
+            );
+          }
+          return null;
+        })()}
 
-        
+        {/* Own prompt image preview displayed above the bubble */}
+        {msg.role === 'user' && (() => {
+          const parsed = parseUserImageMessage(msg.content);
+          if (parsed.hasImage) {
+            const imgSrc = msg.attachment?.thumbnailUrl || parsed.imgUrl || msg.attachment?.url;
+            return (
+              <div 
+                className="flex items-center gap-2 p-1 text-[13px] opacity-90"
+                style={{ 
+                  alignSelf: isMe ? 'flex-end' : 'flex-start',
+                  marginRight: isMe ? '12px' : '0px',
+                  marginLeft: !isMe && isOtherUser ? '56px' : '0px',
+                  width: 'fit-content',
+                  marginBottom: '10px'
+                }}
+              >
+                {/* Curved Arrow ↳ */}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7, color: 'var(--on-surface-muted)' }}>
+                  <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+                  <polyline points="15 10 20 15 15 20" />
+                </svg>
+                {/* Thumbnail Image */}
+                <div 
+                  onClick={() => setFullscreenImageUrl(imgSrc)}
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    border: '1.5px solid rgba(255, 255, 255, 0.2)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                    background: 'var(--surface-3)'
+                  }}
+                  title="Click to view full size"
+                >
+                  <img 
+                    src={imgSrc} 
+                    alt="Prompt Thumbnail" 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                  />
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
         <div className={`w-full flex ${isMe ? 'items-start flex-row-reverse' : msg.isVoice ? 'items-center justify-center' : 'items-start flex-row'}`}>
           {isGroup && !isMe && msg.role !== 'ai' && (
             <div title={msg.sender?.displayName || 'User'} style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', marginRight: '12px', flexShrink: 0, marginTop: '2px', border: '1px solid var(--divider)' }}>
@@ -1346,27 +1849,25 @@ const ChatWindow = () => {
              animate={{ opacity: 1, scale: 1, y: 0 }} 
              transition={{ duration: 0.2, ease: "easeOut" }}
            className={`relative transition-all duration-300 min-w-0 ${
-              parsedImage.hasImage
-                ? 'px-0 py-0'
-                : isMe 
-                  ? 'px-6 py-3 rounded-[24px] font-medium shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] border border-white/5' 
-                  : isOtherUser
-                    ? 'px-6 py-3 rounded-[24px] bg-surface-2 border border-divider'
-                    : 'px-0 py-2'
-            }`}
+              isMe 
+                ? 'px-6 py-3 rounded-[24px] font-medium shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] border border-white/5' 
+                : isOtherUser
+                  ? 'px-6 py-3 rounded-[24px] bg-surface-2 border border-divider'
+                  : msg.isAspectGeneration ? '' : 'px-0 py-2'
+           }`}
            style={{ 
              maxWidth: msg.isVoice ? '340px' : isMe ? '78%' : isOtherUser ? '78%' : '100%',
-             overflow: parsedImage.hasImage ? 'visible' : 'hidden',
+             overflow: msg.isAspectGeneration ? 'visible' : 'hidden',
              wordBreak: 'break-word',
-             background: parsedImage.hasImage ? 'transparent' : (isMe ? accentColor : isOtherUser ? 'var(--surface-2)' : 'transparent'),
+             background: isMe ? accentColor : isOtherUser ? 'var(--surface-2)' : 'transparent',
              color: isMe ? '#ffffff' : 'var(--on-surface)',
-             border: parsedImage.hasImage ? 'none' : (isMe ? `1px solid ${accentColor}` : isOtherUser ? '1px solid var(--divider)' : 'none'),
-             borderRadius: parsedImage.hasImage ? '0' : (msg.isVoice ? '20px' : isMe ? '24px 24px 4px 24px' : isOtherUser ? '4px 24px 24px 24px' : '0'),
+             border: isMe ? `1px solid ${accentColor}` : isOtherUser ? '1px solid var(--divider)' : 'none',
+             borderRadius: msg.isVoice ? '20px' : isMe ? '24px 24px 4px 24px' : isOtherUser ? '4px 24px 24px 24px' : '0',
              fontSize: fontSize === 'Small' ? '12.5px' : fontSize === 'Large' ? '16px' : '14px', 
              lineHeight: '1.7',
-             boxShadow: !parsedImage.hasImage && (isMe || isOtherUser) && resolvedTheme === 'dark' ? '0 10px 20px -5px rgba(0,0,0,0.2)' : 'none',
+             boxShadow: (isMe || isOtherUser) && resolvedTheme === 'dark' ? '0 10px 20px -5px rgba(0,0,0,0.2)' : 'none',
              overflowWrap: 'anywhere',
-             padding: parsedImage.hasImage ? '0px' : (msg.isVoice ? '12px 16px' : (isMe || isOtherUser ? undefined : '0px'))
+             padding: msg.isAspectGeneration ? '0' : msg.isVoice ? '12px 16px' : (isMe || isOtherUser ? undefined : '0px')
            }}
           >
        {msg.isVoice ? 
@@ -1406,83 +1907,36 @@ const ChatWindow = () => {
         </div>
        : 
         <>
-          {msg.replyTo && 
-            <div 
-              className="mb-2 p-2.5 px-3.5 rounded-xl text-[13px] opacity-80"
-              style={{ 
-                 background: isMe ? 'rgba(0,0,0,0.12)' : 'var(--hover-overlay)',
-                 borderLeft: `2px solid ${isMe ? 'rgba(255,255,255,0.4)' : accentColor}`,
-                 color: isMe ? 'rgba(255,255,255,0.9)' : 'var(--on-surface-muted)',
-               }}
-             >
+          {msg.replyTo && (() => {
+            const parsedReply = parseUserImageMessage(msg.replyTo.content);
+            if (parsedReply.hasImage) {
+              return null; // Rendered outside
+            }
+            return (
+              <div 
+                className="mb-2 p-2.5 px-3.5 rounded-xl text-[13px] opacity-80"
+                style={{ 
+                  background: isMe ? 'rgba(0,0,0,0.12)' : 'var(--hover-overlay)',
+                  borderLeft: `2px solid ${isMe ? 'rgba(255,255,255,0.4)' : accentColor}`,
+                  color: isMe ? 'rgba(255, 255, 255, 0.9)' : 'var(--on-surface-muted)',
+                }}
+              >
                 <p className="line-clamp-2 leading-relaxed">
                   <span className="opacity-40 mr-1 font-serif text-[15px]">"</span>
                   {msg.replyTo.content}
                   <span className="opacity-40 ml-1 font-serif text-[15px]">"</span>
                 </p>
-            </div>
-          }
+              </div>
+            );
+          })()}
           {/* Render embedded image card for user messages */}
           {msg.role === 'user' && (() => {
             const parsed = parseUserImageMessage(msg.content);
             if (parsed.hasImage) {
-              const imgSrc = msg.attachment?.thumbnailUrl || parsed.imgUrl || msg.attachment?.url;
               return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {/* Image card */}
-                  <div
-                    style={{
-                      borderRadius: '16px',
-                      overflow: 'hidden',
-                      cursor: 'pointer',
-                      maxWidth: '340px',
-                      width: '100%',
-                      position: 'relative',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-                      flexShrink: 0,
-                      backgroundColor: 'transparent',
-                    }}
-                    title="Click to view full size"
-                  >
-                    <ChatImage
-                      fileId={parsed.fileId}
-                      fallbackUrl={imgSrc}
-                      alt={parsed.alt}
-                      onImageClick={(resolvedSrc) => setFullscreenImageUrl(resolvedSrc)}
-                    />
-                    <div style={{
-                      position: 'absolute', top: 8, right: 8,
-                      background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
-                      borderRadius: '8px', padding: '4px 8px',
-                      fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.8)',
-                      letterSpacing: '0.05em',
-                    }}>IMAGE</div>
-                  </div>
-                  {/* Text bubble below image */}
-                  {parsed.text && (
-                    <div 
-                      className={`font-medium ${
-                        isMe 
-                          ? 'px-6 py-3 shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] border border-white/5' 
-                          : isOtherUser
-                            ? 'px-6 py-3 bg-surface-2 border border-divider'
-                            : 'px-0 py-2'
-                      }`}
-                      style={{ 
-                        margin: 0,
-                        background: isMe ? accentColor : isOtherUser ? 'var(--surface-2)' : 'transparent',
-                        color: isMe ? '#ffffff' : 'var(--on-surface)',
-                        border: isMe ? `1px solid ${accentColor}` : isOtherUser ? '1px solid var(--divider)' : 'none',
-                        borderRadius: isMe ? '24px 24px 4px 24px' : isOtherUser ? '4px 24px 24px 24px' : '0',
-                        boxShadow: (isMe || isOtherUser) && resolvedTheme === 'dark' ? '0 10px 20px -5px rgba(0,0,0,0.2)' : 'none',
-                        alignSelf: isMe ? 'flex-end' : 'flex-start',
-                        maxWidth: '100%',
-                      }}
-                    >
-                      <p className="leading-relaxed whitespace-pre-wrap" style={{ margin: 0 }}>{parsed.text}</p>
-                    </div>
-                  )}
-                </div>
+                <p className="leading-relaxed whitespace-pre-wrap font-medium" style={{ margin: 0 }}>
+                  {parsed.text || 'Cropped Image'}
+                </p>
               );
             }
             return (
@@ -1495,7 +1949,18 @@ const ChatWindow = () => {
             );
           })()}
           {msg.role !== 'user' && (
-            msg._typewriter && msg.content
+            msg.isAspectGeneration ? (
+              <AspectGenCard 
+                messageId={msg.id}
+                imageUrl={msg.imageUrl} 
+                ratio={msg.ratio} 
+                prompt={msg.prompt} 
+                imageId={msg.imageId}
+                isDoneInitially={!!msg.aspectGenDone}
+                setMessages={setMessages}
+                timestamp={msg.timestamp}
+              />
+            ) : msg._typewriter && msg.content
               ? <TypewriterMessage content={msg.content} isUser={false} isGenerating={msg.isPlaceholder} onDone={() => setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, _typewriter: false } : m))} />
               : <MessageContent content={msg.content} isUser={false} />
           )}
@@ -1528,7 +1993,7 @@ const ChatWindow = () => {
     </div>
 
       {!msg.isVoice && (
-        <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? ((generatingId === msg.id || msg.isPlaceholder) ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
+        <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? ((generatingId === msg.id || msg.isPlaceholder || (msg.isAspectGeneration && !msg.aspectGenDone)) ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
          <div className={`flex flex-wrap gap-1 ${!isMe && isOtherUser ? 'ml-[44px]' : ''}`}>
           {isSharedReadOnly ? (
             <ActionButton 
@@ -1686,17 +2151,20 @@ const ChatWindow = () => {
             ) : null
           ) : (
             <>
-              <ActionButton 
-                onClick={() => handleCopy(msg.content, msg.id)} 
-                label={copyingId === msg.id ? "Copied" : "Copy"} 
-                icon={copyingId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />} 
-              />
-              {msg.role === 'ai' && (
+              {msg.isAspectGeneration ? (
                 <>
+                  <ActionButton 
+                    onClick={() => {
+                      navigator.clipboard.writeText(msg.imageUrl);
+                      handleCopy(msg.imageUrl, msg.id + '-copylink');
+                    }} 
+                    label={copyingId === msg.id + '-copylink' ? "Copied" : "Copy"} 
+                    icon={copyingId === msg.id + '-copylink' ? <Check size={14} className="text-green-500" /> : <Copy size={14} />} 
+                  />
                   {(ratings[msg.id] === 'good' || !ratings[msg.id]) && (
                     <ActionButton 
                       onClick={() => handleRate(msg.id, 'good')} 
-                      label="Good Response" 
+                      label="Like" 
                       className={ratings[msg.id] === 'good' ? 'text-green-500' : ''} 
                       icon={<ThumbsUp size={14} fill={ratings[msg.id] === 'good' ? "currentColor" : "none"} />} 
                     />
@@ -1704,24 +2172,11 @@ const ChatWindow = () => {
                   {(ratings[msg.id] === 'bad' || !ratings[msg.id]) && (
                     <ActionButton 
                       onClick={() => handleRate(msg.id, 'bad')} 
-                      label="Bad Response" 
+                      label="Dislike" 
                       className={ratings[msg.id] === 'bad' ? 'text-red-500' : ''} 
                       icon={<ThumbsDown size={14} fill={ratings[msg.id] === 'bad' ? "currentColor" : "none"} />} 
                     />
                   )}
-                  <ActionButton 
-                    onClick={() => setIsShareModalOpen(true)} 
-                    label="Share" 
-                    icon={<Share size={14} />} 
-                  />
-                  <ActionButton 
-                    onClick={() => {}} 
-                    label="Regenerate" 
-                    icon={<RefreshCcw size={14} />} 
-                  />
-                </>
-              )}
-              {msg.role === 'ai' ? (
                   <div className="relative" ref={activeMsgMoreId === msg.id ? msgMoreRef : null}>
                     <ActionButton 
                       onClick={() => setActiveMsgMoreId(activeMsgMoreId === msg.id ? null : msg.id)} 
@@ -1729,78 +2184,167 @@ const ChatWindow = () => {
                       icon={<MoreHorizontal size={14} />} 
                       className={activeMsgMoreId === msg.id ? 'bg-hover-overlay text-on-surface' : ''}
                     />
-                
-                <AnimatePresence>
-                  {activeMsgMoreId === msg.id && (
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                      className="absolute"
-                      style={{
-                        bottom: "calc(100% + 6px)",
-                        top: "auto", 
-                        right: isMobile ? '8px' : '0',
-                        minWidth: '210px',
-                        background: 'var(--surface-1)',
-                        border: '1px solid var(--divider)',
-                        borderRadius: '16px',
-                        padding: '6px',
-                        boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none',
-                        display: 'flex',
-                        zIndex: 100,
-                        flexDirection: 'column',
-                        gap: 2,
-                      }}
-                    >
-                      <div style={{ padding: '8px 14px 6px', fontSize: '11px', color: 'var(--on-surface-subtle)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                        {new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                      </div>
-                      
-                      <button
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                          padding: '9px 14px', borderRadius: 10, background: 'transparent',
-                          border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                          fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                          fontFamily: 'inherit', transition: 'background 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <BookOpen size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                        <span>View sources</span>
-                      </button>
-                      
-                      <button
-                        onClick={() => { handleBranchChat(msg.id); setActiveMsgMoreId(null); }}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: 'transparent', border: 'none', color: 'var(--on-surface)', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.15s' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <GitBranch size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                        <span>Branch in new chat</span>
-                      </button>
-                      
-                      <button 
-                        onClick={() => { speak(msg.content, msg.id); setActiveMsgMoreId(null); }}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: 'transparent', border: 'none', color: 'var(--on-surface)', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.15s' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <Volume2 size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
-                        <span style={{ color: 'var(--on-surface-muted)' }}>{currentlySpeakingId === msg.id ? "Stop Reading" : "Read aloud"}</span>
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                </div>
+                    
+                    <AnimatePresence>
+                      {activeMsgMoreId === msg.id && (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                          className="absolute"
+                          style={{
+                            bottom: "calc(100% + 6px)",
+                            top: "auto", 
+                            right: isMobile ? '8px' : '0',
+                            minWidth: '210px',
+                            background: 'var(--surface-1)',
+                            border: '1px solid var(--divider)',
+                            borderRadius: '16px',
+                            padding: '6px',
+                            boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none',
+                            display: 'flex',
+                            zIndex: 100,
+                            flexDirection: 'column',
+                            gap: 2,
+                          }}
+                        >
+                          <div style={{ padding: '8px 14px 6px', fontSize: '11px', color: 'var(--on-surface-subtle)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                            {new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          </div>
+                          
+                          <button
+                            onClick={() => { handleBranchChat(msg.id); setActiveMsgMoreId(null); }}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: 'transparent', border: 'none', color: 'var(--on-surface)', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.15s' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <GitBranch size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                            <span>Branch in new chat</span>
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </>
               ) : (
-                <ActionButton 
-                  onClick={() => { setEditingId(msg.id); setEditValue(msg.content); }} 
-                  label="Edit" 
-                  icon={<Edit2 size={14} />} 
-                />
+                <>
+                  <ActionButton 
+                    onClick={() => handleCopy(msg.content, msg.id)} 
+                    label={copyingId === msg.id ? "Copied" : "Copy"} 
+                    icon={copyingId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />} 
+                  />
+                  {msg.role === 'ai' && (
+                    <>
+                      {(ratings[msg.id] === 'good' || !ratings[msg.id]) && (
+                        <ActionButton 
+                          onClick={() => handleRate(msg.id, 'good')} 
+                          label="Good Response" 
+                          className={ratings[msg.id] === 'good' ? 'text-green-500' : ''} 
+                          icon={<ThumbsUp size={14} fill={ratings[msg.id] === 'good' ? "currentColor" : "none"} />} 
+                        />
+                      )}
+                      {(ratings[msg.id] === 'bad' || !ratings[msg.id]) && (
+                        <ActionButton 
+                          onClick={() => handleRate(msg.id, 'bad')} 
+                          label="Bad Response" 
+                          className={ratings[msg.id] === 'bad' ? 'text-red-500' : ''} 
+                          icon={<ThumbsDown size={14} fill={ratings[msg.id] === 'bad' ? "currentColor" : "none"} />} 
+                        />
+                      )}
+                      <ActionButton 
+                        onClick={() => setIsShareModalOpen(true)} 
+                        label="Share" 
+                        icon={<Share size={14} />} 
+                      />
+                      <ActionButton 
+                        onClick={() => {}} 
+                        label="Regenerate" 
+                        icon={<RefreshCcw size={14} />} 
+                      />
+                    </>
+                  )}
+                  {msg.role === 'ai' ? (
+                      <div className="relative" ref={activeMsgMoreId === msg.id ? msgMoreRef : null}>
+                        <ActionButton 
+                          onClick={() => setActiveMsgMoreId(activeMsgMoreId === msg.id ? null : msg.id)} 
+                          label="More" 
+                          icon={<MoreHorizontal size={14} />} 
+                          className={activeMsgMoreId === msg.id ? 'bg-hover-overlay text-on-surface' : ''}
+                        />
+                    
+                    <AnimatePresence>
+                      {activeMsgMoreId === msg.id && (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                          className="absolute"
+                          style={{
+                            bottom: "calc(100% + 6px)",
+                            top: "auto", 
+                            right: isMobile ? '8px' : '0',
+                            minWidth: '210px',
+                            background: 'var(--surface-1)',
+                            border: '1px solid var(--divider)',
+                            borderRadius: '16px',
+                            padding: '6px',
+                            boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none',
+                            display: 'flex',
+                            zIndex: 100,
+                            flexDirection: 'column',
+                            gap: 2,
+                          }}
+                        >
+                          <div style={{ padding: '8px 14px 6px', fontSize: '11px', color: 'var(--on-surface-subtle)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                            {new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          </div>
+                          
+                          <button
+                            style={{
+                              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                              padding: '9px 14px', borderRadius: 10, background: 'transparent',
+                              border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                              fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                              fontFamily: 'inherit', transition: 'background 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <BookOpen size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} strokeWidth={1.5} />
+                            <span>View sources</span>
+                          </button>
+                          
+                          <button
+                            onClick={() => { handleBranchChat(msg.id); setActiveMsgMoreId(null); }}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: 'transparent', border: 'none', color: 'var(--on-surface)', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.15s' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <GitBranch size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                            <span>Branch in new chat</span>
+                          </button>
+                          
+                          <button 
+                            onClick={() => { speak(msg.content, msg.id); setActiveMsgMoreId(null); }}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: 'transparent', border: 'none', color: 'var(--on-surface)', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.15s' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <Volume2 size={16} style={{ color: 'var(--on-surface-muted)', flexShrink: 0 }} strokeWidth={1.5} />
+                            <span style={{ color: 'var(--on-surface-muted)' }}>{currentlySpeakingId === msg.id ? "Stop Reading" : "Read aloud"}</span>
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    </div>
+                  ) : (
+                    <ActionButton 
+                      onClick={() => { setEditingId(msg.id); setEditValue(msg.content); }} 
+                      label="Edit" 
+                      icon={<Edit2 size={14} />} 
+                    />
+                  )}
+                </>
               )}
             </>
           )}
@@ -2272,6 +2816,21 @@ const ChatWindow = () => {
     }
   }, [activeChatId, chats, isLoading]);
 
+  useEffect(() => {
+    if (!activeChatId || isLoading) return;
+    const currentChat = chats.find(c => c.id === activeChatId);
+    if (currentChat?.pendingResearchPrompt) {
+      const prompt = currentChat.pendingResearchPrompt;
+      // 1. Remove the flag immediately to prevent duplicate triggers
+      setChats(prev => prev.map(chat => 
+        chat.id === activeChatId ? { ...chat, pendingResearchPrompt: null } : chat
+      ));
+      
+      // 2. Trigger direct send
+      handleSend(null, prompt);
+    }
+  }, [activeChatId, chats, isLoading]);
+
   const handleSaveEdit = async (id) => {
     if (!editValue.trim() || isLoading) return;
     
@@ -2501,6 +3060,37 @@ const ChatWindow = () => {
     return (
       <div className="flex-1 min-w-0 flex flex-col relative bg-primary transition-colors duration-500" style={{ overflow: 'hidden', height: '100dvh' }}>
         <AppsView />
+      </div>
+    );
+  }
+
+  if (appView === 'research') {
+    return (
+      <div className="flex-1 min-w-0 flex flex-col relative bg-primary transition-colors duration-500" style={{ overflow: 'hidden', height: '100dvh' }}>
+        <ResearchView 
+          onStartResearch={(promptText) => {
+            const newId = Date.now().toString();
+            const newChat = {
+              id: newId,
+              title: promptText.length > 30 ? promptText.slice(0, 30) + '...' : promptText,
+              messages: [],
+              timestamp: new Date().toISOString(),
+              pendingResearchPrompt: promptText
+            };
+            setChats(prev => [newChat, ...prev.filter(c => c.messages.length > 0 || c.pendingResearchPrompt)]);
+            setActiveChatId(newId);
+            setMessages([]);
+            setAppView('chat');
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (appView === 'images') {
+    return (
+      <div className="flex-1 min-w-0 flex flex-col relative bg-primary transition-colors duration-500" style={{ overflow: 'hidden', height: '100dvh' }}>
+        <ImagesView />
       </div>
     );
   }
@@ -3511,7 +4101,7 @@ const ChatWindow = () => {
                         >
                           {pendingAttachment && (
                             <div className="flex px-1 pb-2">
-                              <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '140px', height: '140px' }}>
+                              <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '60px', height: '60px' }}>
                                 {pendingAttachment.url && (
                                   <img 
                                     src={pendingAttachment.url} 
@@ -3684,7 +4274,7 @@ const ChatWindow = () => {
                         }}>
                         {pendingAttachment && (
                           <div className="flex px-1 pb-2">
-                            <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '140px', height: '140px' }}>
+                            <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '60px', height: '60px' }}>
                               {pendingAttachment.url && (
                                 <img 
                                   src={pendingAttachment.url} 
@@ -4362,7 +4952,7 @@ const ChatWindow = () => {
                   >
                     {pendingAttachment && (
                       <div className="flex px-1 pb-2">
-                        <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '140px', height: '140px' }}>
+                        <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '60px', height: '60px' }}>
                           {pendingAttachment.url && (
                             <img 
                               src={pendingAttachment.url} 
@@ -4544,7 +5134,7 @@ const ChatWindow = () => {
                 >
                   {pendingAttachment && (
                     <div className="flex px-1 pb-2">
-                      <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '140px', height: '140px' }}>
+                      <div className="relative rounded-xl border border-divider bg-surface-2 flex-shrink-0" style={{ width: '60px', height: '60px' }}>
                         {pendingAttachment.url && (
                           <img 
                             src={pendingAttachment.url} 
