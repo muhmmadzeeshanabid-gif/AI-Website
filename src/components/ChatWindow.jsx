@@ -2080,6 +2080,7 @@ const ChatWindow = () => {
   const [isGroupChatMenuOpen, setIsGroupChatMenuOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
+  const [selectedUserForProfile, setSelectedUserForProfile] = useState(null);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [tempGroupName, setTempGroupName] = useState('');
   const headerMoreRef = useRef(null);
@@ -2664,7 +2665,7 @@ const ChatWindow = () => {
 
         <div className={`w-full flex ${isMe ? 'items-start flex-row-reverse' : msg.isVoice ? 'items-center justify-center' : 'items-start flex-row'}`}>
           {isGroup && !isMe && msg.role !== 'ai' && (
-            <div title={msg.sender?.displayName || 'User'} style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', marginRight: '12px', flexShrink: 0, marginTop: '2px', border: '1px solid var(--divider)' }}>
+            <div title={msg.sender?.displayName || 'User'} onClick={() => setSelectedUserForProfile(msg.sender)} style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', marginRight: '12px', flexShrink: 0, marginTop: '2px', border: '1px solid var(--divider)', cursor: 'pointer' }}>
               {msg.sender?.avatar ? (
                 <img src={msg.sender.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
@@ -4681,6 +4682,11 @@ const ChatWindow = () => {
         isOpen={isKyraModalOpen}
         onClose={() => setIsKyraModalOpen(false)}
         activeChat={chats.find(c => c.id === activeChatId)}
+        onUserClick={(user) => setSelectedUserForProfile(user)}
+      />
+      <UserProfileModal 
+        user={selectedUserForProfile}
+        onClose={() => setSelectedUserForProfile(null)}
       />
       <MsgDeleteModal 
         isOpen={msgDeleteConfirm.open}
@@ -8785,7 +8791,7 @@ const GroupLinkModal = ({ isOpen, onClose, chatId, showGlobalToast }) => {
 };
 
 
-const CustomizedKyraModal = ({ isOpen, onClose, activeChat }) => {
+const CustomizedKyraModal = ({ isOpen, onClose, activeChat, onUserClick }) => {
   const { resolvedTheme, profile, removeMember } = useAppContext();
   const isAdmin = activeChat?.creator?.uid === profile?.uid;
   
@@ -8848,15 +8854,24 @@ const CustomizedKyraModal = ({ isOpen, onClose, activeChat }) => {
           {isAdmin ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '400px', overflowY: 'auto', paddingRight: '4px' }}>
               <p style={{ fontSize: '14px', color: 'var(--on-surface-muted)', margin: '0 0 8px 0' }}>Group Members Details</p>
-              {activeChat?.participants?.length > 0 ? activeChat.participants.map(p => {
-                const isMemberAdmin = activeChat?.creator?.uid === p.uid;
-                return (
+              {(() => {
+                if (!activeChat?.participants?.length) {
+                  return <div style={{ fontSize: '14px', color: 'var(--on-surface-muted)', textAlign: 'center', padding: '20px 0' }}>No members yet.</div>;
+                }
+
+                const admins = activeChat.participants.filter(p => activeChat.creator?.uid === p.uid);
+                const members = activeChat.participants.filter(p => activeChat.creator?.uid !== p.uid);
+
+                const renderUser = (p, isMemberAdmin) => (
                   <div key={p.uid} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ 
-                      width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden',
-                      background: 'var(--hover-overlay-2)', border: '1px solid var(--divider)',
-                      flexShrink: 0
-                    }}>
+                    <div 
+                      onClick={() => onUserClick && onUserClick(p)}
+                      style={{ 
+                        width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden',
+                        background: 'var(--hover-overlay-2)', border: '1px solid var(--divider)',
+                        flexShrink: 0, cursor: 'pointer'
+                      }}
+                    >
                       {p.avatar ? (
                         <img src={p.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
@@ -8865,7 +8880,10 @@ const CustomizedKyraModal = ({ isOpen, onClose, activeChat }) => {
                         </div>
                       )}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div 
+                      onClick={() => onUserClick && onUserClick(p)}
+                      style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <div style={{ fontWeight: 600, color: resolvedTheme === 'dark' ? '#fff' : '#000', fontSize: '14.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {p.displayName || 'User'} {p.uid === profile?.uid && '(You)'}
@@ -8895,16 +8913,22 @@ const CustomizedKyraModal = ({ isOpen, onClose, activeChat }) => {
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 69, 58, 0.2)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 69, 58, 0.1)'}
                       >
-                        Kick
+                        Remove
                       </button>
                     )}
                   </div>
                 );
-              }) : (
-                <div style={{ fontSize: '14px', color: 'var(--on-surface-muted)', textAlign: 'center', padding: '20px 0' }}>
-                  No members yet.
-                </div>
-              )}
+
+                return (
+                  <>
+                    {admins.map(p => renderUser(p, true))}
+                    {members.length > 0 && (
+                      <div style={{ height: '1px', background: 'var(--divider)', margin: '4px 0' }} />
+                    )}
+                    {members.map(p => renderUser(p, false))}
+                  </>
+                );
+              })()}
             </div>
           ) : (
              <div style={{ padding: '20px 0', textAlign: 'center' }}>
@@ -8923,6 +8947,84 @@ const CustomizedKyraModal = ({ isOpen, onClose, activeChat }) => {
              </div>
           )}
 
+        </motion.div>
+      </div>
+    </AnimatePresence>,
+    document.body
+  );
+};
+
+const UserProfileModal = ({ user, onClose }) => {
+  const { resolvedTheme } = useAppContext();
+  
+  if (!user) return null;
+
+  return createPortal(
+    <AnimatePresence>
+      <div 
+        style={{
+          position: 'fixed', inset: 0, zIndex: 99999999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.45)',
+          backdropFilter: 'blur(3px)',
+          padding: '20px'
+        }}
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 30 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 30 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+          onClick={e => e.stopPropagation()}
+          style={{
+            background: resolvedTheme === 'dark' ? '#1c1c1e' : '#ffffff',
+            borderRadius: '24px',
+            width: '100%',
+            maxWidth: '360px',
+            padding: '32px 24px',
+            boxShadow: '0 30px 60px -12px rgba(0, 0, 0, 0.45)',
+            border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+            position: 'relative',
+            display: 'flex', flexDirection: 'column', alignItems: 'center'
+          }}
+        >
+          <button 
+            onClick={onClose}
+            style={{
+              position: 'absolute', top: '16px', right: '16px',
+              width: '30px', height: '30px', borderRadius: '8px',
+              border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`,
+              background: 'transparent', color: resolvedTheme === 'dark' ? '#fff' : '#000',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <X size={16} />
+          </button>
+          
+          <div style={{ 
+            width: '90px', height: '90px', borderRadius: '50%', overflow: 'hidden',
+            background: 'var(--hover-overlay-2)', border: '2px solid var(--divider)',
+            marginBottom: '16px', marginTop: '10px'
+          }}>
+            {user.avatar ? (
+              <img src={user.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <User size={36} style={{ color: 'var(--on-surface-subtle)' }} />
+              </div>
+            )}
+          </div>
+          
+          <h2 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--on-surface)', margin: '0 0 6px 0', textAlign: 'center', fontFamily: 'inherit' }}>
+            {user.displayName || 'User'}
+          </h2>
+          <p style={{ fontSize: '15px', color: 'var(--on-surface-muted)', margin: 0, textAlign: 'center' }}>
+            {user.email || 'No email provided'}
+          </p>
         </motion.div>
       </div>
     </AnimatePresence>,
