@@ -1395,6 +1395,35 @@ export const AppProvider = ({ children }) => {
     }
   }, [chats, profile, activeChatId]);
 
+  const removeMember = useCallback(async (chatId, memberToRemove) => {
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat || !profile || !profile.uid || chat.creator?.uid !== profile.uid) return;
+
+    try {
+      const chatRef = doc(db, 'chats', chatId);
+      
+      // 1. Add System Message: Admin removed [Name]
+      const removeMsgId = `remove-${memberToRemove.uid}-${Date.now()}`;
+      const removeMessage = {
+        id: removeMsgId,
+        content: `${memberToRemove.displayName || 'A member'} was removed from the group by admin`,
+        role: 'system',
+        timestamp: new Date().toISOString(),
+        type: 'remove'
+      };
+
+      // 2. Remove from Firestore and add system message
+      await updateDoc(chatRef, {
+        participantIds: arrayRemove(memberToRemove.uid),
+        participants: arrayRemove(memberToRemove),
+        messages: arrayUnion(removeMessage)
+      });
+      
+    } catch (err) {
+      console.error("Error removing member:", err);
+    }
+  }, [chats, profile]);
+
   const switchChat = useCallback((id) => {
     setChats(prev => {
       const chat = prev.find(c => c.id === id);
@@ -1623,6 +1652,7 @@ export const AppProvider = ({ children }) => {
       convertToGroupChat,
       joinGroup,
       leaveGroup,
+      removeMember,
       isSharedReadOnly, setIsSharedReadOnly,
       sharedChatData, setSharedChatData,
       showLoggedIn: user || (isAuthLoading && typeof window !== 'undefined' && localStorage.getItem('aura-profile')),

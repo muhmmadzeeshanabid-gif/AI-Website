@@ -8786,7 +8786,7 @@ const GroupLinkModal = ({ isOpen, onClose, chatId, showGlobalToast }) => {
 
 
 const CustomizedKyraModal = ({ isOpen, onClose, activeChat }) => {
-  const { resolvedTheme, profile } = useAppContext();
+  const { resolvedTheme, profile, removeMember } = useAppContext();
   const isAdmin = activeChat?.creator?.uid === profile?.uid;
   
   if (!isOpen) return null;
@@ -8848,31 +8848,59 @@ const CustomizedKyraModal = ({ isOpen, onClose, activeChat }) => {
           {isAdmin ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '400px', overflowY: 'auto', paddingRight: '4px' }}>
               <p style={{ fontSize: '14px', color: 'var(--on-surface-muted)', margin: '0 0 8px 0' }}>Group Members Details</p>
-              {activeChat?.participants?.length > 0 ? activeChat.participants.map(p => (
-                <div key={p.uid} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ 
-                    width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden',
-                    background: 'var(--hover-overlay-2)', border: '1px solid var(--divider)',
-                    flexShrink: 0
-                  }}>
-                    {p.avatar ? (
-                      <img src={p.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <User size={18} style={{ color: 'var(--on-surface-subtle)' }} />
+              {activeChat?.participants?.length > 0 ? activeChat.participants.map(p => {
+                const isMemberAdmin = activeChat?.creator?.uid === p.uid;
+                return (
+                  <div key={p.uid} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ 
+                      width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden',
+                      background: 'var(--hover-overlay-2)', border: '1px solid var(--divider)',
+                      flexShrink: 0
+                    }}>
+                      {p.avatar ? (
+                        <img src={p.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <User size={18} style={{ color: 'var(--on-surface-subtle)' }} />
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ fontWeight: 600, color: resolvedTheme === 'dark' ? '#fff' : '#000', fontSize: '14.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {p.displayName || 'User'} {p.uid === profile?.uid && '(You)'}
+                        </div>
+                        <span style={{
+                          fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
+                          background: isMemberAdmin ? 'rgba(52, 199, 89, 0.15)' : 'var(--hover-overlay)',
+                          color: isMemberAdmin ? '#34c759' : 'var(--on-surface-muted)'
+                        }}>
+                          {isMemberAdmin ? 'ADMIN' : 'MEMBER'}
+                        </span>
                       </div>
+                      <div style={{ fontSize: '12.5px', color: 'var(--on-surface-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {p.email || 'No email provided'}
+                      </div>
+                    </div>
+                    
+                    {!isMemberAdmin && (
+                      <button
+                        onClick={() => removeMember(activeChat.id, p)}
+                        style={{
+                          padding: '6px 12px', borderRadius: '8px', border: 'none',
+                          background: 'rgba(255, 69, 58, 0.1)', color: '#ff453a',
+                          fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                          transition: 'background 0.2s', flexShrink: 0
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 69, 58, 0.2)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 69, 58, 0.1)'}
+                      >
+                        Kick
+                      </button>
                     )}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: resolvedTheme === 'dark' ? '#fff' : '#000', fontSize: '14.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {p.displayName || 'User'} {p.uid === profile?.uid && '(You)'}
-                    </div>
-                    <div style={{ fontSize: '12.5px', color: 'var(--on-surface-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {p.email || 'No email provided'}
-                    </div>
-                  </div>
-                </div>
-              )) : (
+                );
+              }) : (
                 <div style={{ fontSize: '14px', color: 'var(--on-surface-muted)', textAlign: 'center', padding: '20px 0' }}>
                   No members yet.
                 </div>
