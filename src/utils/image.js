@@ -157,10 +157,11 @@ export async function generateImageClientSide(prompt, hfToken = '') {
     }
   }
 
-  // ── 2. Pollinations — browser residential IP fallback
+  // ── 2. Pollinations — proxy fallback to bypass adblockers/CORS on live
   const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(displayPrompt)}?width=1024&height=1024&nologo=true&enhance=false&seed=${seed}&model=flux`;
-  console.log(`[ImageGen] Falling back to Pollinations:`, pollinationsUrl);
-  return { url: pollinationsUrl, provider: 'Pollinations AI (browser)' };
+  const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(pollinationsUrl)}`;
+  console.log(`[ImageGen] Falling back to Pollinations via Proxy:`, proxyUrl);
+  return { url: proxyUrl, provider: 'Pollinations AI' };
 }
 
 
@@ -185,24 +186,24 @@ export function extractKeywords(prompt) {
 }
 
 export function handleImgError(e, prompt) {
+  const cleanPrompt = translatePrompt(prompt || 'AI art');
+  const seed = Math.floor(Math.random() * 9999999);
+
   if (!e.target.dataset.fallbackStep) {
-    // Step 1: Fresh Pollinations flux URL with new seed
+    // Step 1: Fresh Pollinations flux URL with new seed via Proxy
     e.target.dataset.fallbackStep = '1';
-    const cleanPrompt = translatePrompt(prompt || 'AI art');
-    const seed = Math.floor(Math.random() * 9999999);
-    e.target.src = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=1024&height=1024&nologo=true&enhance=false&seed=${seed}&model=flux`;
+    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=1024&height=1024&nologo=true&enhance=false&seed=${seed}&model=flux`;
+    e.target.src = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`;
   } else if (e.target.dataset.fallbackStep === '1') {
-    // Step 2: Pollinations turbo model with different seed
+    // Step 2: Pollinations turbo model with different seed via Proxy
     e.target.dataset.fallbackStep = '2';
-    const cleanPrompt = translatePrompt(prompt || 'AI art');
-    const seed = Math.floor(Math.random() * 9999999);
-    e.target.src = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=768&height=768&nologo=true&enhance=false&seed=${seed}&model=turbo`;
+    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=768&height=768&nologo=true&enhance=false&seed=${seed}&model=turbo`;
+    e.target.src = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`;
   } else if (e.target.dataset.fallbackStep === '2') {
-    // Step 3: Simple Pollinations URL without heavy params
+    // Step 3: Simple Pollinations URL without heavy params via Proxy
     e.target.dataset.fallbackStep = '3';
-    const cleanPrompt = translatePrompt(prompt || 'AI art');
-    const seed = Math.floor(Math.random() * 9999999);
-    e.target.src = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?seed=${seed}`;
+    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?seed=${seed}`;
+    e.target.src = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`;
   } else {
     // Final: Styled placeholder
     e.target.onerror = null;
