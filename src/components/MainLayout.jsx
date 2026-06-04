@@ -8,13 +8,13 @@ import SettingsModal from './SettingsModal';
 import ProfileModal from './ProfileModal';
 import SearchModal from './SearchModal';
 import LogoutModal from './LogoutModal';
-import UpgradeModal from './UpgradeModal';
+import AuthModal from './AuthModal';
 
 function ModalContainer() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { isUpgradeModalOpen, setIsUpgradeModalOpen } = useAppContext();
+  const { isUpgradeModalOpen, setIsUpgradeModalOpen, authOpen, setAuthOpen, isLogoutModalOpen, setIsLogoutModalOpen } = useAppContext();
   const activeTab = searchParams.get('tab') || 'general';
 
   const [isMobile, setIsMobile] = React.useState(false);
@@ -27,9 +27,8 @@ function ModalContainer() {
 
   const isSettingsOpen = pathname?.includes('/settings');
   const isSearchOpen = pathname?.includes('/search');
-  const isLogoutOpen = pathname?.includes('/logout');
+  const isLogoutOpen = pathname?.includes('/logout') || isLogoutModalOpen;
   const isProfileOpen = pathname?.includes('/profile') && !isMobile;
-  const isUpgradeOpen = pathname?.includes('/upgrade') || isUpgradeModalOpen;
 
   return (
     <>
@@ -41,7 +40,13 @@ function ModalContainer() {
           router.push('/');
         }
       }} />}
-      {isLogoutOpen && <LogoutModal isOpen={true} onClose={() => router.push('/')} />}
+      {isLogoutOpen && <LogoutModal isOpen={true} onClose={() => { 
+        setIsLogoutModalOpen(false); 
+        if (pathname?.includes('/logout')) {
+          if (window.history.length > 1) window.history.back();
+          else router.push('/');
+        }
+      }} />}
       {isProfileOpen && <ProfileModal onClose={() => {
         if (window.history.length > 1) {
           window.history.back();
@@ -49,6 +54,7 @@ function ModalContainer() {
           router.push('/');
         }
       }} />}
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
     </>
   );
 }
@@ -71,42 +77,39 @@ export default function MainLayout({ children }) {
   // Show full page layout on mobile for /profile, but render standard chat container + overlay on desktop
   const isFullPage = isHelpPage || pathname?.includes('/upgrade') || (pathname?.includes('/profile') && isMobile) || pathname?.startsWith('/g/');
 
-  if (isFullPage) {
-    return (
+  return (
+    <div style={{ position: 'relative', width: '100vw', height: '100dvh', overflow: 'hidden' }}>
+      <div 
+        className="flex w-full bg-primary overflow-hidden" 
+        style={{ 
+          position: 'absolute',
+          inset: 0,
+          visibility: isFullPage ? 'hidden' : 'visible',
+          pointerEvents: isFullPage ? 'none' : 'auto'
+        }}
+      >
+        <Sidebar />
+        <ChatWindow />
+        
+        <Suspense fallback={null}>
+          <ModalContainer />
+        </Suspense>
+      </div>
+
       <div 
         id="profile-scroll-container"
-        style={{ 
-          position: 'fixed', 
-          inset: 0, 
+        style={{
+          position: 'absolute',
+          inset: 0,
           zIndex: 999999, 
           background: 'var(--bg-primary)', 
           overflowY: 'auto',
-          width: '100vw',
-          height: '100vh'
+          visibility: isFullPage ? 'visible' : 'hidden',
+          pointerEvents: isFullPage ? 'auto' : 'none'
         }}
       >
         {children}
       </div>
-    );
-  }
-
-  return (
-    <div className="flex w-full bg-primary overflow-hidden" style={{ height: '100dvh' }}>
-      <Sidebar />
-      <ChatWindow />
-      
-      <Suspense fallback={null}>
-        <ModalContainer />
-      </Suspense>
-
-      {isUpgradeModalOpen && !pathname?.includes('/upgrade') && (
-        <UpgradeModal 
-          isOpen={true} 
-          onClose={() => setIsUpgradeModalOpen(false)} 
-        />
-      )}
-      
-      {children}
     </div>
   );
 }

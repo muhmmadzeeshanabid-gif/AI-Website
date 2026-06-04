@@ -13,67 +13,87 @@ const cropImageToRatio = (imgUrl, ratioStr, callback) => {
     callback(imgUrl);
     return;
   }
-  const img = new window.Image();
-  img.crossOrigin = 'anonymous';
-  img.src = imgUrl;
-  img.onload = () => {
-    try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      
-      const parts = ratioStr.split(':').map(Number);
-      const wRatio = parts[0] || 1;
-      const hRatio = parts[1] || 1;
-      const targetRatio = wRatio / hRatio;
-      
-      const srcW = img.naturalWidth;
-      const srcH = img.naturalHeight;
-      const srcRatio = srcW / srcH;
-      
-      let drawW = srcW;
-      let drawH = srcH;
-      let startX = 0;
-      let startY = 0;
-      
-      if (srcRatio > targetRatio) {
-        // Source is wider than target ratio: crop horizontally
-        drawW = srcH * targetRatio;
-        startX = (srcW - drawW) / 2;
-      } else {
-        // Source is taller than target ratio: crop vertically
-        drawH = srcW / targetRatio;
-        startY = (srcH - drawH) / 2;
-      }
-      
-      // Limit resolution to a max dimension of 800px for space efficiency in localStorage
-      const maxDimension = 800;
-      let targetW = drawW;
-      let targetH = drawH;
-      if (drawW > maxDimension || drawH > maxDimension) {
-        if (drawW > drawH) {
-          targetW = maxDimension;
-          targetH = (drawH / drawW) * maxDimension;
+
+  const attemptCrop = (src) => {
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.src = src;
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const parts = ratioStr.split(':').map(Number);
+        const wRatio = parts[0] || 1;
+        const hRatio = parts[1] || 1;
+        const targetRatio = wRatio / hRatio;
+        
+        const srcW = img.naturalWidth;
+        const srcH = img.naturalHeight;
+        const srcRatio = srcW / srcH;
+        
+        let drawW = srcW;
+        let drawH = srcH;
+        let startX = 0;
+        let startY = 0;
+        
+        if (srcRatio > targetRatio) {
+          drawW = srcH * targetRatio;
+          startX = (srcW - drawW) / 2;
         } else {
-          targetH = maxDimension;
-          targetW = (drawW / drawH) * maxDimension;
+          drawH = srcW / targetRatio;
+          startY = (srcH - drawH) / 2;
         }
+        
+        const maxDimension = 800;
+        let targetW = drawW;
+        let targetH = drawH;
+        if (drawW > maxDimension || drawH > maxDimension) {
+          if (drawW > drawH) {
+            targetW = maxDimension;
+            targetH = (drawH / drawW) * maxDimension;
+          } else {
+            targetH = maxDimension;
+            targetW = (drawW / drawH) * maxDimension;
+          }
+        }
+        
+        canvas.width = targetW;
+        canvas.height = targetH;
+        ctx.drawImage(img, startX, startY, drawW, drawH, 0, 0, targetW, targetH);
+        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        callback(croppedDataUrl);
+      } catch (e) {
+        // Canvas tainted (CORS) — just pass original URL through
+        console.warn('Canvas crop failed (likely CORS), using original URL:', e.message);
+        callback(imgUrl);
       }
-      
-      canvas.width = targetW;
-      canvas.height = targetH;
-      
-      ctx.drawImage(img, startX, startY, drawW, drawH, 0, 0, targetW, targetH);
-      // Export as JPEG at 0.85 quality to save massive local storage space
-      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      callback(croppedDataUrl);
-    } catch (e) {
-      console.error("Error cropping image client-side:", e);
-      callback(imgUrl);
-    }
+    };
+    img.onerror = () => {
+      // If this was a proxy attempt, try direct URL as last resort
+      if (src !== imgUrl && !imgUrl.startsWith('data:')) {
+        console.warn('Proxy load failed for crop, trying direct URL...');
+        attemptCrop(imgUrl);
+      } else {
+        callback(imgUrl);
+      }
+    };
   };
-  img.onerror = () => {
-    callback(imgUrl);
-  };
+
+  if (imgUrl.startsWith('data:')) {
+    // base64 data URIs — load directly, no proxy needed
+    attemptCrop(imgUrl);
+  } else if (
+    imgUrl.startsWith('https://image.pollinations.ai/') ||
+    imgUrl.startsWith('https://gen.pollinations.ai/')
+  ) {
+    // Pollinations URLs: try direct first (browser has residential IP, no rate limit)
+    // If CORS blocks canvas.toDataURL, the catch block will just pass the URL through
+    attemptCrop(imgUrl);
+  } else {
+    // Other remote URLs: try via proxy
+    attemptCrop(`/api/proxy-image?url=${encodeURIComponent(imgUrl)}`);
+  }
 };
 
 const AppContext = createContext();
@@ -88,9 +108,12 @@ export const AppProvider = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpenState] = useState(true);
   const [isSidebarInitializing, setIsSidebarInitializing] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isChatsLoaded, setIsChatsLoaded] = useState(false);
+  const [isFirebaseChatsLoaded, setIsFirebaseChatsLoaded] = useState(false);
   const [appView, setAppView] = useState(() => {
     if (typeof window === 'undefined') return 'chat';
     const path = window.location.pathname;
+    if (path === '/' || path.startsWith('/c/')) return 'chat';
     if (path === '/library') return 'library';
     if (path === '/research') return 'research';
     if (path === '/apps') return 'apps';
@@ -125,6 +148,7 @@ export const AppProvider = ({ children }) => {
   const [isGroupChatModalOpen, setIsGroupChatModalOpen] = useState(false);
   const [groupChatTargetId, setGroupChatTargetId] = useState(null);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [personalization, setPersonalizationState] = useState({
     baseStyle: 'Default', warm: 'Default', enthusiastic: 'Default',
     headers: 'Default', emoji: 'Default', fastAnswers: true,
@@ -141,6 +165,8 @@ export const AppProvider = ({ children }) => {
 
   const [editingImage, setEditingImage] = useState(null);
   const [activeEditImage, setActiveEditImage] = useState(null);
+  const [activeShareImage, setActiveShareImage] = useState(null);
+  const [shareModalState, setShareModalState] = useState('closed');
 
   const lastSyncedChatsRef = useRef({});
   const unsubscribeRef = useRef(null);
@@ -242,13 +268,12 @@ export const AppProvider = ({ children }) => {
         });
       } else {
         console.log("Shared chat not found in Firestore.");
-        router.replace('/');
+        // If it's truly not a shared chat and not a private chat, we should let the useEffect handle redirection
       }
     } catch (err) {
       console.error("Failed to fetch shared chat:", err);
-      router.replace('/');
     }
-  }, [router]);
+  }, []);
 
 
   // Strict enforcement: No messages allowed if no active chat (except for temporary chats)
@@ -263,15 +288,8 @@ export const AppProvider = ({ children }) => {
     setIsTemporary(false);
   }, [activeChatId]);
 
-  // Reset appView to chat when switching active chats (not on initial load)
+  // Track activeChatId changes (but do NOT forcibly reset appView - that breaks view state)
   const prevActiveChatIdRef = useRef(activeChatId);
-  useEffect(() => {
-    // Only reset if previous chat was also non-null (genuine switch, not initial load)
-    if (activeChatId && prevActiveChatIdRef.current && prevActiveChatIdRef.current !== activeChatId) {
-      setAppView('chat');
-    }
-    prevActiveChatIdRef.current = activeChatId;
-  }, [activeChatId]);
 
   // Reset shared read-only states when starting/switching to a non-shared chat
   useEffect(() => {
@@ -346,6 +364,7 @@ export const AppProvider = ({ children }) => {
           const chatDocRef = doc(db, 'chats', activeChatId);
         
         // Use a persistent reference for the listener to prevent overlaps
+        let isInitial = true;
         const unsubscribe = onSnapshot(chatDocRef, (docSnap) => {
           if (!docSnap.exists()) return;
           
@@ -353,7 +372,12 @@ export const AppProvider = ({ children }) => {
           // If it's not a group, we just don't process it here
           if (!data || !data.isGroup) return;
 
-          const remoteMessages = data.messages || [];
+          const remoteMessages = (data.messages || []).map(msg => {
+            if (msg._typewriter && !msg.isPlaceholder) {
+              return { ...msg, _typewriter: false };
+            }
+            return msg;
+          });
           const streamContent = data.streamContent || {};
 
           // Overlay streaming content onto placeholder AI messages for remote viewers
@@ -375,8 +399,12 @@ export const AppProvider = ({ children }) => {
 
             // Tag brand-new messages from OTHER users with _typewriter so ChatWindow animates them
             const prevIds = new Set(prev.map(m => m.id));
+            const prevTypewriters = new Map(prev.map(m => [m.id, m._typewriter]));
             const merged = messagesWithStream.map(rm => {
-              if (!prevIds.has(rm.id) && rm.role === 'user' && rm.sender?.email !== profile?.email) {
+              if (!isInitial && !prevIds.has(rm.id) && rm.role === 'user' && rm.sender?.email !== profile?.email) {
+                return { ...rm, _typewriter: true };
+              }
+              if (prevTypewriters.get(rm.id) === true) {
                 return { ...rm, _typewriter: true };
               }
               return rm;
@@ -432,6 +460,7 @@ export const AppProvider = ({ children }) => {
 
             return updated;
           });
+          isInitial = false;
         }, (error) => {
           console.error("Group Listener Error:", error);
         });
@@ -487,13 +516,63 @@ export const AppProvider = ({ children }) => {
         const savedChats = localStorage.getItem('aura-chats');
         if (savedChats) {
           loadedChats = JSON.parse(savedChats);
+          let cleaned = false;
+          loadedChats = loadedChats.map(chat => {
+            if (chat.messages) {
+              const updatedMessages = chat.messages.map(msg => {
+                if (msg.imageUrl && msg.imageUrl.startsWith('data:image/')) {
+                  cleaned = true;
+                  if (msg.prompt) {
+                    const seed = Math.floor(Math.random() * 99999);
+                    const encodedPrompt = encodeURIComponent(msg.prompt.trim());
+                    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}`;
+                    return { ...msg, imageUrl: fallbackUrl };
+                  }
+                  return { ...msg, imageUrl: '' };
+                }
+                return msg;
+              });
+              return { ...chat, messages: updatedMessages };
+            }
+            return chat;
+          });
+          if (cleaned) {
+            localStorage.setItem('aura-chats', JSON.stringify(loadedChats));
+          }
           setChats(loadedChats);
         }
       } catch (e) {}
+      setIsChatsLoaded(true);
 
       try {
         const savedArchivedChats = localStorage.getItem('aura-archived-chats');
-        if (savedArchivedChats) setArchivedChatsState(JSON.parse(savedArchivedChats));
+        if (savedArchivedChats) {
+          let loadedArchived = JSON.parse(savedArchivedChats);
+          let cleaned = false;
+          loadedArchived = loadedArchived.map(chat => {
+            if (chat.messages) {
+              const updatedMessages = chat.messages.map(msg => {
+                if (msg.imageUrl && msg.imageUrl.startsWith('data:image/')) {
+                  cleaned = true;
+                  if (msg.prompt) {
+                    const seed = Math.floor(Math.random() * 99999);
+                    const encodedPrompt = encodeURIComponent(msg.prompt.trim());
+                    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}`;
+                    return { ...msg, imageUrl: fallbackUrl };
+                  }
+                  return { ...msg, imageUrl: '' };
+                }
+                return msg;
+              });
+              return { ...chat, messages: updatedMessages };
+            }
+            return chat;
+          });
+          if (cleaned) {
+            localStorage.setItem('aura-archived-chats', JSON.stringify(loadedArchived));
+          }
+          setArchivedChatsState(loadedArchived);
+        }
       } catch (e) {}
 
       const savedArchivePwd = localStorage.getItem('aura-archive-password') || '';
@@ -528,7 +607,9 @@ export const AppProvider = ({ children }) => {
       // Initialize appView based on pathname first, fallback to saved local storage
       const path = window.location.pathname;
       let initialView = 'chat';
-      if (path === '/library') {
+      if (path === '/' || path.startsWith('/c/')) {
+        initialView = 'chat';
+      } else if (path === '/library') {
         initialView = 'library';
       } else if (path === '/research') {
         initialView = 'research';
@@ -650,11 +731,15 @@ export const AppProvider = ({ children }) => {
           fetchedChats.push(doc.data());
         });
 
-        // Populate lastSyncedRef to avoid redundant writes on load
         fetchedChats.forEach(chat => {
+          const lastMessage = chat.messages?.[chat.messages?.length - 1];
           lastSyncedChatsRef.current[chat.id] = {
             messageCount: chat.messages?.length || 0,
-            title: chat.title || ''
+            title: chat.title || '',
+            lastMessageId: lastMessage?.id || '',
+            lastMessageContent: lastMessage?.content || '',
+            lastMessageImageUrl: lastMessage?.imageUrl || '',
+            lastMessageIsPlaceholder: lastMessage?.isPlaceholder || false
           };
         });
 
@@ -665,7 +750,21 @@ export const AppProvider = ({ children }) => {
         setChats(prev => {
           // Keep remote groups from Firestore
           const groupChats = prev.filter(c => c.isGroup);
+          
+          // Retain all local personal chats that are not yet in Firebase
+          // This prevents new or unsynced chats from disappearing on refresh
+          const localOnlyPersonalChats = prev.filter(c => {
+            if (c.isGroup) return false;
+            const isInActive = activePersonalChats.some(fc => fc.id === c.id);
+            const isInArchived = archivedPersonalChats.some(fc => fc.id === c.id);
+            return !isInActive && !isInArchived;
+          });
+
           const combined = [...groupChats];
+          
+          localOnlyPersonalChats.forEach(rc => {
+            combined.push(rc);
+          });
 
           activePersonalChats.forEach(fc => {
             const existingIdx = combined.findIndex(c => c.id === fc.id);
@@ -688,18 +787,20 @@ export const AppProvider = ({ children }) => {
 
         // Update archived chats in state
         setArchivedChatsState(prev => {
-          const combined = [...prev];
-          archivedPersonalChats.forEach(apc => {
-            const existingIdx = combined.findIndex(c => c.id === apc.id);
+          const combinedArchived = [...prev];
+          archivedPersonalChats.forEach(fc => {
+            const existingIdx = combinedArchived.findIndex(c => c.id === fc.id);
             if (existingIdx === -1) {
-              combined.push(apc);
+              combinedArchived.push(fc);
             } else {
-              combined[existingIdx] = apc;
+              combinedArchived[existingIdx] = fc;
             }
           });
-          const resultArchived = safeSetLocalStorageItem('aura-archived-chats', combined);
-          return resultArchived || combined;
+          safeSetLocalStorageItem('aura-archived-chats', combinedArchived);
+          return combinedArchived;
         });
+
+        setIsFirebaseChatsLoaded(true);
 
         // Unsubscribe immediately so it behaves like a one-time fetch
         unsubscribe();
@@ -707,46 +808,90 @@ export const AppProvider = ({ children }) => {
         console.error("Error loading personal chats from Firestore:", err);
       });
       return () => unsubscribe();
-    } else {
+    } else if (!isAuthLoading && !user) {
+      setIsFirebaseChatsLoaded(true);
       lastSyncedChatsRef.current = {};
     }
-  }, [user]);
+  }, [user, isAuthLoading]);
 
   useEffect(() => {
-    if (!isInitializing) {
-      const savedChats = safeSetLocalStorageItem('aura-chats', chats);
+    if (!isInitializing && isChatsLoaded) {
+      // Safety guard: never overwrite existing saved chats with an empty array.
+      // This prevents HMR-induced state resets from wiping chat history.
+      if (chats.length === 0) {
+        const existing = localStorage.getItem('aura-chats');
+        if (existing) {
+          try {
+            const parsed = JSON.parse(existing);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setChats(parsed);
+              return;
+            }
+          } catch (_) {}
+        }
+      }
+      let savedChats;
+      if (user?.uid) {
+        savedChats = safeSetLocalStorageItem('aura-chats', chats);
+      }
       if (savedChats && JSON.stringify(savedChats) !== JSON.stringify(chats)) {
         setChats(savedChats);
       }
 
+      let timeoutId;
       if (user?.uid) {
-        chats.forEach(chat => {
-          if (chat.isGroup || isTemporary || chat.isSharedReadOnly) return;
+        timeoutId = setTimeout(() => {
+          chats.forEach(chat => {
+            if (chat.isGroup || isTemporary || chat.isSharedReadOnly) return;
 
-          const lastSynced = lastSyncedChatsRef.current[chat.id];
-          const currentMessageCount = chat.messages?.length || 0;
-          const currentTitle = chat.title || '';
+            const lastSynced = lastSyncedChatsRef.current[chat.id];
+            const currentMessageCount = chat.messages?.length || 0;
+            const currentTitle = chat.title || '';
+            
+            const lastMessage = chat.messages?.[chat.messages.length - 1];
+            const lastMessageId = lastMessage?.id || '';
+            const lastMessageContent = lastMessage?.content || '';
+            const lastMessageImageUrl = lastMessage?.imageUrl || '';
+            const lastMessageIsPlaceholder = lastMessage?.isPlaceholder || false;
 
-          if (!lastSynced || lastSynced.messageCount !== currentMessageCount || lastSynced.title !== currentTitle) {
-            lastSyncedChatsRef.current[chat.id] = {
-              messageCount: currentMessageCount,
-              title: currentTitle
-            };
+            const needsSync = !lastSynced || 
+              lastSynced.messageCount !== currentMessageCount || 
+              lastSynced.title !== currentTitle ||
+              lastSynced.lastMessageId !== lastMessageId ||
+              lastSynced.lastMessageContent !== lastMessageContent ||
+              lastSynced.lastMessageImageUrl !== lastMessageImageUrl ||
+              lastSynced.lastMessageIsPlaceholder !== lastMessageIsPlaceholder;
 
-            const personalChatRef = doc(db, 'users', user.uid, 'personal_chats', chat.id);
-            setDoc(personalChatRef, {
-              id: chat.id,
-              title: chat.title || 'New Chat',
-              messages: chat.messages || [],
-              timestamp: chat.timestamp || new Date().toISOString(),
-              createdAt: chat.createdAt || new Date().toISOString(),
-              isArchived: false
-            }, { merge: true }).catch(err => console.error("Error autosaving personal chat to Firestore:", err));
-          }
-        });
+            if (needsSync) {
+              lastSyncedChatsRef.current[chat.id] = {
+                messageCount: currentMessageCount,
+                title: currentTitle,
+                lastMessageId,
+                lastMessageContent,
+                lastMessageImageUrl,
+                lastMessageIsPlaceholder
+              };
+
+              const personalChatRef = doc(db, 'users', user.uid, 'personal_chats', chat.id);
+              setDoc(personalChatRef, {
+                id: chat.id,
+                title: chat.title || 'New Chat',
+                messages: chat.messages || [],
+                timestamp: chat.timestamp || new Date().toISOString(),
+                createdAt: chat.createdAt || new Date().toISOString(),
+                isArchived: false
+              }, { merge: true }).catch(err => console.error("Error autosaving personal chat to Firestore:", err));
+            }
+          });
+        }, 2500); // Debounce Firestore writes by 2.5s to prevent quota exhaustion during streaming
       }
+
+      return () => {
+        if (timeoutId) clearTimeout(timeoutId);
+      };
     }
   }, [chats, isInitializing, user, isTemporary]);
+
 
   useEffect(() => {
     if (!isInitializing) {
@@ -754,40 +899,119 @@ export const AppProvider = ({ children }) => {
     }
   }, [appView, isInitializing]);
 
+  const [myImages, setMyImagesState] = useState([]);
+
+  // Load guest/local images initially
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !user) {
+      const saved = localStorage.getItem('aura-my-images-guest');
+      if (saved) {
+        try { setMyImagesState(JSON.parse(saved)); } catch (e) {}
+      }
+    }
+  }, [user]);
+
+  // Listen to Firestore my_images when logged in
+  useEffect(() => {
+    let unsubscribe = () => {};
+    if (user?.uid) {
+      const imagesColRef = collection(db, 'users', user.uid, 'my_images');
+      // Sync guest images to Firestore on first login
+      const guestSaved = localStorage.getItem('aura-my-images-guest');
+      if (guestSaved) {
+        try {
+          const guestImages = JSON.parse(guestSaved);
+          if (guestImages && guestImages.length > 0) {
+            guestImages.forEach(async (img) => {
+              const docRef = doc(db, 'users', user.uid, 'my_images', img.id);
+              await setDoc(docRef, { ...img, timestamp: img.timestamp || Date.now() }, { merge: true });
+            });
+            localStorage.removeItem('aura-my-images-guest');
+          }
+        } catch (e) {
+          console.error("Failed to migrate guest images:", e);
+        }
+      }
+
+      unsubscribe = onSnapshot(imagesColRef, (snapshot) => {
+        const fetched = [];
+        snapshot.forEach((doc) => {
+          fetched.push(doc.data());
+        });
+        // Sort by timestamp desc
+        fetched.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        setMyImagesState(fetched);
+      }, (error) => {
+        console.error("Error loading images from Firestore:", error);
+      });
+    } else {
+      setMyImagesState([]);
+    }
+    return () => unsubscribe();
+  }, [user]);
+
+  // Helper to add a new image
+  const addMyImage = useCallback(async (imageObj) => {
+    const newImg = {
+      ...imageObj,
+      timestamp: imageObj.timestamp || Date.now()
+    };
+    if (user?.uid) {
+      try {
+        const docRef = doc(db, 'users', user.uid, 'my_images', newImg.id);
+        await setDoc(docRef, newImg);
+      } catch (err) {
+        console.error("Failed to add image to Firestore:", err);
+      }
+    } else {
+      // Guest accounts do not save images to My Images library
+      return;
+    }
+  }, [user]);
+
+  // Helper to delete an image
+  const deleteMyImage = useCallback(async (id) => {
+    if (user?.uid) {
+      try {
+        const docRef = doc(db, 'users', user.uid, 'my_images', id);
+        await deleteDoc(docRef);
+      } catch (err) {
+        console.error("Failed to delete image from Firestore:", err);
+      }
+    } else {
+      // Guest accounts do not have saved images
+      return;
+    }
+  }, [user]);
+
+  // Helper to toggle like or modify an image
+  const updateMyImage = useCallback(async (id, updatedFields) => {
+    if (user?.uid) {
+      try {
+        const docRef = doc(db, 'users', user.uid, 'my_images', id);
+        await setDoc(docRef, updatedFields, { merge: true });
+      } catch (err) {
+        console.error("Failed to update image in Firestore:", err);
+      }
+    } else {
+      // Guest accounts do not have saved images
+      return;
+    }
+  }, [user]);
+
   const autoCompleteGeneration = useCallback((chatId, msg) => {
     cropImageToRatio(msg.imageUrl, msg.ratio, (croppedDataUrl) => {
-      // 1. Save to My Images list in localStorage
+      // Save to My Images list (handles both Firestore and local guest cache)
       try {
-        const saved = localStorage.getItem('aura-my-images');
-        let currentImages = [];
-        if (saved) {
-          try {
-            currentImages = JSON.parse(saved);
-          } catch (e) {
-            console.error(e);
-          }
-        }
-        if (currentImages.length === 0) {
-          currentImages = [
-            { id: 'img-1', url: '/my_ai_assistant.png', prompt: 'Futuristic dark blue cybernetic AI robot assistant logo layout' },
-            { id: 'img-2', url: '/my_couple_heart.png', prompt: 'Romantic portrait of a couple inside a decorated golden heart frame' },
-            { id: 'img-3', url: '/app_design.png', prompt: 'Sleek colorful mobile UI app dashboard layout mockup' },
-            { id: 'img-4', url: '/my_pizza.png', prompt: 'Delicious gourmet Italian pizza with melting mozzarella cheese' },
-            { id: 'img-5', url: '/wanderlust.png', prompt: 'Wanderlust explorer mountain landscape painting' },
-            { id: 'img-6', url: '/my_zypher_logo.png', prompt: 'Modern futuristic brand logo with a glowing purple and cyan Z' },
-            { id: 'img-7', url: '/chibi_stickers.png', prompt: 'Cute chibi style sticker pack designs' },
-            { id: 'img-8', url: '/makeup_guide.png', prompt: 'High-fashion beauty makeup guide eyeshadow palette details' }
-          ];
-        }
-
-        if (!currentImages.some(img => img.url === croppedDataUrl)) {
+        if (!myImages.some(img => img.url === croppedDataUrl)) {
           const newImgObj = {
             id: `img-gen-aspect-${Date.now()}`,
             url: croppedDataUrl,
-            prompt: msg.prompt || `Cropped to aspect ratio ${msg.ratio}`
+            prompt: msg.prompt || `Cropped to aspect ratio ${msg.ratio}`,
+            chatId: chatId,
+            isGenerated: true
           };
-          const updated = [newImgObj, ...currentImages];
-          safeSetLocalStorageItem('aura-my-images', updated);
+          addMyImage(newImgObj);
         }
       } catch (err) {
         console.error("Error saving image to my images in background:", err);
@@ -797,7 +1021,7 @@ export const AppProvider = ({ children }) => {
       setChats(prev => prev.map(chat => {
         if (chat.id === chatId) {
           const updatedMessages = chat.messages?.map(m => 
-            m.id === msg.id ? { ...m, aspectGenDone: true, imageUrl: croppedDataUrl } : m
+            m.id === msg.id ? { ...m, aspectGenDone: true } : m
           ) || [];
           return { ...chat, messages: updatedMessages };
         }
@@ -807,11 +1031,11 @@ export const AppProvider = ({ children }) => {
       // 3. Update the active messages state if this is the active chat
       if (activeChatId === chatId) {
         setMessages(prev => prev.map(m => 
-          m.id === msg.id ? { ...m, aspectGenDone: true, imageUrl: croppedDataUrl } : m
+          m.id === msg.id ? { ...m, aspectGenDone: true } : m
         ));
       }
     });
-  }, [activeChatId, setMessages]);
+  }, [activeChatId, setMessages, myImages, addMyImage]);
 
   // Background aspect ratio generation manager
   useEffect(() => {
@@ -861,6 +1085,10 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     if (isInitializing) return;
 
+    // Do not enforce appView URL sync if a modal route is active
+    const isModalPath = pathname?.startsWith('/settings') || pathname?.startsWith('/help') || pathname?.startsWith('/profile') || pathname?.startsWith('/logout') || pathname?.startsWith('/search') || pathname?.startsWith('/upgrade');
+    if (isModalPath) return;
+
     if (appView === 'library') {
       if (pathname !== '/library') {
         router.push('/library');
@@ -895,6 +1123,12 @@ export const AppProvider = ({ children }) => {
           const isCurrentChatPath = pathname === `/c/${activeChatId}`;
           if (pathname.startsWith('/c/') && !isCurrentChatPath) {
             router.push('/');
+          } else if (isFirebaseChatsLoaded) {
+            // Only redirect to / if we are sure the chat doesn't exist in Firebase
+            if (!chats.some(c => c.id === activeChatId)) {
+              router.push('/');
+              setActiveChatId(null);
+            }
           }
         }
       } else {
@@ -1021,6 +1255,9 @@ export const AppProvider = ({ children }) => {
     setIsSharedReadOnly(false);
     setSharedChatData(null);
     router.push('/');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('aura-new-chat'));
+    }
   }, [setActiveChatId, setMessages, router]);
 
   const lastPathnameRef = useRef(pathname);
@@ -1037,12 +1274,10 @@ export const AppProvider = ({ children }) => {
       if (pathname === '/') {
         setIsSharedReadOnly(false);
         setSharedChatData(null);
-        // If pathname is '/' but activeChatId points to an existing chat, reset to a new chat
-        const isExistingChat = chats.some(c => c.id === activeChatId);
-        if (isExistingChat) {
-          createNewChat();
-        }
-        setAppView('chat');
+        // Only do new-chat reset if user was in chat view and navigated to / intentionally.
+        // Do NOT call createNewChat here - it fires router.push('/') causing infinite loop.
+        // Also do NOT switch appView - images/apps/etc all live on '/' too.
+        // The view state is preserved as-is when returning to '/' from a full-page route.
       } else if (pathname === '/library') {
         setAppView('library');
       } else if (pathname === '/research') {
@@ -1065,7 +1300,7 @@ export const AppProvider = ({ children }) => {
         setAppView('chat');
       }
     }
-  }, [pathname, chats, activeChatId, isInitializing, createNewChat, setActiveChatId, setMessages, fetchSharedChat]);
+  }, [pathname, isInitializing, setActiveChatId, setMessages, fetchSharedChat]);
 
   const deleteChat = useCallback(async (id) => {
     const chatToDelete = chats.find(c => c.id === id) || archivedChats.find(c => c.id === id);
@@ -1107,16 +1342,22 @@ export const AppProvider = ({ children }) => {
       return updatedChats;
     });
 
+    // 3. Remove associated images from myImages
+    const imagesToDelete = myImages.filter(img => img.chatId === id);
+    imagesToDelete.forEach(img => {
+      deleteMyImage(img.id);
+    });
+
     setArchivedChatsState(prev => {
       const updated = prev.filter(chat => chat.id !== id);
       const result = safeSetLocalStorageItem('aura-archived-chats', updated);
       return result || updated;
     });
-  }, [activeChatId, chats, archivedChats, profile, user]);
+  }, [activeChatId, chats, archivedChats, profile, user, myImages, deleteMyImage]);
 
   const leaveGroup = useCallback(async (id) => {
     const chatToLeave = chats.find(c => c.id === id);
-    if (!chatToLeave || !profile) return;
+    if (!chatToLeave || !profile || !profile.uid) return;
 
     try {
       const chatRef = doc(db, 'chats', id);
@@ -1216,7 +1457,7 @@ export const AppProvider = ({ children }) => {
   }, [profile, chats]);
 
   const joinGroup = useCallback(async (id) => {
-    if (!profile) return { success: false, error: "Please log in to join the group" };
+    if (!profile || !profile.uid) return { success: false, error: "Please log in to join the group" };
     
     console.log("Attempting to join group:", id);
     
@@ -1301,6 +1542,41 @@ export const AppProvider = ({ children }) => {
     }
   }, [profile, setActiveChatId, setChats]);
 
+  useEffect(() => {
+    if (isFirebaseChatsLoaded && myImages.length > 0) {
+      const hasRunCleanup = localStorage.getItem('aura-cleanup-orphaned-images-v2');
+      if (!hasRunCleanup && !isAuthLoading) {
+        const validChatImageUrls = new Set();
+        [...chats, ...archivedChats].forEach(chat => {
+          chat.messages?.forEach(msg => {
+            if (msg.imageUrl) validChatImageUrls.add(msg.imageUrl);
+          });
+        });
+
+        let deletedCount = 0;
+        myImages.forEach(img => {
+          let shouldDelete = false;
+          if (img.chatId) {
+            const chatExists = chats.some(c => c.id === img.chatId) || archivedChats.some(c => c.id === img.chatId);
+            if (!chatExists) shouldDelete = true;
+          } else if (img.id && img.id.includes('img-gen-aspect')) {
+            if (!validChatImageUrls.has(img.url)) {
+              shouldDelete = true;
+            }
+          }
+
+          if (shouldDelete) {
+            deleteMyImage(img.id);
+            deletedCount++;
+          }
+        });
+        
+        localStorage.setItem('aura-cleanup-orphaned-images-v2', 'true');
+        console.log(`Cleaned up ${deletedCount} orphaned images.`);
+      }
+    }
+  }, [isFirebaseChatsLoaded, myImages, chats, archivedChats, deleteMyImage, isAuthLoading]);
+
   return (
     <AppContext.Provider value={{
       theme, resolvedTheme, toggleTheme, setAppTheme,
@@ -1310,6 +1586,9 @@ export const AppProvider = ({ children }) => {
       appView, setAppView,
       editingImage, setEditingImage,
       activeEditImage, setActiveEditImage,
+      activeShareImage, setActiveShareImage,
+      shareModalState, setShareModalState,
+      myImages, addMyImage, deleteMyImage, updateMyImage,
       messages, setMessages,
       chats, setChats,
       activeChatId, setActiveChatId,
@@ -1329,6 +1608,7 @@ export const AppProvider = ({ children }) => {
       personalization, setPersonalization,
       deleteAccount,
       isInitializing,
+      isFirebaseChatsLoaded,
       isSidebarInitializing,
       isAuthLoading,
       isShareModalOpen, setIsShareModalOpen,
@@ -1339,6 +1619,7 @@ export const AppProvider = ({ children }) => {
       isGroupChatModalOpen, setIsGroupChatModalOpen,
       groupChatTargetId, setGroupChatTargetId,
       isUpgradeModalOpen, setIsUpgradeModalOpen,
+      isLogoutModalOpen, setIsLogoutModalOpen,
       convertToGroupChat,
       joinGroup,
       leaveGroup,

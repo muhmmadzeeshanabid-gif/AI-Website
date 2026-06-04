@@ -292,23 +292,8 @@ export default function LibraryView() {
   }, [files]);
 
   const loadFromLocalStorage = () => {
-    try {
-      const saved = localStorage.getItem('aura-library-files');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.length === 0) {
-          setFiles(defaultFiles);
-          localStorage.setItem('aura-library-files', JSON.stringify(defaultFiles));
-        } else {
-          setFiles(parsed);
-        }
-      } else {
-        setFiles(defaultFiles);
-        localStorage.setItem('aura-library-files', JSON.stringify(defaultFiles));
-      }
-    } catch (e) {
-      setFiles(defaultFiles);
-    }
+    // Guests always see an empty library — no seed files
+    setFiles([]);
   };
 
   const saveToLocalStorage = (updatedFiles) => {
@@ -1355,7 +1340,16 @@ export default function LibraryView() {
           {filteredFiles.length === 0 ? (
             <div className="w-full h-80 flex flex-col items-center justify-center gap-3" style={{ color: 'var(--text-secondary)' }}>
               <File size={48} strokeWidth={1.5} className="opacity-40" />
-              <p className="text-sm">No items found in your library</p>
+              {!user ? (
+                <>
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Sign in to view your Library</p>
+                  <p className="text-xs opacity-60">Your uploaded files are linked to your account</p>
+                </>
+              ) : searchQuery.trim() ? (
+                <p className="text-sm">No items match your search</p>
+              ) : (
+                <p className="text-sm">No items found in your library</p>
+              )}
             </div>
           ) : viewMode === 'list' ? (
             /* List Layout */

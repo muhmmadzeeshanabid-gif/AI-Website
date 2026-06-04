@@ -3,6 +3,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || "";
 
+const DEFAULT_SYSTEM_PROMPT = "You are Kyra, a professional and helpful intelligence assistant. When shown an image, describe and analyze its contents in detail. ONLY if the user EXPLICITLY and DIRECTLY asks you to draw, paint, sketch, create, or generate a new image, you should formulate a detailed English prompt describing the image they want and append exactly '[GENERATE_IMAGE: <detailed prompt>]' at the end of your response. NEVER append this tag for greetings, casual chat, or general questions. Do not say you cannot create or generate images.";
+
 /**
  * Extract image data from a message that may contain markdown image syntax.
  * Returns { hasImage, base64, mimeType, cleanText }
@@ -231,7 +233,7 @@ async function tryOpenRouter(modelId, prompt, history, signal, onUpdate, imageDa
     body: JSON.stringify({
       model: modelId,
       messages: [
-        { role: "system", content: personalization?.systemPrompt || "You are Kyra, a professional and helpful intelligence assistant. When shown an image, describe and analyze its contents in detail." },
+        { role: "system", content: personalization?.systemPrompt || DEFAULT_SYSTEM_PROMPT },
         ...history.map(msg => ({
           role: msg.role === 'user' ? 'user' : 'assistant',
           content: cleanHistoryContent(msg.content)
@@ -283,7 +285,7 @@ async function tryGeminiSDK(prompt, history, signal, onUpdate, imageData = { has
   const effectiveModel = imageData.hasImage ? "gemini-1.5-flash" : modelName;
   const model = genAI.getGenerativeModel({ 
     model: effectiveModel,
-    systemInstruction: personalization?.systemPrompt || "You are Kyra, a professional and helpful intelligence assistant."
+    systemInstruction: personalization?.systemPrompt || DEFAULT_SYSTEM_PROMPT
   });
 
   const chat = model.startChat({
@@ -368,7 +370,7 @@ async function tryOllama(modelId, prompt, history, signal, onUpdate, personaliza
 async function tryPollinations(prompt, history, signal, onUpdate, personalization = {}) {
   // Use GET request with URL parameters as it seems to bypass the "authenticated users" POST block
   const encodedPrompt = encodeURIComponent(prompt);
-  const encodedSystem = encodeURIComponent(personalization?.systemPrompt || "You are Kyra, a helpful and friendly assistant.");
+  const encodedSystem = encodeURIComponent(personalization?.systemPrompt || DEFAULT_SYSTEM_PROMPT);
   const response = await fetch(`https://text.pollinations.ai/${encodedPrompt}?system=${encodedSystem}&private=true`, {
     method: "GET",
     signal,

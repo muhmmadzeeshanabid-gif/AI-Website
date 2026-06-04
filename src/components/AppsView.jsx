@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, ChevronRight, ChevronLeft, LayoutGrid, Compass, Briefcase, Database, Heart, Palette, Globe, ExternalLink, Play, Pause } from 'lucide-react';
+import { Search, ChevronRight, ChevronLeft, LayoutGrid, Compass, Briefcase, Database, Heart, Palette, Globe, ExternalLink, Play, Pause, ChevronDown } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
 
 // Detail data for all apps (rendered on the separate details page)
@@ -88,7 +88,7 @@ const appDetailsData = {
 };
 
 export default function AppsView() {
-  const { setAppView, setChats, setActiveChatId, setMessages, chats } = useAppContext();
+  const { setAppView, setChats, setActiveChatId, setMessages, chats, showLoggedIn, setAuthOpen } = useAppContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('Featured');
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -822,9 +822,51 @@ export default function AppsView() {
       backgroundColor: 'var(--bg-primary, #0d0d0d)',
       color: 'var(--on-surface, #ffffff)',
       overflowY: 'auto',
-      padding: '40px 24px',
+      padding: !showLoggedIn ? '80px 24px 40px' : '40px 24px',
       fontFamily: 'Inter, sans-serif'
     }}>
+      {!showLoggedIn && (
+        <>
+          <div style={{ position: 'absolute', top: '16px', left: '20px', zIndex: 100 }}>
+            <button 
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', cursor: 'pointer',
+                padding: '8px 4px', borderRadius: 12, color: 'var(--on-surface)',
+                transition: 'background 0.15s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px', color: 'var(--on-surface)' }}>Kyra</span>
+              <ChevronDown size={15} style={{ color: 'var(--on-surface-muted)', marginTop: 1 }} />
+            </button>
+          </div>
+          <div style={{ position: 'absolute', top: '16px', right: '20px', zIndex: 100, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button 
+              onClick={() => setAuthOpen(true)}
+              style={{ 
+                padding: '8px 18px', borderRadius: '999px', fontSize: '15px', fontWeight: 500, 
+                background: '#ffffff', color: '#000000', border: 'none', cursor: 'pointer', transition: 'all 0.2s' 
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = 0.9}
+              onMouseLeave={e => e.currentTarget.style.opacity = 1}
+            >
+              Log in
+            </button>
+            <button 
+              onClick={() => setAuthOpen(true)}
+              style={{ 
+                padding: '8px 18px', borderRadius: '999px', fontSize: '15px', fontWeight: 500, 
+                background: '#2a2a2a', color: '#ffffff', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', transition: 'all 0.2s' 
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = 0.9}
+              onMouseLeave={e => e.currentTarget.style.opacity = 1}
+            >
+              Sign up for free
+            </button>
+          </div>
+        </>
+      )}
       {/* Top Header Row */}
       <div style={{
         display: 'flex',

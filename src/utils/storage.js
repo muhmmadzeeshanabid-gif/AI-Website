@@ -29,8 +29,11 @@ export function safeSetLocalStorageItem(key, data) {
     if (isQuotaExceededError(error)) {
       console.warn(`Storage quota exceeded for key "${key}". Attempting to free space...`);
 
-      // 1. Pruning aura-my-images
-      if (key === 'aura-my-images') {
+      // Check if this key is a user-scoped images key
+      const isMyImagesKey = key === 'aura-my-images' || key.startsWith('aura-my-images-');
+
+      // 1. Pruning user-scoped or legacy image keys
+      if (isMyImagesKey) {
         const items = typeof data === 'string' ? JSON.parse(data) : data;
         if (Array.isArray(items)) {
           let pruneList = [...items];
@@ -46,7 +49,7 @@ export function safeSetLocalStorageItem(key, data) {
               pruneList.splice(lastGenIdx, 1);
               try {
                 localStorage.setItem(key, JSON.stringify(pruneList));
-                console.log("Successfully resolved quota error by pruning aura-my-images.");
+                console.log("Successfully resolved quota error by pruning images key:", key);
                 return pruneList;
               } catch (innerErr) {
                 // Try next pruning iteration
@@ -96,41 +99,47 @@ export function safeSetLocalStorageItem(key, data) {
                 // Try next iteration
               }
             } else {
-              // If no base64 URLs can be cleared, start evicting oldest chats
-              if (prunedChats.length > 3) {
-                prunedChats.pop();
-                try {
-                  localStorage.setItem(key, JSON.stringify(prunedChats));
-                  console.log("Successfully resolved quota error by evicting the oldest chat.");
-                  return prunedChats;
-                } catch (innerErr) {
-                  // Try next iteration
-                }
-              } else {
-                break;
-              }
+              break;
             }
           }
         }
       }
 
-      // 3. Emergency Cleanup: clear generated images from 'aura-my-images' to fit other keys
-      try {
-        const savedMyImages = localStorage.getItem('aura-my-images');
-        if (savedMyImages && key !== 'aura-my-images') {
-          const items = JSON.parse(savedMyImages);
-          const pruned = items.filter(x => !x.id?.startsWith('img-gen-') && !x.id?.startsWith('img-gen-aspect-'));
-          localStorage.setItem('aura-my-images', JSON.stringify(pruned));
-          try {
-            localStorage.setItem(key, serialized);
-            console.log(`Successfully saved key "${key}" after emergency cleanup of aura-my-images.`);
-            return data;
-          } catch (innerErr) {
-            // Still fails
+      // 3. Emergency Cleanup: clear generated images from ALL user-scoped image keys to fit other keys
+      if (!isMyImagesKey) {
+        try {
+          // Find all user-scoped image keys
+          const keysToClean = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && (k === 'aura-my-images' || k.startsWith('aura-my-images-'))) {
+              keysToClean.push(k);
+            }
           }
+          let freed = false;
+          for (const imgKey of keysToClean) {
+            try {
+              const savedMyImages = localStorage.getItem(imgKey);
+              if (savedMyImages) {
+                const items = JSON.parse(savedMyImages);
+                const pruned = items.filter(x => !x.id?.startsWith('img-gen-') && !x.id?.startsWith('img-gen-aspect-'));
+                localStorage.setItem(imgKey, JSON.stringify(pruned));
+                freed = true;
+              }
+            } catch (_) {}
+          }
+          if (freed) {
+            try {
+              localStorage.setItem(key, serialized);
+              console.log(`Successfully saved key "${key}" after emergency cleanup of image keys.`);
+              return data;
+            } catch (innerErr) {
+              // Still fails
+            }
+          }
+        } catch (emergencyErr) {
+          console.error("Emergency cleanup of other keys failed:", emergencyErr);
         }
-      } catch (emergencyErr) {
-        console.error("Emergency cleanup of other keys failed:", emergencyErr);
       }
     }
 

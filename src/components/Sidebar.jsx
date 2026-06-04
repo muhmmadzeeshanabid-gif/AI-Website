@@ -24,6 +24,7 @@ const Sidebar = () => {
     isGroupChatModalOpen, setIsGroupChatModalOpen,
     groupChatTargetId, setGroupChatTargetId,
     isUpgradeModalOpen, setIsUpgradeModalOpen,
+    isLogoutModalOpen, setIsLogoutModalOpen,
     isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId,
     leaveGroup,
     isSharedReadOnly, setIsSharedReadOnly,
@@ -213,6 +214,9 @@ const Sidebar = () => {
                   setAppView('chat');
                   router.push('/');
                   setIsSidebarOpen(false);
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new Event('aura-new-chat'));
+                  }
                 }}
                 className="flex items-center gap-3 bg-transparent border-none text-on-surface cursor-pointer animate-fade-in"
                 style={{ fontFamily: 'inherit', padding: 0 }}
@@ -476,6 +480,9 @@ const Sidebar = () => {
                 setAppView('chat'); 
                 router.push('/'); 
                 if (isMobile) setIsSidebarOpen(false);
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new Event('aura-new-chat'));
+                }
               }}
               style={{
                 display: 'flex', alignItems: 'center', background: 'transparent', border: 'none',
@@ -531,6 +538,88 @@ const Sidebar = () => {
             )}
           </div>
           
+          {(!mounted || !showLoggedIn) && (
+            <>
+              <div className="relative group/tooltip w-full flex justify-center">
+                <button
+                  onClick={() => { 
+                    setAppView('images'); 
+                    if (isMobile) setIsSidebarOpen(false);
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', background: 'transparent', border: 'none',
+                    borderRadius: 12, cursor: 'pointer', transition: 'all 0.15s', color: 'var(--on-surface)',
+                    width: isSidebarOpen ? '100%' : 'auto',
+                    padding: '10px 12px', gap: 12,
+                    justifyContent: isSidebarOpen ? 'flex-start' : 'center',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <Image size={20} style={{ color: 'var(--on-surface)' }} />
+                  {isSidebarOpen && <span style={{ fontSize: 14, fontWeight: 500 }}>Images</span>}
+                </button>
+                {!isSidebarOpen && (
+                  <div style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }} className="tooltip-label absolute opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50">Images</div>
+                )}
+              </div>
+              <div className="relative group w-full flex justify-center">
+                <button
+                  onClick={() => {
+                    setAuthOpen(true);
+                    if (isMobile) setIsSidebarOpen(false);
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', background: 'transparent', border: 'none',
+                    borderRadius: 12, cursor: 'pointer', transition: 'all 0.15s', color: 'var(--on-surface)',
+                    width: isSidebarOpen ? '100%' : 'auto',
+                    padding: '10px 12px', gap: 12,
+                    justifyContent: isSidebarOpen ? 'flex-start' : 'center',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <Telescope size={20} style={{ color: 'var(--on-surface)' }} />
+                  {isSidebarOpen && <span style={{ fontSize: 14, fontWeight: 500 }}>Deep research</span>}
+                </button>
+                {!isSidebarOpen && (
+                  <div style={{ left: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)' }} className="tooltip-label absolute opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">Deep research</div>
+                )}
+                {/* Deep Research Hover Card */}
+                <div 
+                  className="absolute left-full ml-2 top-0 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity z-50 shadow-2xl"
+                  style={{ width: '300px', background: 'var(--surface-1)', border: '1px solid var(--divider)', borderRadius: '16px', overflow: 'hidden' }}
+                >
+                  <div style={{ height: '120px', background: 'linear-gradient(135deg, #60a5fa, #a78bfa, #38bdf8)' }} />
+                  <div style={{ padding: '16px' }}>
+                    <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 600, color: 'var(--on-surface)', textAlign: 'left' }}>Turn questions into research</h3>
+                    <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: 'var(--on-surface-muted)', lineHeight: '1.4', textAlign: 'left' }}>
+                      Log in to run multi-step research, compare sources, and save cited reports to revisit later.
+                    </p>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        onClick={() => setAuthOpen(true)}
+                        style={{ padding: '8px 16px', borderRadius: '99px', background: 'transparent', border: '1px solid var(--divider)', color: 'var(--on-surface)', fontSize: '14px', fontWeight: 500, cursor: 'pointer', transition: 'background 0.2s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        Log in
+                      </button>
+                      <button 
+                        onClick={() => setAuthOpen(true)}
+                        style={{ padding: '8px 16px', borderRadius: '99px', background: 'var(--on-surface)', color: 'var(--bg-primary)', border: 'none', fontSize: '14px', fontWeight: 500, cursor: 'pointer', transition: 'opacity 0.2s' }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                      >
+                        Sign up for free
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
           {/* More Menu */}
             <div className="relative group/tooltip w-full flex justify-center">
               <button
@@ -595,25 +684,27 @@ const Sidebar = () => {
                   }}
                   onClick={e => e.stopPropagation()}
                 >
-                  <button 
-                    onClick={() => { 
-                      setAppView('images'); 
-                      setIsMoreMenuOpen(false); 
-                      if (isMobile) setIsSidebarOpen(false);
-                    }}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                      padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                      border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                      fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                      fontFamily: 'inherit', transition: 'background 0.15s'
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                     <Image size={16} style={{ color: 'var(--on-surface-muted)' }} strokeWidth={1.5} />
-                     <span>Images</span>
-                  </button>
+                  {(mounted && showLoggedIn) && (
+                    <button 
+                      onClick={() => { 
+                        setAppView('images'); 
+                        setIsMoreMenuOpen(false); 
+                        if (isMobile) setIsSidebarOpen(false);
+                      }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                        border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                        fontFamily: 'inherit', transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                       <Image size={16} style={{ color: 'var(--on-surface-muted)' }} strokeWidth={1.5} />
+                       <span>Images</span>
+                    </button>
+                  )}
                   <button 
                     onClick={() => { 
                       setAppView('library'); 
@@ -633,25 +724,27 @@ const Sidebar = () => {
                      <Library size={16} style={{ color: 'var(--on-surface-muted)' }} strokeWidth={1.5} />
                      <span>Library</span>
                   </button>
-                  <button 
-                    onClick={() => {
-                      setAppView('research');
-                      setIsMoreMenuOpen(false);
-                      if (isMobile) setIsSidebarOpen(false);
-                    }}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                      padding: '10px 14px', borderRadius: 12, background: 'transparent',
-                      border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
-                      fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-                      fontFamily: 'inherit', transition: 'background 0.15s'
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                     <Telescope size={16} style={{ color: 'var(--on-surface-muted)' }} strokeWidth={1.5} />
-                     <span>Deep research</span>
-                  </button>
+                  {(mounted && showLoggedIn) && (
+                    <button 
+                      onClick={() => {
+                        setAppView('research');
+                        setIsMoreMenuOpen(false);
+                        if (isMobile) setIsSidebarOpen(false);
+                      }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 14px', borderRadius: 12, background: 'transparent',
+                        border: 'none', color: 'var(--on-surface)', fontSize: 13.5,
+                        fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                        fontFamily: 'inherit', transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                       <Telescope size={16} style={{ color: 'var(--on-surface-muted)' }} strokeWidth={1.5} />
+                       <span>Deep research</span>
+                    </button>
+                  )}
                   <button 
                     onClick={() => {
                       setAppView('apps');
@@ -675,7 +768,7 @@ const Sidebar = () => {
               )}
             </AnimatePresence>
           
-          {!isSidebarOpen && (
+          {!isSidebarOpen && mounted && showLoggedIn && (
             <div className="relative group/tooltip w-full flex justify-center" ref={recentsButtonRef}>
               <button 
                 onClick={() => setIsRecentsCardOpen(!isRecentsCardOpen)}
@@ -702,7 +795,9 @@ const Sidebar = () => {
 
         {/* Chat History Section */}
         <div className="flex-1 overflow-hidden flex flex-col mt-6">
-          {isSidebarOpen && mounted && showLoggedIn && (
+        {(mounted && showLoggedIn) && (
+          <>
+          {isSidebarOpen && mounted && (
             <div className="px-4 mb-1">
               <button 
                 onClick={() => setIsRecentOpen(!isRecentOpen)}
@@ -727,7 +822,7 @@ const Sidebar = () => {
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden flex flex-col w-full"
                 >
-                  {mounted && showLoggedIn && sortedChats.map((chat, i) => (
+                  {mounted && sortedChats.map((chat, i) => (
                     <div
                       key={chat.id}
                       className="relative"
@@ -979,8 +1074,8 @@ const Sidebar = () => {
             </AnimatePresence>
 
           </div>
-
-
+          </>
+        )}
         </div>
 
         {/* Bottom Profile Area */}
@@ -1029,7 +1124,8 @@ const Sidebar = () => {
               </div>
                 {isSidebarOpen && (
                   <button 
-                    onClick={() => { 
+                    onClick={(e) => { 
+                      e.stopPropagation();
                       router.push('/upgrade'); 
                       if (isMobile) setIsSidebarOpen(false);
                     }}
@@ -1253,7 +1349,7 @@ const Sidebar = () => {
           <button
             onClick={() => { 
               setProfileMenuOpen(false); 
-              router.push('/logout'); 
+              setIsLogoutModalOpen(true); 
               if (isMobile) setIsSidebarOpen(false);
             }}
             style={{

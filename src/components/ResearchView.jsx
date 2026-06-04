@@ -5,8 +5,24 @@ import { Telescope, Plus, ChevronDown, Mic, ArrowUpRight, ArrowUp, Send, Check, 
 import { useAppContext } from '@/context/AppContext';
 
 export default function ResearchView({ onStartResearch }) {
-  const { accentColor } = useAppContext();
+  const { accentColor, resolvedTheme } = useAppContext();
   const [inputValue, setInputValue] = useState('');
+
+  const isDark = resolvedTheme === 'dark';
+  const bgColor = isDark ? '#0a0a0c' : 'var(--bg-primary)';
+  const textColor = isDark ? '#f3f4f6' : 'var(--on-surface)';
+  const headingColorStyle = isDark 
+    ? { background: 'linear-gradient(180deg, #ffffff 0%, #e5e7eb 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }
+    : { color: 'var(--on-surface)' };
+  const subtextColor = isDark ? '#9ca3af' : 'var(--on-surface-muted)';
+  const cardBg = isDark ? 'rgba(24, 24, 27, 0.8)' : 'var(--surface-1)';
+  const cardBorder = isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid var(--divider)';
+  const cardShadow = isDark ? '0 20px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05)' : 'var(--shadow-md)';
+  const inputTextColor = isDark ? '#f9fafb' : 'var(--on-surface)';
+  const pillBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay-2)';
+  const dropdownBg = isDark ? '#232325' : 'var(--surface-1)';
+  const modalBg = isDark ? '#232325' : 'var(--surface-1)';
+  const inputBg = isDark ? '#121214' : 'var(--surface-2)';
   const [isAppsDropdownOpen, setIsAppsDropdownOpen] = useState(false);
   const [isSitesDropdownOpen, setIsSitesDropdownOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState('All Apps');
@@ -138,8 +154,8 @@ export default function ResearchView({ onStartResearch }) {
         justifyContent: 'center',
         minHeight: '100%',
         width: '100%',
-        background: '#0a0a0c', // Elegant deep dark background
-        color: '#f3f4f6',
+        background: bgColor,
+        color: textColor,
         fontFamily: "'Inter', sans-serif",
         padding: '40px 24px',
         overflowY: 'auto',
@@ -185,9 +201,7 @@ export default function ResearchView({ onStartResearch }) {
             fontWeight: 600,
             letterSpacing: '-0.02em',
             marginBottom: '10px',
-            background: 'linear-gradient(180deg, #ffffff 0%, #e5e7eb 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent'
+            ...headingColorStyle
           }}
         >
           Ready when you are.
@@ -195,7 +209,7 @@ export default function ResearchView({ onStartResearch }) {
         <p 
           style={{
             fontSize: '15px',
-            color: '#9ca3af',
+            color: subtextColor,
             fontWeight: 400,
             maxWidth: '480px'
           }}
@@ -210,12 +224,12 @@ export default function ResearchView({ onStartResearch }) {
         style={{
           width: '100%',
           maxWidth: '760px',
-          background: 'rgba(24, 24, 27, 0.8)',
+          background: cardBg,
           backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          border: cardBorder,
           borderRadius: '28px',
           padding: '16px 20px',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+          boxShadow: cardShadow,
           display: 'flex',
           flexDirection: 'column',
           gap: '16px',
@@ -241,7 +255,7 @@ export default function ResearchView({ onStartResearch }) {
             background: 'transparent',
             border: 'none',
             outline: 'none',
-            color: '#f9fafb',
+            color: inputTextColor,
             fontSize: '16px',
             width: '100%',
             fontWeight: 400,
@@ -272,19 +286,17 @@ export default function ResearchView({ onStartResearch }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'rgba(255, 255, 255, 0.05)',
+                background: pillBg,
                 color: 'var(--on-surface)',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 border: 'none'
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                e.currentTarget.style.color = '#ffffff';
+                e.currentTarget.style.background = 'var(--hover-overlay)';
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                e.currentTarget.style.color = 'var(--on-surface)';
+                e.currentTarget.style.background = pillBg;
               }}
             >
               <Plus size={16} />
@@ -325,8 +337,8 @@ export default function ResearchView({ onStartResearch }) {
                   gap: '6px',
                   padding: '6px 12px',
                   borderRadius: '999px',
-                  background: isAppsDropdownOpen ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
-                  color: isAppsDropdownOpen ? '#ffffff' : '#9ca3af',
+                  background: isAppsDropdownOpen ? pillBg : 'transparent',
+                  color: isAppsDropdownOpen ? 'var(--on-surface)' : 'var(--on-surface-muted)',
                   border: 'none',
                   fontSize: '13px',
                   fontWeight: 500,
@@ -334,13 +346,13 @@ export default function ResearchView({ onStartResearch }) {
                   transition: 'all 0.2s ease'
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.color = '#ffffff';
+                  e.currentTarget.style.background = pillBg;
+                  e.currentTarget.style.color = 'var(--on-surface)';
                 }}
                 onMouseLeave={e => {
                   if (!isAppsDropdownOpen) {
                     e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = '#9ca3af';
+                    e.currentTarget.style.color = 'var(--on-surface-muted)';
                   }
                 }}
               >
@@ -357,11 +369,11 @@ export default function ResearchView({ onStartResearch }) {
                     left: 0,
                     zIndex: 50,
                     width: '160px',
-                    background: '#1c1c1e',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    background: dropdownBg,
+                    border: cardBorder,
                     borderRadius: '12px',
                     padding: '6px',
-                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)'
+                    boxShadow: isDark ? '0 10px 25px rgba(0, 0, 0, 0.5)' : 'var(--shadow-md)'
                   }}
                 >
                   {['All Apps', 'Canva', 'Figma', 'Photoshop', 'Airtable'].map((app) => (
@@ -378,15 +390,16 @@ export default function ResearchView({ onStartResearch }) {
                         padding: '8px 10px',
                         borderRadius: '8px',
                         fontSize: '13px',
-                        color: selectedApp === app ? '#60a5fa' : '#d1d5db',
-                        background: selectedApp === app ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                        color: selectedApp === app ? (isDark ? '#60a5fa' : 'var(--accent-color)') : 'var(--on-surface)',
+                        background: selectedApp === app ? (isDark ? 'rgba(59, 130, 246, 0.1)' : 'var(--hover-overlay-2)') : 'transparent',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'space-between'
+                        justifyContent: 'space-between',
+                        border: 'none'
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
-                      onMouseLeave={e => e.currentTarget.style.background = selectedApp === app ? 'rgba(59, 130, 246, 0.1)' : 'transparent'}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                      onMouseLeave={e => e.currentTarget.style.background = selectedApp === app ? (isDark ? 'rgba(59, 130, 246, 0.1)' : 'var(--hover-overlay-2)') : 'transparent'}
                     >
                       <span>{app}</span>
                       {selectedApp === app && <Check size={14} />}
@@ -410,8 +423,8 @@ export default function ResearchView({ onStartResearch }) {
                   gap: '6px',
                   padding: '6px 12px',
                   borderRadius: '999px',
-                  background: isSitesDropdownOpen ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
-                  color: isSitesDropdownOpen ? '#ffffff' : '#9ca3af',
+                  background: isSitesDropdownOpen ? pillBg : 'transparent',
+                  color: isSitesDropdownOpen ? 'var(--on-surface)' : 'var(--on-surface-muted)',
                   border: 'none',
                   fontSize: '13px',
                   fontWeight: 500,
@@ -419,13 +432,13 @@ export default function ResearchView({ onStartResearch }) {
                   transition: 'all 0.2s ease'
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.color = '#ffffff';
+                  e.currentTarget.style.background = pillBg;
+                  e.currentTarget.style.color = 'var(--on-surface)';
                 }}
                 onMouseLeave={e => {
                   if (!isSitesDropdownOpen) {
                     e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = '#9ca3af';
+                    e.currentTarget.style.color = 'var(--on-surface-muted)';
                   }
                 }}
               >
@@ -442,11 +455,11 @@ export default function ResearchView({ onStartResearch }) {
                     left: 0,
                     zIndex: 50,
                     width: '230px',
-                    background: '#232325', // High-fidelity dark slate background matching screenshot
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    background: dropdownBg,
+                    border: cardBorder,
                     borderRadius: '14px',
                     padding: '6px',
-                    boxShadow: '0 12px 30px rgba(0, 0, 0, 0.5)',
+                    boxShadow: isDark ? '0 12px 30px rgba(0, 0, 0, 0.5)' : 'var(--shadow-md)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '2px'
@@ -465,24 +478,25 @@ export default function ResearchView({ onStartResearch }) {
                       padding: '10px 12px',
                       borderRadius: '10px',
                       fontSize: '13.5px',
-                      color: '#f3f4f6',
+                      color: 'var(--on-surface)',
                       background: 'transparent',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '12px',
-                      transition: 'background 0.2s ease'
+                      transition: 'background 0.2s ease',
+                      border: 'none'
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <Globe size={15} style={{ color: '#9ca3af' }} />
+                    <Globe size={15} style={{ color: 'var(--on-surface-muted)' }} />
                     <span style={{ flex: 1 }}>Search the web</span>
-                    {selectedSiteOption === 'Search the web' && <Check size={15} style={{ color: '#f3f4f6' }} />}
+                    {selectedSiteOption === 'Search the web' && <Check size={15} style={{ color: 'var(--on-surface)' }} />}
                   </button>
 
                   {/* Separator line */}
-                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.06)', margin: '4px 6px' }} />
+                  <div style={{ height: '1px', background: 'var(--divider)', margin: '4px 6px' }} />
 
                   {/* Item 2: Specific sites */}
                   <button
@@ -498,20 +512,21 @@ export default function ResearchView({ onStartResearch }) {
                       padding: '10px 12px',
                       borderRadius: '10px',
                       fontSize: '13.5px',
-                      color: '#f3f4f6',
+                      color: 'var(--on-surface)',
                       background: 'transparent',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '12px',
-                      transition: 'background 0.2s ease'
+                      transition: 'background 0.2s ease',
+                      border: 'none'
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <Globe size={15} style={{ color: '#9ca3af' }} />
+                    <Globe size={15} style={{ color: 'var(--on-surface-muted)' }} />
                     <span style={{ flex: 1 }}>Specific sites ({specificSites.length})</span>
-                    {selectedSiteOption === 'Specific sites' && <Check size={15} style={{ color: '#f3f4f6' }} />}
+                    {selectedSiteOption === 'Specific sites' && <Check size={15} style={{ color: 'var(--on-surface)' }} />}
                   </button>
 
                   {/* Item 3: Manage sites */}
@@ -527,18 +542,19 @@ export default function ResearchView({ onStartResearch }) {
                       padding: '10px 12px',
                       borderRadius: '10px',
                       fontSize: '13.5px',
-                      color: '#f3f4f6',
+                      color: 'var(--on-surface)',
                       background: 'transparent',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '12px',
-                      transition: 'background 0.2s ease'
+                      transition: 'background 0.2s ease',
+                      border: 'none'
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <CornerDownRight size={15} style={{ color: '#9ca3af' }} />
+                    <CornerDownRight size={15} style={{ color: 'var(--on-surface-muted)' }} />
                     <span style={{ flex: 1 }}>Manage sites</span>
                   </button>
                 </div>
@@ -640,7 +656,7 @@ export default function ResearchView({ onStartResearch }) {
               overflow: 'hidden'
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; // Subtle hover pill background
+              e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)'; // Subtle hover pill background
               const arrow = e.currentTarget.querySelector('.arrow-icon');
               if (arrow) arrow.style.transform = 'translate(2px, -2px)';
             }}
@@ -654,7 +670,7 @@ export default function ResearchView({ onStartResearch }) {
             <div 
               className="arrow-icon"
               style={{
-                color: '#9ca3af',
+                color: isDark ? '#9ca3af' : 'var(--on-surface-muted)',
                 transition: 'transform 0.15s ease',
                 display: 'flex',
                 alignItems: 'center',
@@ -680,7 +696,7 @@ export default function ResearchView({ onStartResearch }) {
               <span 
                 style={{
                   fontWeight: 600,
-                  color: '#f3f4f6',
+                  color: textColor,
                   flexShrink: 0
                 }}
               >
@@ -688,7 +704,7 @@ export default function ResearchView({ onStartResearch }) {
               </span>
               <span 
                 style={{
-                  color: '#9ca3af',
+                  color: subtextColor,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap'
@@ -716,7 +732,7 @@ export default function ResearchView({ onStartResearch }) {
             alignItems: 'center',
             justifyContent: 'center',
             background: 'rgba(0, 0, 0, 0.4)', // Muted backdrop
-            backdropFilter: 'blur(2px)'
+            backdropFilter: 'none'
           }}
         >
           <div 
@@ -729,11 +745,11 @@ export default function ResearchView({ onStartResearch }) {
             }} // Prevent closing modal when clicking inside the card
             style={{
               width: '480px', // Slightly wider for a premium layout
-              background: '#232325', // High fidelity slate color matching screenshot
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: modalBg, // High fidelity slate color matching screenshot
+              border: cardBorder,
               borderRadius: '16px',
               padding: '22px 24px', // Taller padding for increased height
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+              boxShadow: isDark ? '0 20px 40px rgba(0, 0, 0, 0.5)' : 'var(--shadow-lg)',
               display: 'flex',
               flexDirection: 'column',
               gap: '20px',
@@ -742,10 +758,10 @@ export default function ResearchView({ onStartResearch }) {
           >
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '15px', fontWeight: 600, color: '#ffffff', fontFamily: "'Outfit', sans-serif" }}>
+              <span style={{ fontSize: '15px', fontWeight: 600, color: textColor, fontFamily: "'Outfit', sans-serif" }}>
                 Search specific sites
               </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', color: '#9ca3af' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', color: subtextColor }}>
                 {/* Dots Dropdown Wrapper */}
                 <div style={{ position: 'relative' }}>
                   <button 
@@ -754,7 +770,7 @@ export default function ResearchView({ onStartResearch }) {
                       e.stopPropagation();
                       setIsDotsMenuOpen(!isDotsMenuOpen);
                     }}
-                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#9ca3af', background: 'none', border: 'none', padding: 0 }}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: subtextColor, background: 'none', border: 'none', padding: 0 }}
                   >
                     <MoreHorizontal size={18} />
                   </button>
@@ -767,11 +783,11 @@ export default function ResearchView({ onStartResearch }) {
                         right: 0,
                         zIndex: 110,
                         width: '140px',
-                        background: '#2a2a2c', // Matches card dropdown
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        background: isDark ? '#2a2a2c' : 'var(--surface-2)', // Matches card dropdown
+                        border: cardBorder,
                         borderRadius: '12px',
                         padding: '6px',
-                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+                        boxShadow: isDark ? '0 10px 25px rgba(0, 0, 0, 0.5)' : 'var(--shadow-md)',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '2px'
@@ -787,7 +803,7 @@ export default function ResearchView({ onStartResearch }) {
                           padding: '8px 10px',
                           borderRadius: '8px',
                           fontSize: '13px',
-                          color: '#e5e7eb',
+                          color: textColor,
                           background: 'transparent',
                           cursor: 'pointer',
                           display: 'flex',
@@ -795,10 +811,10 @@ export default function ResearchView({ onStartResearch }) {
                           gap: '8px',
                           border: 'none'
                         }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                        onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
-                        <Copy size={14} style={{ color: '#9ca3af' }} />
+                        <Copy size={14} style={{ color: subtextColor }} />
                         <span>Copy list</span>
                       </button>
 
@@ -820,7 +836,7 @@ export default function ResearchView({ onStartResearch }) {
                           gap: '8px',
                           border: 'none'
                         }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(248, 113, 113, 0.08)'}
+                        onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(248, 113, 113, 0.08)' : 'rgba(248, 113, 113, 0.12)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
                         <Trash2 size={14} style={{ color: '#f87171' }} />
@@ -837,7 +853,7 @@ export default function ResearchView({ onStartResearch }) {
                     setIsSpecificSitesOpen(false);
                     setIsDotsMenuOpen(false);
                   }}
-                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#f3f4f6', background: 'none', border: 'none', padding: 0 }}
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: textColor, background: 'none', border: 'none', padding: 0 }}
                 >
                   <X size={18} />
                 </button>
@@ -870,14 +886,14 @@ export default function ResearchView({ onStartResearch }) {
                         width: '32px',
                         height: '32px',
                         borderRadius: '8px',
-                        background: '#121214',
+                        background: inputBg,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: '10px',
                         fontWeight: '600',
-                        color: '#9ca3af',
-                        border: '1px solid rgba(255, 255, 255, 0.05)',
+                        color: subtextColor,
+                        border: isDark ? '1px solid rgba(255, 255, 255, 0.05)' : '1px solid var(--divider)',
                         flexShrink: 0,
                         overflow: 'hidden'
                       }}>
@@ -894,7 +910,7 @@ export default function ResearchView({ onStartResearch }) {
                           />
                         )}
                       </div>
-                      <span style={{ fontSize: '14.5px', color: '#f3f4f6', fontWeight: 500 }}>
+                      <span style={{ fontSize: '14.5px', color: textColor, fontWeight: 500 }}>
                         {site}
                       </span>
                     </div>
@@ -908,7 +924,7 @@ export default function ResearchView({ onStartResearch }) {
                       style={{
                         background: 'transparent',
                         border: 'none',
-                        color: '#9ca3af',
+                        color: subtextColor,
                         cursor: 'pointer',
                         padding: '4px',
                         borderRadius: '4px',
@@ -918,12 +934,12 @@ export default function ResearchView({ onStartResearch }) {
                         transition: 'all 0.2s ease'
                       }}
                       onMouseEnter={e => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                        e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.08)' : 'var(--hover-overlay)';
                         e.currentTarget.style.color = '#f87171';
                       }}
                       onMouseLeave={e => {
                         e.currentTarget.style.background = 'transparent';
-                        e.currentTarget.style.color = '#9ca3af';
+                        e.currentTarget.style.color = subtextColor;
                       }}
                     >
                       <Trash2 size={15} />
@@ -948,10 +964,10 @@ export default function ResearchView({ onStartResearch }) {
                 placeholder="Add site URLs, separated by commas"
                 style={{
                   flex: 1,
-                  background: '#121214',
-                  border: 'none',
+                  background: inputBg,
+                  border: isDark ? 'none' : '1px solid var(--divider)',
                   outline: 'none',
-                  color: '#f9fafb',
+                  color: textColor,
                   fontSize: '14px', // Taller font size
                   padding: '12px 20px', // Taller padding for input capsule height
                   borderRadius: '999px',
@@ -964,16 +980,16 @@ export default function ResearchView({ onStartResearch }) {
                 style={{
                   padding: '10px 22px', // Taller padding for button height
                   borderRadius: '999px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  color: '#ffffff',
+                  background: isDark ? 'rgba(255, 255, 255, 0.1)' : 'var(--hover-overlay-2)',
+                  color: textColor,
                   fontSize: '14px',
                   fontWeight: 500,
                   cursor: 'pointer',
-                  border: 'none',
+                  border: isDark ? 'none' : '1px solid var(--divider)',
                   transition: 'background 0.2s ease'
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+                onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.15)' : 'var(--hover-overlay)'}
+                onMouseLeave={e => e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.1)' : 'var(--hover-overlay-2)'}
               >
                 Add
               </button>
@@ -985,12 +1001,12 @@ export default function ResearchView({ onStartResearch }) {
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'space-between',
-                borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                borderTop: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid var(--divider)',
                 paddingTop: '16px',
                 marginTop: '4px'
               }}
             >
-              <span style={{ fontSize: '13.5px', color: '#9ca3af', fontWeight: 400 }}>
+              <span style={{ fontSize: '13.5px', color: subtextColor, fontWeight: 400 }}>
                 Prioritize these sites, but allow full-web search
               </span>
               <button
@@ -1000,10 +1016,10 @@ export default function ResearchView({ onStartResearch }) {
                   width: '38px',
                   height: '22px',
                   borderRadius: '999px',
-                  background: prioritizeSites ? (accentColor || '#3b82f6') : 'rgba(255, 255, 255, 0.1)',
+                  background: prioritizeSites ? (accentColor || '#3b82f6') : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'var(--hover-overlay-2)'),
                   position: 'relative',
                   cursor: 'pointer',
-                  border: prioritizeSites ? `1px solid ${accentColor || '#3b82f6'}` : '1px solid rgba(255, 255, 255, 0.1)',
+                  border: prioritizeSites ? `1px solid ${accentColor || '#3b82f6'}` : (isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid var(--divider)'),
                   transition: 'all 0.2s ease',
                   flexShrink: 0,
                   outline: 'none'

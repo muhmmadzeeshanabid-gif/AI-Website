@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { useAppContext } from '@/context/AppContext';
 import { safeSetLocalStorageItem } from '@/utils/storage';
 import { 
@@ -9,18 +10,19 @@ import {
   AlertTriangle, ChevronDown, Mic, Square, ArrowUp, Plus, AudioLines, X, Menu, SquarePen,
   ChevronRight, Paperclip, Image, Lightbulb, Monitor, BookOpen, PenTool, Telescope, Cpu, Zap, Brain,
   ArrowDown, MessageSquareDashed, PenLine, Globe, RotateCw, UserPlus, Users, Pin, Archive, Trash2, Volume2, VolumeX, GitBranch, Settings, SmilePlus, Reply, Flag, ChevronLeft, LogOut,
-  Code, Compass, FileText, LayoutGrid
+  Code, Compass, FileText, LayoutGrid, Download, Library, Folder, Link2, Crop, Gift
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getGeminiResponse } from '@/utils/gemini';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, arrayUnion, onSnapshot, getDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, onSnapshot, getDoc, setDoc, collection } from 'firebase/firestore';
 import AuthModal from './AuthModal';
 import LibraryView from './LibraryView';
+import { handleImgError, generateImageClientSide } from '@/utils/image';
 import AppsView from './AppsView';
 import ResearchView from './ResearchView';
 import ImagesView from './ImagesView';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -34,22 +36,97 @@ const APP_SYSTEM_PROMPTS = {
   lovable: "You are Lovable Assistant, a modern web development companion. Help the user build clean, responsive, and aesthetically outstanding React components, HTML structures, and CSS/Tailwind layouts. Focus on modern frontend aesthetics, clean structure, component reusability, and interactive micro-animations."
 };
 
-const AttachmentMenu = ({ isOpen, onClose, position = 'bottom', onSelectFile }) => {
+const SEED_SUNSET_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:%23ff7e5f;stop-opacity:1" /><stop offset="100%" style="stop-color:%23feb47b;stop-opacity:1" /></linearGradient></defs><rect width="100" height="100" fill="url(%23g1)"/><circle cx="50" cy="50" r="20" fill="%23fff" opacity="0.3"/><path d="M 0,70 L 30,50 L 60,75 L 80,60 L 100,80 L 100,100 L 0,100 Z" fill="%23ffffff" opacity="0.15"/></svg>`;
+const SEED_SYNTH_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><linearGradient id="g2" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:%232c3e50;stop-opacity:1" /><stop offset="100%" style="stop-color:%23000000;stop-opacity:1" /></linearGradient></defs><rect width="100" height="100" fill="url(%23g2)"/><path d="M 10,0 L 10,100 M 30,0 L 30,100 M 50,0 L 50,100 M 70,0 L 70,100 M 90,0 L 90,100 M 0,10 L 100,10 M 0,30 L 100,30 M 0,50 L 100,50 M 0,70 L 100,70 M 0,90 L 100,90" stroke="%233498db" stroke-width="0.5" opacity="0.4"/><circle cx="50" cy="40" r="15" fill="%23e74c3c" opacity="0.7"/></svg>`;
+const SEED_DOC_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%231a1a1a"/><rect x="10" y="10" width="80" height="15" rx="2" fill="%23333"/><rect x="10" y="35" width="35" height="40" rx="2" fill="%232c3e50"/><rect x="55" y="35" width="35" height="10" rx="2" fill="%236366f1"/><rect x="55" y="50" width="35" height="5" rx="1" fill="%23444"/><rect x="55" y="60" width="35" height="5" rx="1" fill="%23444"/><rect x="55" y="70" width="20" height="5" rx="1" fill="%23444"/></svg>`;
+
+const defaultFiles = [
+  {
+    id: 'seed-1',
+    name: 'f770b1e4-62b0-4e0l-a8f5-c97aca853736.jpeg',
+    type: 'image/jpeg',
+    size: 33382,
+    modified: 'Today',
+    timestamp: Date.now() - 3600000,
+    thumbnailUrl: SEED_SUNSET_SVG,
+    isSeed: true
+  },
+  {
+    id: 'seed-2',
+    name: 'b6925b61-4155-4e25-a450-88ec7158eb59.jpeg',
+    type: 'image/jpeg',
+    size: 33382,
+    modified: 'Today',
+    timestamp: Date.now() - 7200000,
+    thumbnailUrl: SEED_SYNTH_SVG,
+    isSeed: true
+  },
+  {
+    id: 'seed-3',
+    name: 'screencapture-themewagon-github-io-VillaAgency-pro...',
+    type: 'application/pdf',
+    size: 1205862,
+    modified: 'Tuesday',
+    timestamp: Date.now() - 86400000 * 2,
+    thumbnailUrl: SEED_DOC_SVG,
+    isSeed: true
+  },
+  {
+    id: 'seed-4',
+    name: 'screencapture-themewagon-github-io-VillaAgency-ind...',
+    type: 'application/pdf',
+    size: 1018880,
+    modified: 'Tuesday',
+    timestamp: Date.now() - 86400000 * 2 - 3600000,
+    thumbnailUrl: SEED_DOC_SVG,
+    isSeed: true
+  }
+];
+
+const renderFileThumbnail = (file, size = 36) => {
+  if (file.thumbnailUrl) {
+    return (
+      <img 
+        src={file.thumbnailUrl} 
+        alt="" 
+        style={{ width: `${size}px`, height: `${size}px`, borderRadius: '6px', objectFit: 'cover', background: '#121214', border: '1px solid var(--divider)', flexShrink: 0 }} 
+      />
+    );
+  }
+  return (
+    <div style={{
+      width: `${size}px`, height: `${size}px`, borderRadius: '6px',
+      background: 'rgba(255,255,255,0.05)', color: 'var(--on-surface-muted)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center', border: '1px solid var(--divider)',
+      flexShrink: 0
+    }}>
+      <FileText size={Math.round(size * 0.5)} />
+    </div>
+  );
+};
+
+const AttachmentMenu = ({ 
+  isOpen, onClose, position = 'bottom', onSelectFile, onNavigateImages,
+  onSelectRecentFile, onOpenGallerySelect, libraryFiles = [], onNavigateResearch
+}) => {
   const [hoveredMore, setHoveredMore] = useState(false);
+  const [hoveredRecent, setHoveredRecent] = useState(false);
+  const [recents, setRecents] = useState([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const sorted = [...libraryFiles].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      setRecents(sorted.slice(0, 3));
+    }
+  }, [isOpen, libraryFiles]);
 
   const menuItems = [
     { icon: <Paperclip size={18} strokeWidth={2.2} />, text: 'Add photos & files', action: 'file' },
-    { icon: <Image size={18} strokeWidth={2.2} />, text: 'Create image' },
-    { icon: <Lightbulb size={18} strokeWidth={2.2} />, text: 'Thinking' },
-    { icon: <Telescope size={18} strokeWidth={2.2} />, text: 'Deep research' },
-    { icon: <MoreHorizontal size={18} strokeWidth={2.2} />, text: 'More' },
-  ];
-
-  const subMenuItems = [
-    { icon: <PenTool size={16} strokeWidth={2.5} />, text: 'Canvas', color: '#ec4899' },
-    { icon: <img src="https://github.githubassets.com/favicons/favicon.svg" className="w-4 h-4 object-contain invert" />, text: 'GitHub' },
-    { icon: <img src="https://openai.com/favicon.ico" className="w-4 h-4 object-contain invert" />, text: 'OpenAI Platform' },
-    { icon: <img src="https://www.scdn.co/mirror/static/icons/apple-touch-icon-57x57.png" className="w-4 h-4 object-contain rounded-full" />, text: 'Spotify' },
+    { icon: <FileText size={18} strokeWidth={2.2} />, text: 'Recent files', action: 'recent', hasChevron: true },
+    { isDivider: true },
+    { icon: <Image size={18} strokeWidth={2.2} />, text: 'Create image', action: 'create-image' },
+    { icon: <Telescope size={18} strokeWidth={2.2} />, text: 'Deep research', action: 'deep-research' },
+    { icon: <MoreHorizontal size={18} strokeWidth={2.2} />, text: 'More', action: 'more', hasChevron: true },
   ];
 
   return (
@@ -67,69 +144,474 @@ const AttachmentMenu = ({ isOpen, onClose, position = 'bottom', onSelectFile }) 
               left: 0,
               marginTop: position === 'bottom' ? '14px' : 0,
               marginBottom: position === 'top' ? '14px' : 0,
-              width: '264px',
+              width: '230px',
               backgroundColor: 'var(--surface-1)',
               backdropFilter: 'blur(25px) saturate(1.8)',
               border: '1px solid var(--divider)',
               borderRadius: '22px',
-              padding: '6px',
+              padding: '4px',
               boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.2)',
               zIndex: 70
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {menuItems.map((item, i) => (
-              <div 
-                key={i} 
-                className="relative"
-                onMouseEnter={() => item.text === 'More' && setHoveredMore(true)}
-                onMouseLeave={() => item.text === 'More' && setHoveredMore(false)}
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (item.action === 'file' && onSelectFile) {
-                      onSelectFile();
-                    }
-                    if (!item.hasSubmenu) {
-                      onClose();
-                    }
+            {menuItems.map((item, i) => {
+              if (item.isDivider) {
+                return <div key={`divider-${i}`} style={{ height: '1px', background: 'var(--divider)', margin: '4px 10px' }} />;
+              }
+
+              return (
+                <div 
+                  key={i} 
+                  className="relative"
+                  onMouseEnter={() => {
+                    if (item.action === 'recent') setHoveredRecent(true);
+                    if (item.action === 'more') setHoveredMore(true);
                   }}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px',
-                    padding: '10px 14px',
-                    color: 'var(--on-surface)',
-                    background: 'transparent',
-                    border: 'none',
-                    borderRadius: '12px',
-                    cursor: 'pointer',
-                    transition: 'all 0.1s ease',
-                    textAlign: 'left'
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = 'var(--hover-overlay)';
-                    e.currentTarget.style.color = 'var(--on-surface)';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = 'var(--on-surface-muted)';
+                  onMouseLeave={() => {
+                    if (item.action === 'recent') setHoveredRecent(false);
+                    if (item.action === 'more') setHoveredMore(false);
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ color: 'var(--on-surface-muted)', display: 'flex', transition: 'color 0.1s ease' }}>{item.icon}</span>
-                    <span style={{ fontSize: '14.5px', fontWeight: '500', letterSpacing: '-0.1px' }}>{item.text}</span>
-                  </div>
-                </button>
-                {i === 0 && <div style={{ height: '1px', background: 'var(--divider)', margin: '4px 10px' }} />}
-              </div>
-            ))}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (item.action === 'file' && onOpenGallerySelect) {
+                        onOpenGallerySelect();
+                        onClose();
+                      }
+                      if (item.action === 'create-image' && onNavigateImages) {
+                        onNavigateImages();
+                        onClose();
+                      }
+                      if (item.action === 'deep-research' && onNavigateResearch) {
+                        onNavigateResearch();
+                        onClose();
+                      }
+                      if (item.action !== 'recent' && item.action !== 'more' && item.action !== 'projects') {
+                        onClose();
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      padding: '10px 14px',
+                      color: 'var(--on-surface)',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.1s ease',
+                      textAlign: 'left'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'var(--hover-overlay)';
+                      e.currentTarget.style.color = 'var(--on-surface)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'var(--on-surface-muted)';
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ color: 'var(--on-surface-muted)', display: 'flex', transition: 'color 0.1s ease' }}>{item.icon}</span>
+                      <span style={{ fontSize: '14.5px', fontWeight: '500', letterSpacing: '-0.1px' }}>{item.text}</span>
+                    </div>
+                    {item.hasChevron && <ChevronRight size={14} style={{ color: 'var(--on-surface-muted)' }} />}
+                  </button>
+
+                  {/* Secondary Sub-menu for Recent Files */}
+                  {item.action === 'recent' && hoveredRecent && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.97, x: -10 }}
+                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 'calc(100% + 8px)',
+                        width: '240px',
+                        maxHeight: '300px',
+                        overflowY: 'auto',
+                        backgroundColor: 'var(--surface-1)',
+                        backdropFilter: 'blur(25px) saturate(1.8)',
+                        border: '1px solid var(--divider)',
+                        borderRadius: '22px',
+                        padding: '12px',
+                        boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.25)',
+                        zIndex: 75,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px'
+                      }}
+                    >
+                      {/* Header: Add from library */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onOpenGallerySelect) {
+                            onOpenGallerySelect();
+                          }
+                          onClose();
+                        }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '8px 10px',
+                          color: 'var(--on-surface)',
+                          background: 'transparent',
+                          border: 'none',
+                          borderRadius: '10px',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s ease',
+                          textAlign: 'left'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <Library size={18} strokeWidth={2} style={{ color: 'var(--on-surface-muted)' }} />
+                        <span style={{ fontSize: '14.5px', fontWeight: '600' }}>Add from library</span>
+                      </button>
+
+                      <div style={{ height: '1px', background: 'var(--divider)', margin: '0 4px' }} />
+
+                      <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--on-surface-muted)', paddingLeft: '10px' }}>
+                        Recents
+                      </span>
+
+                      {/* Recents list */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {recents.length === 0 ? (
+                          <div style={{ padding: '20px 10px', textAlign: 'center', fontSize: '13px', color: 'var(--on-surface-muted)' }}>
+                            No recent files found
+                          </div>
+                        ) : (
+                          recents.map((file) => (
+                            <button
+                              key={file.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onSelectRecentFile) {
+                                  onSelectRecentFile(file);
+                                }
+                                onClose();
+                              }}
+                              style={{
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                padding: '6px 10px',
+                                background: 'transparent',
+                                border: 'none',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                transition: 'background 0.15s ease'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                              {renderFileThumbnail(file, 36)}
+                              <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {file.name}
+                                </span>
+                                <span style={{ fontSize: '11px', color: 'var(--on-surface-muted)' }}>
+                                  Last modified {file.modified || (file.timestamp ? new Date(file.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'recently')}
+                                </span>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* More sub-menu: GitHub, Figma, Spotify */}
+                  {item.action === 'more' && hoveredMore && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.97, x: -10 }}
+                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 'calc(100% + 8px)',
+                        width: '220px',
+                        backgroundColor: 'var(--surface-1)',
+                        backdropFilter: 'blur(25px) saturate(1.8)',
+                        border: '1px solid var(--divider)',
+                        borderRadius: '22px',
+                        padding: '6px',
+                        boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.25)',
+                        zIndex: 75,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px'
+                      }}
+                    >
+                      {[
+                        { label: 'GitHub', icon: (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                          </svg>
+                        )},
+                        { label: 'Figma', icon: (
+                          <svg width="18" height="18" viewBox="0 0 38 57" fill="none">
+                            <path d="M19 28.5A9.5 9.5 0 0 1 28.5 19 9.5 9.5 0 0 1 38 28.5 9.5 9.5 0 0 1 28.5 38 9.5 9.5 0 0 1 19 28.5z" fill="#1ABCFE"/>
+                            <path d="M0 47.5A9.5 9.5 0 0 1 9.5 38H19v9.5A9.5 9.5 0 0 1 9.5 57 9.5 9.5 0 0 1 0 47.5z" fill="#0ACF83"/>
+                            <path d="M19 0v19h9.5A9.5 9.5 0 0 0 28.5 0H19z" fill="#FF7262"/>
+                            <path d="M0 9.5A9.5 9.5 0 0 0 9.5 19H19V0H9.5A9.5 9.5 0 0 0 0 9.5z" fill="#F24E1E"/>
+                            <path d="M0 28.5A9.5 9.5 0 0 0 9.5 38H19V19H9.5A9.5 9.5 0 0 0 0 28.5z" fill="#A259FF"/>
+                          </svg>
+                        )},
+                        { label: 'Spotify', icon: (
+                          <svg width="18" height="18" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="12" fill="#1db954"/>
+                            <path d="M17.9 10.9C14.7 9 9.35 8.8 6.3 9.75c-.5.15-1-.15-1.15-.6-.15-.5.15-1 .6-1.15 3.55-1.05 9.4-.85 13.1 1.35.45.25.6.85.35 1.3-.25.35-.85.5-1.3.25zm-.1 2.8c-.25.4-.75.5-1.15.25-2.7-1.65-6.8-2.15-9.95-1.15-.4.1-.85-.1-.95-.5-.1-.4.1-.85.5-.95 3.65-1.1 8.15-.55 11.25 1.35.4.25.5.75.3 1zm-1.3 2.7c-.2.35-.6.45-.95.25-2.35-1.45-5.3-1.75-8.8-.95-.35.1-.65-.15-.75-.45-.1-.35.15-.65.45-.75 3.8-.85 7.1-.5 9.7 1.1.35.15.45.55.35.8z" fill="white"/>
+                          </svg>
+                        )},
+                      ].map(({ label, icon }) => (
+                        <button
+                          key={label}
+                          onClick={(e) => { e.stopPropagation(); onClose(); }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: '12px',
+                            padding: '10px 14px', background: 'transparent', border: 'none',
+                            borderRadius: '12px', cursor: 'pointer', textAlign: 'left',
+                            color: 'var(--on-surface)', transition: 'background 0.15s',
+                            fontFamily: 'inherit'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 8, background: 'var(--hover-overlay)', flexShrink: 0 }}>{icon}</span>
+                          <span style={{ fontSize: '14.5px', fontWeight: 500 }}>{label}</span>
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </div>
+              );
+            })}
           </motion.div>
       )}
     </AnimatePresence>
+  );
+};
+
+const IMAGE_GEN_HEADINGS = [
+  "What do you want to create?",
+  "What do you want to design?",
+  "What do you want to generate?",
+  "What do you want to imagine?"
+];
+
+// ===== IMAGE GEN INPUT COMPONENT =====
+const ASPECT_RATIOS = [
+  { label: 'Auto', icon: '▣', value: 'auto' },
+  { label: 'Square 1:1', icon: '□', value: '1:1' },
+  { label: 'Portrait 3:4', icon: '▯', value: '3:4' },
+  { label: 'Story 9:16', icon: '▮', value: '9:16' },
+  { label: 'Landscape 4:3', icon: '▭', value: '4:3' },
+  { label: 'Widescreen 16:9', icon: '⬜', value: '16:9' },
+];
+
+const ImageGenInput = ({ 
+  imageGenPrompt, setImageGenPrompt, isImageGenLoading, handleInlineImageGen, accentColor, onClose,
+  pendingAttachment, setPendingAttachment, chatFileInputRef, setIsVoiceMessageMode, voiceModeRef, toggleListening,
+  setShowGallerySelectModal
+}) => {
+  const [hoveredImage, setHoveredImage] = useState(false);
+  const [showAutoDropdown, setShowAutoDropdown] = useState(false);
+  const [selectedRatio, setSelectedRatio] = useState(ASPECT_RATIOS[0]);
+  const autoRef = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (autoRef.current && !autoRef.current.contains(e.target)) {
+        setShowAutoDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div style={{
+      width: '100%',
+      background: 'var(--surface-1)',
+      border: '1px solid var(--divider)',
+      borderRadius: '24px',
+      padding: '8px 8px 8px 18px',
+      boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+      marginBottom: '32px',
+      position: 'relative',
+    }}>
+      {/* Attachment Preview if any */}
+      {pendingAttachment && (
+        <div style={{ position: 'relative', display: 'inline-flex', marginTop: '6px', marginBottom: '8px' }}>
+          {pendingAttachment.url && (
+            <img 
+              src={pendingAttachment.url} 
+              alt="Attachment" 
+              style={{ width: '60px', height: '60px', borderRadius: '14px', objectFit: 'cover', border: '1px solid var(--divider)' }} 
+            />
+          )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setPendingAttachment(null); }}
+            style={{
+              position: 'absolute', top: '-6px', right: '-6px',
+              width: '20px', height: '20px', borderRadius: '50%',
+              background: 'var(--surface-1)', border: '1px solid var(--divider)',
+              color: 'var(--on-surface)', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+            }}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      <textarea
+        value={imageGenPrompt}
+        onChange={e => setImageGenPrompt(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (imageGenPrompt.trim() && !isImageGenLoading) handleInlineImageGen();
+          }
+        }}
+        placeholder="Describe or edit an image..."
+        rows={1}
+        style={{
+          width: '100%', background: 'transparent', border: 'none', outline: 'none',
+          color: 'var(--on-surface)', fontSize: '16px', fontFamily: 'inherit',
+          resize: 'none', lineHeight: '1.4', padding: '6px 0 0 0', minHeight: '28px'
+        }}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* + icon only */}
+          <button 
+            onClick={() => chatFileInputRef.current?.click()}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: '32px', height: '32px', borderRadius: '999px',
+              border: '1px solid var(--divider)', background: 'transparent',
+              color: 'var(--on-surface-muted)', cursor: 'pointer', transition: 'all 0.15s'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; e.currentTarget.style.color = 'var(--on-surface)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--on-surface-muted)'; }}
+          >
+            <Plus size={15} />
+          </button>
+
+          {/* Image button → hover shows X to close */}
+          <button
+            onMouseEnter={() => setHoveredImage(true)}
+            onMouseLeave={() => setHoveredImage(false)}
+            onClick={onClose}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+              borderRadius: '999px', border: '1px solid var(--divider)',
+              background: hoveredImage ? 'var(--hover-overlay)' : 'transparent',
+              color: hoveredImage ? 'var(--on-surface)' : accentColor,
+              fontSize: '13px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s'
+            }}
+          >
+            {hoveredImage ? <X size={13} strokeWidth={2.5} /> : <Image size={13} />}
+            <span>Image</span>
+          </button>
+
+          {/* Auto dropdown */}
+          <div ref={autoRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowAutoDropdown(v => !v)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px',
+                borderRadius: '999px', border: '1px solid var(--divider)',
+                background: showAutoDropdown ? 'var(--hover-overlay)' : 'transparent',
+                color: 'var(--on-surface-muted)', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => { if (!showAutoDropdown) e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+              onMouseLeave={e => { if (!showAutoDropdown) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <span>{selectedRatio.label}</span>
+              <ChevronDown size={12} style={{ transition: 'transform 0.2s', transform: showAutoDropdown ? 'rotate(180deg)' : 'none' }} />
+            </button>
+
+            {showAutoDropdown && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 8px)', left: 0,
+                background: 'var(--surface-1)', border: '1px solid var(--divider)',
+                borderRadius: '16px', padding: '6px', zIndex: 200, minWidth: '200px',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+              }}>
+                <p style={{ fontSize: '12px', color: 'var(--on-surface-muted)', padding: '6px 12px 4px', margin: 0, fontWeight: 500 }}>
+                  Choose image aspect ratio
+                </p>
+                {ASPECT_RATIOS.map(r => (
+                  <button
+                    key={r.value}
+                    onClick={() => { setSelectedRatio(r); setShowAutoDropdown(false); }}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '9px 12px', borderRadius: '10px', border: 'none',
+                      background: selectedRatio.value === r.value ? 'var(--hover-overlay)' : 'transparent',
+                      color: 'var(--on-surface)', fontSize: '13.5px', fontWeight: 500,
+                      cursor: 'pointer', textAlign: 'left', gap: '10px'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = selectedRatio.value === r.value ? 'var(--hover-overlay)' : 'transparent'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '16px', opacity: 0.7 }}>{r.icon}</span>
+                      <span>{r.label}</span>
+                    </div>
+                    {selectedRatio.value === r.value && <Check size={14} style={{ color: accentColor }} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button 
+            onClick={() => { setIsVoiceMessageMode(false); voiceModeRef.current = false; toggleListening(); }}
+            style={{ padding: '8px', borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--on-surface-muted)', cursor: 'pointer', display: 'flex' }}
+          >
+            <Mic size={18} />
+          </button>
+          <button
+            onClick={imageGenPrompt.trim() ? handleInlineImageGen : () => { setIsVoiceMessageMode(true); voiceModeRef.current = true; toggleListening(); }}
+            disabled={isImageGenLoading}
+            style={{
+              width: '40px', height: '40px', borderRadius: '50%', border: 'none',
+              background: accentColor,
+              color: '#ffffff',
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
+            }}
+          >
+            {isImageGenLoading ? (
+              <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            ) : imageGenPrompt.trim() ? (
+              <ArrowUp size={18} strokeWidth={2.5} />
+            ) : (
+              <AudioLines size={18} />
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -449,6 +931,7 @@ const TypewriterMessage = ({ content, isUser = false, isGenerating = false, onDo
       if (idxRef.current >= currentLength) {
         if (!isGeneratingRef.current) {
           onDoneRef.current?.();
+          return;
         }
       }
       
@@ -469,6 +952,7 @@ const TypewriterMessage = ({ content, isUser = false, isGenerating = false, onDo
     <div className="markdown-content w-full overflow-hidden">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={(url) => url.startsWith('data:') ? url : defaultUrlTransform(url)}
         components={{
           code({ node, inline, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
@@ -578,254 +1062,254 @@ const cropImageToRatio = (imgUrl, ratioStr, callback) => {
   };
 };
 
-const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInitially, setMessages, timestamp }) => {
-  const { setEditingImage, setActiveEditImage, setAppView } = useAppContext();
-  const startTime = React.useMemo(() => new Date(timestamp || new Date().toISOString()).getTime(), [timestamp]);
-
+const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInitially, setMessages, timestamp, onExpand }) => {
+  const { activeChatId, setEditingImage, setActiveEditImage, setAppView, setActiveShareImage, setShareModalState, user, addMyImage } = useAppContext();
   const [phase, setPhase] = useState(() => {
     if (isDoneInitially) return 'done';
-    const elapsed = Date.now() - startTime;
-    if (elapsed >= 40000) return 'done';
-    if (elapsed >= 15000) return 'revealing';
     return 'sketching';
   });
 
-  const [maskHeight, setMaskHeight] = useState(() => {
-    if (isDoneInitially) return '0%';
-    const elapsed = Date.now() - startTime;
-    if (elapsed >= 40000) return '0%';
-    return '100%';
-  });
+  const [imageLoaded, setImageLoaded] = useState(!!isDoneInitially);
+  const [showCard, setShowCard] = useState(!!isDoneInitially);
+  const [minSketchTimePassed, setMinSketchTimePassed] = useState(!!isDoneInitially);
+  const [loadingText, setLoadingText] = useState('Creating image');
 
-  const [transitionDuration, setTransitionDuration] = useState('25s cubic-bezier(0.4, 0, 0.2, 1)');
+  const onExpandRef = useRef(onExpand);
+  useEffect(() => {
+    onExpandRef.current = onExpand;
+  }, [onExpand]);
 
   useEffect(() => {
-    if (isDoneInitially || phase === 'done') return;
+    if (!showCard && !isDoneInitially) {
+      const timer = setTimeout(() => {
+        setShowCard(true);
+        if (onExpandRef.current) {
+          setTimeout(onExpandRef.current, 50);
+        }
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [showCard, isDoneInitially]);
 
-    const elapsed = Date.now() - startTime;
+  useEffect(() => {
+    if (phase === 'sketching' && showCard) {
+      const texts = ['Creating image', 'Setting the scene', 'Adding details', 'Mixing colors', 'Applying filters', 'Final polish'];
+      let idx = 0;
+      const interval = setInterval(() => {
+        idx++;
+        if (idx >= texts.length) {
+          clearInterval(interval);
+        } else {
+          setLoadingText(texts[idx]);
+        }
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [phase, showCard]);
 
-    // Timer to transition from sketching to revealing
-    let sketchTimer;
-    if (phase === 'sketching') {
-      const remainingSketch = 15000 - elapsed;
-      sketchTimer = setTimeout(() => {
-        setPhase('revealing');
-        // Start revealing
-        setTimeout(() => {
-          setTransitionDuration('25s cubic-bezier(0.4, 0, 0.2, 1)');
-          setMaskHeight('0%');
-        }, 50);
-      }, Math.max(0, remainingSketch));
-    } else if (phase === 'revealing') {
-      // If we mounted already in revealing phase
-      const remainingReveal = 40000 - elapsed;
-      const remainingRevealSec = Math.max(0.1, remainingReveal / 1000).toFixed(2);
-      setTransitionDuration(`${remainingRevealSec}s cubic-bezier(0.4, 0, 0.2, 1)`);
-      // Trigger transition on next tick
-      const transitionTimer = setTimeout(() => {
-        setMaskHeight('0%');
-      }, 50);
+  useEffect(() => {
+    if (showCard && !isDoneInitially) {
+      const timer = setTimeout(() => {
+        setMinSketchTimePassed(true);
+      }, 12000);
+      return () => clearTimeout(timer);
+    }
+  }, [showCard, isDoneInitially]);
+
+  useEffect(() => {
+    if (isDoneInitially) {
+      setPhase('done');
+      setImageLoaded(true);
+      return;
     }
 
-    // Timer to mark as complete
-    const remainingTotal = 40000 - elapsed;
-    const doneTimer = setTimeout(() => {
-      setPhase('done');
+    const safetyTimeout = setTimeout(() => {
+      setMinSketchTimePassed(true);
+      setImageLoaded(true);
+    }, 90000);
 
-      // Center crop the image client-side and save to My Images gallery
-      cropImageToRatio(imageUrl, ratio, (croppedDataUrl) => {
-        try {
-          const saved = localStorage.getItem('aura-my-images');
-          let currentImages = [];
-          if (saved) {
-            try {
-              currentImages = JSON.parse(saved);
-            } catch (e) {
-              console.error(e);
-            }
+    if (imageLoaded && minSketchTimePassed && phase === 'sketching') {
+      clearTimeout(safetyTimeout);
+      setPhase('revealing');
+
+      const doneTimer = setTimeout(() => {
+        setPhase('done');
+        cropImageToRatio(imageUrl, ratio, (croppedDataUrl) => {
+            const newImgObj = {
+              id: `img-gen-aspect-${Date.now()}`,
+              url: croppedDataUrl,
+              prompt: prompt || `Cropped to aspect ratio ${ratio}`,
+              chatId: activeChatId,
+              isGenerated: true
+            };
+            addMyImage(newImgObj);
+
+          if (setMessages && messageId) {
+            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, aspectGenDone: true } : m));
           }
-          if (currentImages.length === 0) {
-            currentImages = [
-              { id: 'img-1', url: '/my_ai_assistant.png', prompt: 'Futuristic dark blue cybernetic AI robot assistant logo layout' },
-              { id: 'img-2', url: '/my_couple_heart.png', prompt: 'Romantic portrait of a couple inside a decorated golden heart frame' },
-              { id: 'img-3', url: '/app_design.png', prompt: 'Sleek colorful mobile UI app dashboard layout mockup' },
-              { id: 'img-4', url: '/my_pizza.png', prompt: 'Delicious gourmet Italian pizza with melting mozzarella cheese' },
-              { id: 'img-5', url: '/wanderlust.png', prompt: 'Wanderlust explorer mountain landscape painting' },
-              { id: 'img-6', url: '/my_zypher_logo.png', prompt: 'Modern futuristic brand logo with a glowing purple and cyan Z' },
-              { id: 'img-7', url: '/chibi_stickers.png', prompt: 'Cute chibi style sticker pack designs' },
-              { id: 'img-8', url: '/makeup_guide.png', prompt: 'High-fashion beauty makeup guide eyeshadow palette details' }
-            ];
-          }
+        });
+      }, 13000); // 13000ms transition time
 
-          const newImgObj = {
-            id: `img-gen-aspect-${Date.now()}`,
-            url: croppedDataUrl,
-            prompt: prompt || `Cropped to aspect ratio ${ratio}`
-          };
-          const updated = [newImgObj, ...currentImages];
-          safeSetLocalStorageItem('aura-my-images', updated);
-        } catch (err) {
-          console.error("Error saving image to my images:", err);
-        }
+      return () => {
+        clearTimeout(doneTimer);
+      };
+    }
 
-        if (setMessages && messageId) {
-          setMessages(prev => prev.map(m => m.id === messageId ? { ...m, aspectGenDone: true, imageUrl: croppedDataUrl } : m));
-        }
-      });
-    }, Math.max(0, remainingTotal));
-
-    return () => {
-      if (sketchTimer) clearTimeout(sketchTimer);
-      clearTimeout(doneTimer);
-    };
-  }, [phase, startTime, isDoneInitially, messageId, setMessages, imageUrl, prompt, ratio]);
+    return () => clearTimeout(safetyTimeout);
+  }, [imageLoaded, minSketchTimePassed, isDoneInitially, phase, imageUrl, ratio, prompt, messageId, setMessages]);
 
   const cssRatio = ratio.replace(':', '/');
 
-  if (phase === 'sketching') {
+  if (!showCard) {
     return (
-      <div
-        style={{
-          width: '320px',
-          aspectRatio: cssRatio,
-          background: '#232325',
-          borderRadius: '20px',
-          padding: '20px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          position: 'relative',
-          overflow: 'hidden',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.4)'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#e5e7eb' }}>
-          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
-          <span style={{ fontSize: '13px', fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>
-            Sketching it out
-          </span>
+      <div style={{ display: 'flex', alignItems: 'center', height: '36px' }}>
+        <div className="flex gap-1 items-center px-1">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0 }} className="w-1.5 h-1.5 rounded-full bg-on-surface-muted" />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }} className="w-1.5 h-1.5 rounded-full bg-on-surface-muted" />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.4 }} className="w-1.5 h-1.5 rounded-full bg-on-surface-muted" />
         </div>
-        
-        {/* Dot Matrix Grid */}
-        <div 
-          style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(12, 1fr)', 
-            gridTemplateRows: 'repeat(12, 1fr)', 
-            gap: '8px',
-            width: '100%',
-            height: '70%',
-            justifyContent: 'center',
-            alignContent: 'center',
-            margin: 'auto'
-          }}
-        >
-          {Array.from({ length: 144 }).map((_, i) => {
-            const row = Math.floor(i / 12);
-            const col = i % 12;
-            const delay = (row + col) * 0.04;
-            return (
-              <div 
-                key={i} 
-                style={{ 
-                  width: '4px', 
-                  height: '4px', 
-                  borderRadius: '50%', 
-                  background: '#ffffff', 
-                  opacity: 0.15,
-                  animation: `pulse-dots 1.5s infinite ease-in-out`,
-                  animationDelay: `${delay}s`
-                }} 
-              />
-            );
-          })}
-        </div>
-        
-        <style>{`
-          @keyframes pulse-dots {
-            0%, 100% { transform: scale(1); opacity: 0.15; }
-            50% { transform: scale(2.2); opacity: 0.75; background-color: #3b82f6; }
-          }
-        `}</style>
       </div>
     );
   }
 
   return (
-    <div
+    <motion.div
+      initial={isDoneInitially ? false : { opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.8, ease: "easeOut" }}
       style={{
         background: 'transparent',
         padding: '0',
-        borderRadius: '0',
+        borderRadius: '24px',
         boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
-        width: '460px',
+        width: '480px',
         maxWidth: '100%',
         display: 'flex',
         flexDirection: 'column',
-        border: 'none'
+        border: 'none',
+        overflow: 'hidden'
       }}
     >
       <div
         style={{
-          background: '#000000',
-          borderRadius: '0',
+          background: '#232325',
+          borderRadius: '24px',
           overflow: 'hidden',
           position: 'relative',
           width: '100%',
-          aspectRatio: cssRatio
+          aspectRatio: cssRatio,
+          border: '1px solid rgba(255, 255, 255, 0.08)'
         }}
       >
+        {/* Actual Image Tag, starts loading in background immediately */}
         {imageUrl ? (
           <img
             src={imageUrl}
             alt={prompt || ''}
+            onLoad={() => setImageLoaded(true)}
+            onError={(e) => {
+              // Don't call setImageLoaded(true) on error!
+              // handleImgError will swap the src to a new Pollinations URL.
+              // The <img> will then attempt to load the new src, and onLoad will fire if successful.
+              handleImgError(e, prompt);
+            }}
             style={{
               width: '100%',
               height: '100%',
-              objectFit: 'cover'
+              objectFit: 'cover',
+              display: 'block'
             }}
           />
         ) : (
           <div style={{ width: '100%', height: '100%', background: '#0a0a0b' }} />
         )}
 
-        {/* Wiping Black Background Mask */}
-        {phase === 'revealing' && (
+        {/* Sketching Overlay (Shown while loading in background, slides down on reveal) */}
+        {(phase === 'sketching' || phase === 'revealing') && (
           <div
             style={{
               position: 'absolute',
-              bottom: 0,
-              left: 0,
-              width: '100%',
-              height: maskHeight,
+              inset: 0,
               background: '#232325',
-              transition: `height ${transitionDuration}`,
+              padding: '20px',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 5
+              justifyContent: 'space-between',
+              zIndex: 4,
+              transform: phase === 'revealing' ? 'translateY(100%)' : 'translateY(0%)',
+              transition: 'transform 13s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
           >
-            <div style={{ color: '#ffffff', opacity: 0.3, fontSize: '12px', fontWeight: 500, position: 'absolute', top: '16px', left: '16px' }}>
-              Revealing...
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#e5e7eb' }}>
+              <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+              <motion.span 
+                key={loadingText}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                style={{ fontSize: '13px', fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}
+              >
+                {loadingText}
+              </motion.span>
             </div>
+            
+            {/* Dot Matrix Grid */}
+            <div 
+              style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(12, 1fr)', 
+                gridTemplateRows: 'repeat(12, 1fr)', 
+                gap: '8px',
+                width: '100%',
+                height: '70%',
+                justifyContent: 'center',
+                alignContent: 'center',
+                margin: 'auto'
+              }}
+            >
+              {Array.from({ length: 144 }).map((_, i) => {
+                const row = Math.floor(i / 12);
+                const col = i % 12;
+                const delay = (row + col) * 0.04;
+                return (
+                  <div 
+                    key={i} 
+                    style={{ 
+                      width: '4px', 
+                      height: '4px', 
+                      borderRadius: '50%', 
+                      background: '#ffffff', 
+                      opacity: 0.15,
+                      animation: `pulse-dots 1.5s infinite ease-in-out`,
+                      animationDelay: `${delay}s`
+                    }} 
+                  />
+                );
+              })}
+            </div>
+            
+            <style>{`
+              @keyframes pulse-dots {
+                0%, 100% { transform: scale(1); opacity: 0.15; }
+                50% { transform: scale(2.2); opacity: 0.75; background-color: #3b82f6; }
+              }
+            `}</style>
           </div>
         )}
 
-        {/* Floating action overlay only when phase is 'done' */}
+
         {phase === 'done' && (
           <div
             style={{
               position: 'absolute',
               inset: 0,
-              background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 40%)',
+              background: 'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 35%)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'flex-end',
-              padding: '12px',
-              zIndex: 10
+              padding: '16px',
+              zIndex: 10,
+              pointerEvents: 'none'
             }}
           >
             <button
@@ -835,89 +1319,74 @@ const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInit
                 setAppView('images');
               }}
               style={{
-                background: 'rgba(10, 10, 12, 0.8)',
+                pointerEvents: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '999px',
+                background: 'rgba(255, 255, 255, 0.12)',
+                backdropFilter: 'blur(8px)',
                 border: '1px solid rgba(255, 255, 255, 0.15)',
-                borderRadius: '16px',
-                padding: '4px 10px',
                 color: '#ffffff',
                 fontSize: '11px',
                 fontWeight: 600,
                 cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                transition: 'background 0.2s'
+                transition: 'all 0.15s ease'
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(10, 10, 12, 0.8)'}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
             >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-              </svg>
+              <Edit2 size={11} />
               <span>Edit</span>
             </button>
 
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const link = document.createElement('a');
-                  link.href = imageUrl;
-                  link.download = `cropped_${ratio}.png`;
-                  link.click();
-                }}
-                style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  background: 'rgba(10, 10, 12, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  padding: 0
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-              </button>
-              <button
-                style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  background: 'rgba(10, 10, 12, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  padding: 0
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                  <polyline points="16 6 12 2 8 6" />
-                  <line x1="12" y1="2" x2="12" y2="15" />
-                </svg>
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                setActiveShareImage({ id: imageId, url: imageUrl, prompt });
+                setShareModalState('open');
+              }}
+              style={{
+                pointerEvents: 'auto',
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.12)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              <Share size={12} />
+            </button>
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 };
 
 const MessageContent = ({ content, isUser }) => {
-  const { resolvedTheme } = useAppContext();
+  const { resolvedTheme, setEditingImage, setActiveEditImage, setAppView, setActiveShareImage, setShareModalState } = useAppContext();
   
   if (isUser) {
     return <p className="leading-relaxed whitespace-pre-wrap font-medium">{content}</p>;
@@ -927,6 +1396,7 @@ const MessageContent = ({ content, isUser }) => {
     <div className="markdown-content w-full overflow-hidden">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={(url) => url.startsWith('data:') ? url : defaultUrlTransform(url)}
         components={{
           code({ node, inline, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
@@ -970,20 +1440,51 @@ const MessageContent = ({ content, isUser }) => {
             );
           },
           img({ node, ...props }) {
+            const handleEditClick = () => {
+              const imageId = 'img_' + Date.now();
+              const imageData = {
+                id: imageId,
+                url: props.src,
+                prompt: props.alt || 'Generated Image',
+                timestamp: new Date().toISOString()
+              };
+              setActiveEditImage(imageData);
+              setEditingImage(true);
+              setAppView('images');
+            };
+
+            const handleShareClick = () => {
+              setActiveShareImage({
+                id: 'img_' + Date.now(),
+                url: props.src,
+                prompt: props.alt || 'Generated Image'
+              });
+              setShareModalState('open');
+            };
+
             return (
-              <div className="my-6 rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black/20 group">
+              <div className="my-4 rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black/20 group max-w-[480px] w-full flex flex-col relative aspect-square">
                 <img 
                   {...props} 
-                  className="w-full h-auto max-h-[600px] object-cover transition-all duration-500 hover:scale-[1.02]" 
+                  onError={(e) => handleImgError(e, props.alt || 'Generated Image')}
+                  className="w-full h-full object-cover transition-all duration-500 hover:scale-[1.02]" 
                   loading="lazy"
                 />
-                <div className="px-4 py-2 bg-white/5 flex justify-between items-center">
-                  <span className="text-[11px] text-white/40 font-medium">{props.alt || 'Generated Content'}</span>
+                {/* Overlay buttons */}
+                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center z-10">
                   <button 
-                    onClick={() => window.open(props.src, '_blank')}
-                    className="p-1.5 hover:bg-white/10 rounded-lg transition-all"
+                    onClick={handleEditClick}
+                    className="w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md flex items-center justify-center text-white border border-white/15 transition-all cursor-pointer shadow-lg"
+                    title="Edit Image"
                   >
-                    <Share2 size={12} className="text-white/40" />
+                    <Edit2 size={16} />
+                  </button>
+                  <button 
+                    onClick={handleShareClick}
+                    className="w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md flex items-center justify-center text-white border border-white/15 transition-all cursor-pointer shadow-lg"
+                    title="Share Image"
+                  >
+                    <Share2 size={16} />
                   </button>
                 </div>
               </div>
@@ -1109,6 +1610,189 @@ const cleanInputForPrompt = (text) => {
     .trim();
 };
 
+const ImageGenerationSidebarNavigator = ({ imageMessages, scrollContainerRef, activeChatId }) => {
+  const [hovered, setHovered] = useState(false);
+  const [activeImageId, setActiveImageId] = useState(null);
+  const { resolvedTheme } = useAppContext();
+
+  useEffect(() => {
+    const handleScrollActiveImage = () => {
+      if (!scrollContainerRef.current) return;
+      const container = scrollContainerRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const containerCenter = containerRect.top + containerRect.height / 2;
+      
+      let closestId = null;
+      let minDistance = Infinity;
+      
+      imageMessages.forEach(msg => {
+        const el = document.getElementById(`msg-${msg.id}`);
+        if (el) {
+          const elRect = el.getBoundingClientRect();
+          const elCenter = elRect.top + elRect.height / 2;
+          const distance = Math.abs(containerCenter - elCenter);
+          if (distance < minDistance) {
+            minDistance = distance;
+            closestId = msg.id;
+          }
+        }
+      });
+      
+      if (closestId) {
+        setActiveImageId(closestId);
+      }
+    };
+    
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScrollActiveImage);
+      setTimeout(handleScrollActiveImage, 100);
+    }
+    
+    return () => {
+      if (container) {
+        container.removeEventListener('scroll', handleScrollActiveImage);
+      }
+    };
+  }, [imageMessages, scrollContainerRef, activeChatId]);
+
+  const handleItemClick = (msgId) => {
+    const el = document.getElementById(`msg-${msgId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  return (
+    <div 
+      className="hidden md:flex"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'absolute',
+        right: '16px',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        padding: '20px 8px',
+        cursor: 'pointer'
+      }}
+    >
+      {hovered && (
+        <div 
+          style={{
+            position: 'absolute',
+            right: '8px',
+            background: resolvedTheme === 'dark' ? 'var(--surface-1)' : 'rgba(255, 255, 255, 0.98)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid var(--divider)',
+            borderRadius: '16px',
+            padding: '8px',
+            boxShadow: resolvedTheme === 'dark' ? '0 16px 40px rgba(0, 0, 0, 0.5)' : '0 16px 40px rgba(0, 0, 0, 0.15)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+            width: '280px',
+            maxHeight: '360px',
+            overflowY: 'auto',
+            animation: 'fadeInLeft 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+            zIndex: 110
+          }}
+          className="custom-scrollbar"
+        >
+          {imageMessages.map((msg) => {
+            const isActive = msg.id === activeImageId;
+            return (
+              <button
+                key={msg.id}
+                onClick={() => handleItemClick(msg.id)}
+                style={{
+                  textAlign: 'left',
+                  padding: '8px 12px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  fontWeight: isActive ? 600 : 500,
+                  color: isActive 
+                    ? 'var(--on-surface)' 
+                    : 'var(--on-surface-subtle)',
+                  background: isActive 
+                    ? 'var(--hover-overlay-2)' 
+                    : 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  width: '100%',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'var(--hover-overlay)';
+                  e.currentTarget.style.color = 'var(--on-surface)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = isActive ? 'var(--hover-overlay-2)' : 'transparent';
+                  e.currentTarget.style.color = isActive ? 'var(--on-surface)' : 'var(--on-surface-subtle)';
+                }}
+                title={msg.prompt || 'Generated Image'}
+              >
+                {msg.prompt || 'Generated Image'}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div 
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: '6px'
+        }}
+      >
+        {imageMessages.map((msg) => {
+          const isActive = msg.id === activeImageId;
+          return (
+            <div
+              key={msg.id}
+              onClick={() => handleItemClick(msg.id)}
+              style={{
+                width: '24px',
+                height: '2.5px',
+                borderRadius: '999px',
+                background: isActive 
+                  ? (resolvedTheme === 'dark' ? '#ffffff' : '#000000') 
+                  : (resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.25)'),
+                transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+              onMouseEnter={e => {
+                if (!isActive) {
+                  e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
+                }
+              }}
+              onMouseLeave={e => {
+                if (!isActive) {
+                  e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.25)';
+                }
+              }}
+            />
+          );
+        })}
+      </div>
+      <style>{`
+        @keyframes fadeInLeft {
+          0% { transform: translateX(10px); opacity: 0; }
+          100% { transform: translateX(0); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 const ChatWindow = () => {
   const { 
     isSidebarOpen, appView, setAppView, resolvedTheme, activeChatId, chats, 
@@ -1117,7 +1801,7 @@ const ChatWindow = () => {
     isGroupChatModalOpen, setIsGroupChatModalOpen, 
     groupChatTargetId, setGroupChatTargetId,
     isUpgradeModalOpen, setIsUpgradeModalOpen,
-    messages, setMessages, theme, 
+    messages, setMessages, theme, isFirebaseChatsLoaded,
     toggleTheme, updateChatTheme, chatTheme, setChats, setActiveChatId, 
     createNewChat, user, login, authOpen, setAuthOpen,
     fontSize, chatWidth, lineHeight, setIsSidebarOpen, isAuthLoading,
@@ -1125,9 +1809,12 @@ const ChatWindow = () => {
     deleteChat, archiveChat, aiModel, setAiModel, renameChat,
     isGroupLinkModalOpen, setIsGroupLinkModalOpen, groupLinkChatId, setGroupLinkChatId,
     leaveGroup, isTemporary, setIsTemporary,
-    isSharedReadOnly, sharedChatData
+    isSharedReadOnly, sharedChatData,
+    activeShareImage, setActiveShareImage,
+    shareModalState, setShareModalState
   } = useAppContext();
 
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null, name: '' });
   const [input, setInput] = useState('');
@@ -1140,9 +1827,10 @@ const ChatWindow = () => {
   const showGlobalToast = showToast;
   const [greeting, setGreeting] = useState("What's on your mind?");
   const [hoveredChip, setHoveredChip] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [generatingId, setGeneratingId] = useState(null);
-  const currentResponseRef = useRef("");
+  const [loadingChats, setLoadingChats] = useState({});
+  const isLoading = !!loadingChats[activeChatId];
+  const [generatingIds, setGeneratingIds] = useState({});
+  const abortControllersRef = useRef({});
   
   const currentChatForSend = chats.find(c => c.id === activeChatId);
   const isGroupForSend = currentChatForSend?.isGroup;
@@ -1163,7 +1851,7 @@ const ChatWindow = () => {
     }
   }
   
-  const isSendDisabled = isLoading || isGeneratingRemote;
+  const isSendDisabled = isLoading || isGeneratingRemote || messages.some(m => m.isAspectGeneration && !m.aspectGenDone);
   const getGreeting = () => {
     const hour = new Date().getHours();
     let welcome = "";
@@ -1241,6 +1929,72 @@ const ChatWindow = () => {
   const [showModelSwitcherLanding, setShowModelSwitcherLanding] = useState(false);
   const [hoveredPlus, setHoveredPlus] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState(null); // { name, type, url, dataUrl }
+  const [showGallerySelectModal, setShowGallerySelectModal] = useState(false);
+  const [gallerySearchQuery, setGallerySearchQuery] = useState('');
+  const [libraryFiles, setLibraryFiles] = useState([]);
+
+  useEffect(() => {
+    let unsubscribe = () => {};
+    
+    const loadFromLocalStorage = () => {
+      try {
+        const saved = localStorage.getItem('aura-library-files');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.length === 0) {
+            setLibraryFiles(defaultFiles);
+            localStorage.setItem('aura-library-files', JSON.stringify(defaultFiles));
+          } else {
+            setLibraryFiles(parsed);
+          }
+        } else {
+          setLibraryFiles(defaultFiles);
+          localStorage.setItem('aura-library-files', JSON.stringify(defaultFiles));
+        }
+      } catch (e) {
+        setLibraryFiles(defaultFiles);
+      }
+    };
+
+    if (user?.uid) {
+      // Sync from Firestore for logged-in user
+      const filesColRef = collection(db, 'users', user.uid, 'library_files');
+      unsubscribe = onSnapshot(filesColRef, (snapshot) => {
+        const fetchedFiles = [];
+        snapshot.forEach((doc) => {
+          fetchedFiles.push(doc.data());
+        });
+
+        if (fetchedFiles.length === 0) {
+          // If Firestore is empty, seed it
+          defaultFiles.forEach(async (f) => {
+            const docRef = doc(db, 'users', user.uid, 'library_files', f.id);
+            await setDoc(docRef, f);
+          });
+          setLibraryFiles(defaultFiles);
+        } else {
+          setLibraryFiles(fetchedFiles);
+        }
+      }, (error) => {
+        console.error("Firestore loading error, falling back to LocalStorage:", error);
+        loadFromLocalStorage();
+      });
+    } else {
+      // Guest mode - LocalStorage
+      loadFromLocalStorage();
+    }
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const handleSelectRecentFile = (file) => {
+    setPendingAttachment({
+      id: file.id,
+      name: file.name,
+      type: file.type,
+      url: file.thumbnailUrl || file.url
+    });
+  };
   const [fullscreenImageUrl, setFullscreenImageUrl] = useState(null);
   const chatFileInputRef = useRef(null);
 
@@ -1328,14 +2082,55 @@ const ChatWindow = () => {
   const [tempGroupName, setTempGroupName] = useState('');
   const headerMoreRef = useRef(null);
   const groupChatMenuRef = useRef(null);
+  const modelSwitcherRef = useRef(null);
+  const modelSwitcherLandingRef = useRef(null);
   const [isListening, setIsListening] = useState(false);
   const [isVoiceMessageMode, setIsVoiceMessageMode] = useState(false);
-  const voiceModeRef = useRef(false);
   const recognitionRef = useRef(null);
   const [currentlySpeakingId, setCurrentlySpeakingId] = useState(null);
   const [activeMsgMoreId, setActiveMsgMoreId] = useState(null);
   const msgMoreRef = useRef(null);
   const [activeCategory, setActiveCategory] = useState(null);
+  const [showImageGen, setShowImageGen] = useState(false);
+  const [imageGenPrompt, setImageGenPrompt] = useState('');
+  const [isImageGenLoading, setIsImageGenLoading] = useState(false);
+  const [imageGenResult, setImageGenResult] = useState(null);
+  const [imageGenHeadingText, setImageGenHeadingText] = useState('');
+
+  const voiceModeRef = useRef(false);
+  const showImageGenRef = useRef(false);
+  useEffect(() => {
+    showImageGenRef.current = showImageGen;
+  }, [showImageGen]);
+
+  useEffect(() => {
+    if (!showImageGen) {
+      setImageGenHeadingText('');
+      return;
+    }
+    
+    const hour = new Date().getHours();
+    let timeOfDayGreeting = "";
+    if (hour < 12) timeOfDayGreeting = "Good morning";
+    else if (hour < 17) timeOfDayGreeting = "Good afternoon";
+    else timeOfDayGreeting = "Good evening";
+
+    const getUserName = () => {
+      if (profile?.displayName) return profile.displayName.split(' ')[0];
+      if (user?.displayName) return user.displayName.split(' ')[0];
+      if (user?.email) {
+        const emailName = user.email.split('@')[0];
+        return emailName.charAt(0).toUpperCase() + emailName.slice(1);
+      }
+      return '';
+    };
+
+    const userName = getUserName();
+    const welcomeStr = userName ? `${timeOfDayGreeting}, ${userName}` : timeOfDayGreeting;
+
+    setImageGenHeadingText(welcomeStr);
+  }, [showImageGen, user, profile]);
+  const imageGenCarouselRef = useRef(null);
   const categoryRef = useRef(null);
   const attachmentRefLanding = useRef(null);
   const attachmentRefFooter = useRef(null);
@@ -1376,7 +2171,21 @@ const ChatWindow = () => {
   useEffect(() => {
     setInput('');
     setPendingAttachment(null);
+    setShowImageGen(false);
+    setImageGenResult(null);
+    setImageGenPrompt('');
   }, [activeChatId]);
+
+  // Handle start new chat custom event to close inline image generator on home page
+  useEffect(() => {
+    const handleNewChatEvent = () => {
+      setShowImageGen(false);
+      setImageGenResult(null);
+      setImageGenPrompt('');
+    };
+    window.addEventListener('aura-new-chat', handleNewChatEvent);
+    return () => window.removeEventListener('aura-new-chat', handleNewChatEvent);
+  }, []);
 
   // Handle real-time typing status in Firestore for group chats
   const typingTimeoutRef = useRef(null);
@@ -1489,7 +2298,11 @@ const ChatWindow = () => {
           .map(result => result.transcript)
           .join('');
         
-        setInput(transcript);
+        if (showImageGenRef.current) {
+          setImageGenPrompt(transcript);
+        } else {
+          setInput(transcript);
+        }
         
         if (event.results[0].isFinal) {
           setIsListening(false);
@@ -1497,8 +2310,13 @@ const ChatWindow = () => {
           
           // If we were in Voice Message mode, send it automatically
           if (voiceModeRef.current) {
-            handleSend(null, transcript, true);
-            setIsVoiceMessageMode(false);
+            if (showImageGenRef.current) {
+              handleInlineImageGen(transcript);
+              setIsVoiceMessageMode(false);
+            } else {
+              handleSend(null, transcript, true);
+              setIsVoiceMessageMode(false);
+            }
           }
         }
       };
@@ -1517,7 +2335,13 @@ const ChatWindow = () => {
       stopAudioVisualizer();
       setIsListening(false);
     } else {
-      if (voiceModeRef.current) setInput('');
+      if (voiceModeRef.current) {
+        if (showImageGenRef.current) {
+          setImageGenPrompt('');
+        } else {
+          setInput('');
+        }
+      }
       setIsListening(true);
       recognitionRef.current?.start();
 
@@ -1610,12 +2434,18 @@ const ChatWindow = () => {
       if (msgMoreRef.current && !msgMoreRef.current.contains(e.target)) {
         setActiveMsgMoreId(null);
       }
+      if (modelSwitcherRef.current && !modelSwitcherRef.current.contains(e.target)) {
+        setShowModelSwitcher(false);
+      }
+      if (modelSwitcherLandingRef.current && !modelSwitcherLandingRef.current.contains(e.target)) {
+        setShowModelSwitcherLanding(false);
+      }
     };
-    if (isHeaderMoreOpen || activeMsgMoreId) {
+    if (isHeaderMoreOpen || activeMsgMoreId || showModelSwitcher || showModelSwitcherLanding) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isHeaderMoreOpen, activeMsgMoreId]);
+  }, [isHeaderMoreOpen, activeMsgMoreId, showModelSwitcher, showModelSwitcherLanding]);
 
   // Modular message rendering to resolve JSX parsing complexity
   const renderMessageView = (msg, index) => {
@@ -1844,7 +2674,7 @@ const ChatWindow = () => {
           )}
 
           <motion.div 
-             layout={msg.role === 'ai' && generatingId === msg.id ? false : "position"}
+             layout={msg.role === 'ai' && generatingIds[activeChatId] === msg.id ? false : "position"}
              initial={{ opacity: 0, scale: 0.98, y: 10 }} 
              animate={{ opacity: 1, scale: 1, y: 0 }} 
              transition={{ duration: 0.2, ease: "easeOut" }}
@@ -1959,8 +2789,9 @@ const ChatWindow = () => {
                 isDoneInitially={!!msg.aspectGenDone}
                 setMessages={setMessages}
                 timestamp={msg.timestamp}
+                onExpand={() => scrollToBottom(true)}
               />
-            ) : msg._typewriter && msg.content
+            ) : msg._typewriter && msg.content && !msg.content.startsWith('![image](')
               ? <TypewriterMessage content={msg.content} isUser={false} isGenerating={msg.isPlaceholder} onDone={() => setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, _typewriter: false } : m))} />
               : <MessageContent content={msg.content} isUser={false} />
           )}
@@ -1993,7 +2824,7 @@ const ChatWindow = () => {
     </div>
 
       {!msg.isVoice && (
-        <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? ((generatingId === msg.id || msg.isPlaceholder || (msg.isAspectGeneration && !msg.aspectGenDone)) ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
+        <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? ((generatingIds[activeChatId] === msg.id || msg.isPlaceholder || (msg.isAspectGeneration && !msg.aspectGenDone)) ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
          <div className={`flex flex-wrap gap-1 ${!isMe && isOtherUser ? 'ml-[44px]' : ''}`}>
           {isSharedReadOnly ? (
             <ActionButton 
@@ -2511,12 +3342,11 @@ const ChatWindow = () => {
     setIsTemporary(false);
   };
 
-  const abortControllerRef = useRef(null);
 
   const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setIsLoading(false);
+    if (abortControllersRef.current[activeChatId]) {
+      abortControllersRef.current[activeChatId].abort();
+      delete abortControllersRef.current[activeChatId];
     }
   };
 
@@ -2534,7 +3364,114 @@ const ChatWindow = () => {
     }, 50);
   };
 
-  const handleSend = async (e, overrideInput, isVoice = false) => {
+  const handleInlineImageGen = async (overridePrompt) => {
+    const promptText = (typeof overridePrompt === 'string') ? overridePrompt : (imageGenPrompt || '');
+    const prompt = promptText.trim();
+    if (!prompt || isImageGenLoading) return;
+    setIsImageGenLoading(true);
+    setImageGenResult(null);
+    try {
+      const hfToken = process.env.NEXT_PUBLIC_HF_ACCESS_TOKEN || '';
+      const result = await generateImageClientSide(prompt, hfToken);
+      setImageGenResult({ url: result.url, prompt });
+    } catch (err) {
+      console.error('Inline image gen error:', err);
+    } finally {
+      setIsImageGenLoading(false);
+    }
+  };
+
+  const handleImageGenSubmit = (promptToSubmit) => {
+    const promptText = (promptToSubmit && typeof promptToSubmit === 'string') 
+      ? promptToSubmit 
+      : (imageGenPrompt || '');
+    const prompt = promptText.trim();
+    if (!prompt) return;
+    
+    setShowImageGen(false);
+    setImageGenResult(null);
+    setImageGenPrompt('');
+    
+    handleSend(null, prompt, false, true);
+  };
+
+  const isImagePrompt = (text) => {
+    if (!text) return false;
+    const clean = text.toLowerCase().trim();
+    
+    // Direct phrases indicating image generation requests
+    const directPhrases = [
+      'generate an image', 'create an image', 'generate image', 'create image', 
+      'generate a photo', 'create a photo', 'generate photo', 'create photo',
+      'draw a', 'draw an', 'paint a', 'paint an', 'sketch a', 'sketch an',
+      'make a photo', 'make an image', 'make a picture', 'show me a photo',
+      'show me an image', 'photo of', 'image of', 'picture of', 'painting of',
+      'drawing of', 'sketch of', 'portrait of', 'illustration of', 'render of',
+      '3d render of', 'artwork of', 'vector art of', 'clipart of'
+    ];
+    
+    if (directPhrases.some(phrase => clean.includes(phrase))) {
+      return true;
+    }
+
+    // Keywords indicating image requests at the beginning
+    const startKeywords = ['generate', 'create', 'draw', 'paint', 'sketch', 'illustrate', 'render', 'depict', 'design', 'make'];
+    const imageNouns = ['image', 'photo', 'picture', 'painting', 'drawing', 'sketch', 'portrait', 'illustration', 'artwork', 'graphic', 'render', 'wallpaper', 'logo', 'scene', 'visual'];
+    
+    for (const kw of startKeywords) {
+      if (clean.startsWith(kw)) {
+        if (['draw', 'paint', 'sketch', 'illustrate'].includes(kw)) {
+          return true;
+        }
+        if (imageNouns.some(noun => clean.includes(noun))) {
+          return true;
+        }
+        const textExclusions = ['code', 'text', 'website', 'app', 'script', 'function', 'story', 'poem', 'email', 'essay', 'html', 'css', 'react', 'javascript', 'python', 'java', 'sql', 'writing'];
+        if (!textExclusions.some(word => clean.includes(word))) {
+          return true;
+        }
+      }
+    }
+
+    // Common style keywords
+    const styleKeywords = [
+      'realistic photo', 'photorealistic', 'hyperrealistic', '3d render', 
+      'anime style', 'cartoon style', 'oil painting', 'watercolor painting', 
+      'concept art', 'digital art', 'pencil sketch', 'cyberpunk portrait',
+      'cinematic lighting', 'unreal engine', 'octane render'
+    ];
+    
+    if (styleKeywords.some(style => clean.includes(style))) {
+      const textExclusions = ['code', 'text', 'write', 'explain', 'how to'];
+      if (!textExclusions.some(word => clean.includes(word))) {
+        return true;
+      }
+    }
+
+    // Roman Urdu / Hindi patterns support
+    const romanUrduVerbs = ['bana', 'banao', 'banaye', 'chahiye', 'chahye', 'chahie', 'dikhao', 'dikhaye'];
+    const romanUrduNouns = ['image', 'photo', 'pic', 'picture', 'tasveer', 'tasweer', 'tasvir', 'drawing', 'painting', 'sketch', 'logo', 'design'];
+    
+    const hasRomanUrduVerb = romanUrduVerbs.some(verb => new RegExp(`\\\\b${verb}\\\\b`, 'i').test(clean));
+    const hasRomanUrduNoun = romanUrduNouns.some(noun => new RegExp(`\\\\b${noun}\\\\b`, 'i').test(clean));
+    if (hasRomanUrduVerb && hasRomanUrduNoun) {
+      return true;
+    }
+
+    const suffixPatterns = [
+      'ki image', 'ki photo', 'ki pic', 'ki tasveer', 'ki tasweer', 'ki tasvir',
+      'ka image', 'ka photo', 'ka pic', 'ka tasveer', 'ka tasweer',
+      'ko image', 'ko photo', 'ko pic',
+      'image bana', 'photo bana', 'tasveer bana', 'tasweer bana', 'tasvir bana'
+    ];
+    if (suffixPatterns.some(pattern => clean.includes(pattern))) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleSend = async (e, overrideInput, isVoice = false, forceImageGen = false) => {
     if (e) e.preventDefault();
     const rawTextToSend = overrideInput || input;
     
@@ -2542,8 +3479,13 @@ const ChatWindow = () => {
     let textToSend = rawTextToSend;
     let attachmentForMessage = null;
     if (pendingAttachment && !overrideInput) {
-      const imgMarkdown = `![${pendingAttachment.name}|${pendingAttachment.id}](${pendingAttachment.thumbnailUrl || pendingAttachment.url})`;
-      textToSend = `${imgMarkdown}\nAsk about this image: ${rawTextToSend}`.trim();
+      const isImage = pendingAttachment.type?.startsWith('image/');
+      if (isImage) {
+        const imgMarkdown = `![${pendingAttachment.name}|${pendingAttachment.id}](${pendingAttachment.thumbnailUrl || pendingAttachment.url})`;
+        textToSend = `${imgMarkdown}\n\nAsk about this image: ${rawTextToSend}`.trim();
+      } else {
+        textToSend = `📄 **${pendingAttachment.name}**\n\nAsk about this file: ${rawTextToSend}`.trim();
+      }
       attachmentForMessage = { ...pendingAttachment };
       setPendingAttachment(null);
     }
@@ -2551,16 +3493,19 @@ const ChatWindow = () => {
     const currentChat = chats.find(c => c.id === activeChatId);
     const isGroup = currentChat?.isGroup;
     const isGeneratingRemote = isGroup && currentChat?.isGenerating;
-    if ((!textToSend.trim() && !attachmentForMessage) || isLoading || isGeneratingRemote) return;
+    if ((!textToSend.trim() && !attachmentForMessage) || loadingChats[activeChatId] || isGeneratingRemote) return;
+
+    const isFirstMessage = messages.length === 0;
+    const targetChatId = (isFirstMessage && !isTemporary) ? (activeChatId || Date.now().toString()) : activeChatId;
 
     // Snapshot history immediately to isolate this request from parallel messages
     const historySnapshot = [...messages]; 
     
-    setIsLoading(true);
+    setLoadingChats(prev => ({ ...prev, [targetChatId]: true }));
     
     // Sync generating status with timestamp for group chats and reset typing status
     if (isGroup) {
-      updateDoc(doc(db, 'chats', activeChatId), { 
+      updateDoc(doc(db, 'chats', targetChatId), { 
         isGenerating: true,
         generatingTimestamp: new Date().toISOString(),
         [`typing.${profile?.uid || 'unknown'}`]: {
@@ -2595,7 +3540,6 @@ const ChatWindow = () => {
       sender: profile || { displayName: 'Guest', avatar: null },
       timestamp: new Date().toISOString()
     };
-    const isFirstMessage = messages.length === 0;
     const aiMessageId = Date.now() + 1;
     const aiPlaceholder = { 
       role: 'ai', 
@@ -2613,9 +3557,9 @@ const ChatWindow = () => {
     // If it's a voice message, just show the bubble — don't call AI
     if (isVoice) {
       if (isFirstMessage && !isTemporary) {
-        const newChatId = Date.now().toString();
+        const newChatId = activeChatId || Date.now().toString();
         const newChat = { id: newChatId, title: 'Voice Message', messages: [userMessage], timestamp: new Date().toISOString() };
-        setChats(prev => [newChat, ...prev.filter(c => c.messages.length > 0)]);
+        setChats(prev => [newChat, ...prev.filter(c => c.messages.length > 0 || c.pendingResearchPrompt || c.pendingImagePrompt)]);
         setActiveChatId(newChatId);
         localStorage.setItem('aura-active-chat-id', newChatId);
       }
@@ -2625,7 +3569,6 @@ const ChatWindow = () => {
     }
 
     if (isFirstMessage && !isTemporary) {
-      const newChatId = Date.now().toString();
       // Set a generic initial title to avoid "hello" etc. showing up
       // Use raw text (not image content) for title generation
       const cleanTitleText = cleanChatTitle(rawTextToSend.trim());
@@ -2633,28 +3576,34 @@ const ChatWindow = () => {
         ? cleanTitleText.slice(0, 30) + '...' 
         : cleanTitleText.length > 0 ? cleanTitleText : (attachmentForMessage ? 'Image design request' : 'New Chat');
       
-      const newChat = { id: newChatId, title: initialTitle, messages: [userMessage], timestamp: new Date().toISOString() };
-      setChats(prev => [newChat, ...prev.filter(c => c.messages.length > 0)]);
-      setActiveChatId(newChatId);
-      localStorage.setItem('aura-active-chat-id', newChatId);
+      const newChat = { id: targetChatId, title: initialTitle, messages: [userMessage, aiPlaceholder], timestamp: new Date().toISOString() };
+      setChats(prev => [newChat, ...prev.filter(c => c.messages.length > 0 || c.pendingResearchPrompt || c.pendingImagePrompt)]);
+      setActiveChatId(targetChatId);
+      localStorage.setItem('aura-active-chat-id', targetChatId);
+    } else {
+      setChats(prev => prev.map(c => 
+        c.id === targetChatId ? { ...c, messages: [...(c.messages || []), userMessage, aiPlaceholder] } : c
+      ));
     }
 
     if (!overrideInput) setInput('');
     const currentInput = textToSend;
     
-    // Optimistically update local state for better UX
-    setMessages(prev => [...prev, userMessage]);
+    // Optimistically update local state for better UX ONLY if this chat is active
+    if (activeChatId === targetChatId) {
+      setMessages(prev => [...prev, userMessage, aiPlaceholder]);
+    }
 
     if (isGroup) {
       try {
-        await updateDoc(doc(db, 'chats', activeChatId), {
+        await updateDoc(doc(db, 'chats', targetChatId), {
           messages: arrayUnion(userMessage, aiPlaceholder)
         });
       } catch (err) {
         console.error("Failed to sync group message:", err);
       }
     }
-    abortControllerRef.current = new AbortController();
+    abortControllersRef.current[targetChatId] = new AbortController();
 
     // 1. Generate a smart title in parallel if it's the first message
     if (isFirstMessage && !isTemporary) {
@@ -2693,33 +3642,135 @@ const ChatWindow = () => {
     try {
       let finalPrompt = textToSend;
       
-      // Check if it's an image GENERATION request (only on raw text, not on attached images)
-      if (!attachmentForMessage && (rawTextToSend.toLowerCase().includes('generate an image') || rawTextToSend.toLowerCase().includes('create an image') || rawTextToSend.toLowerCase().includes('draw'))) {
-        finalPrompt = `${rawTextToSend}. 
-        IMPORTANT: To generate an image, you MUST return a markdown image link in this EXACT format: ![description](https://image.pollinations.ai/prompt/YOUR_PROMPT_HERE?width=1024&height=1024&nologo=true). 
-        Replace YOUR_PROMPT_HERE with a highly detailed, descriptive, and artistic prompt based on the user's request. 
-        The prompt in the URL must be URL-encoded (use %20 for spaces). 
-        Do NOT add any other text unless necessary.`;
+      // Check if it's an image GENERATION request (either forceImageGen is true OR it's detected as an image prompt)
+      const isImgReq = forceImageGen || (!attachmentForMessage && isImagePrompt(rawTextToSend));
+      if (isImgReq) {
+        setGeneratingIds(prev => ({ ...prev, [targetChatId]: aiMessageId }));
+        
+        const generatingImageMessage = { 
+          ...aiPlaceholder, 
+          content: '', 
+          isPlaceholder: false, 
+          isAspectGeneration: true, 
+          aspectGenDone: false, 
+          ratio: '1:1', 
+          prompt: rawTextToSend.trim(), 
+          imageId: 'img_' + Date.now(), 
+          imageUrl: null, 
+          timestamp: new Date().toISOString() 
+        };
+        
+        // Optimistically show the empty card
+        if (activeChatId === targetChatId) {
+          setMessages(prev => prev.map(m => m.id === aiMessageId ? generatingImageMessage : m));
+        }
+        setChats(prevChats => prevChats.map(c => 
+          c.id === targetChatId ? {
+            ...c,
+            messages: c.messages.map(m => m.id === aiMessageId ? generatingImageMessage : m)
+          } : c
+        ));
+
+        try {
+          const hfToken = process.env.NEXT_PUBLIC_HF_ACCESS_TOKEN || '';
+          const result = await generateImageClientSide(rawTextToSend.trim(), hfToken);
+          const data = { imageUrl: result.url };
+          if (!result.url) throw new Error('Failed to generate image');
+          
+          const aiResponse = `![image](${data.imageUrl})`;
+          
+          const updatedImageMessage = { 
+            ...aiPlaceholder, 
+            content: '', 
+            isPlaceholder: false, 
+            isAspectGeneration: true, 
+            aspectGenDone: false, 
+            ratio: '1:1', 
+            prompt: rawTextToSend.trim(), 
+            imageId: 'img_' + Date.now(), 
+            imageUrl: data.imageUrl, 
+            timestamp: new Date().toISOString() 
+          };
+          
+          setMessages(prev => prev.map(m => m.id === aiMessageId ? updatedImageMessage : m));
+          setChats(prevChats => prevChats.map(c => 
+            c.id === targetChatId ? {
+              ...c,
+              messages: c.messages.map(m => m.id === aiMessageId ? updatedImageMessage : m)
+            } : c
+          ));
+          
+          if (isGroup) {
+            try {
+              const chatRef = doc(db, 'chats', activeChatId);
+              const docSnap = await getDoc(chatRef);
+              if (docSnap.exists()) {
+                const currentMsgs = docSnap.data().messages || [];
+                const updatedMsgs = currentMsgs.map(m => 
+                  m.id === aiMessageId ? { 
+                    ...m, 
+                    content: '', 
+                    isPlaceholder: false, 
+                    isAspectGeneration: true, 
+                    aspectGenDone: false, 
+                    ratio: '1:1', 
+                    prompt: rawTextToSend.trim(), 
+                    imageId: 'img_' + Date.now(), 
+                    imageUrl: data.imageUrl, 
+                    timestamp: new Date().toISOString() 
+                  } : m
+                );
+                await updateDoc(chatRef, { 
+                  messages: updatedMsgs,
+                  [`streamContent.${aiMessageId}`]: null
+                });
+              }
+            } catch (err) {
+              console.error("Failed to sync direct AI image response to group:", err);
+            }
+          }
+        } catch (err) {
+          console.error('Image generation error:', err);
+          const errorMsg = err.message || "I'm sorry, I encountered an error while trying to generate the image. Please try again.";
+          setMessages(prev => prev.map(m => 
+            m.id === aiMessageId ? { ...m, content: errorMsg, isPlaceholder: false } : m
+          ));
+          setChats(prevChats => prevChats.map(c => 
+            c.id === targetChatId ? {
+              ...c,
+              messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: errorMsg, isPlaceholder: false } : m)
+            } : c
+          ));
+        } finally {
+          delete abortControllersRef.current[targetChatId];
+          setLoadingChats(prev => ({ ...prev, [targetChatId]: false }));
+          setGeneratingIds(prev => { const next = {...prev}; delete next[targetChatId]; return next; });
+        }
+        return;
       }
-
-
-      setGeneratingId(aiMessageId);
-      setMessages(prev => [...prev, aiPlaceholder]);
       
-      currentResponseRef.current = "";
+      let currentResponse = "";
       let lastStreamSync = 0;
       const STREAM_INTERVAL = 250; // ms between Firestore streaming writes
 
       const onUpdate = (text) => {
-        currentResponseRef.current = text;
+        currentResponse = text;
         setMessages(prev => prev.map(m => m.id === aiMessageId ? { ...m, content: text } : m));
+        
+        // Update global state directly so background generations aren't lost when switching chats
+        setChats(prevChats => prevChats.map(c => 
+          c.id === targetChatId ? {
+            ...c,
+            messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: text } : m)
+          } : c
+        ));
 
         // Throttle-stream the growing content to Firestore so other group members see it live
         if (isGroup) {
           const now = Date.now();
           if (now - lastStreamSync > STREAM_INTERVAL) {
             lastStreamSync = now;
-            updateDoc(doc(db, 'chats', activeChatId), {
+            updateDoc(doc(db, 'chats', targetChatId), {
               [`streamContent.${aiMessageId}`]: text
             }).catch(console.error);
           }
@@ -2734,21 +3785,109 @@ const ChatWindow = () => {
         }
       }
 
-      const aiResponse = await getGeminiResponse(finalPrompt, historySnapshot, activePersonalization, abortControllerRef.current.signal, onUpdate, aiModel);
+      const aiResponse = await getGeminiResponse(finalPrompt, historySnapshot, activePersonalization, abortControllersRef.current[targetChatId].signal, onUpdate, aiModel);
       
+      let finalResponseContent = aiResponse;
+      const genImageMatch = aiResponse.match(/\[GENERATE_IMAGE:\s*([^\]]+)\]/i);
+      
+      if (genImageMatch) {
+        const imagePrompt = genImageMatch[1].trim();
+        setMessages(prev => prev.map(m => 
+          m.id === aiMessageId ? { ...m, content: "Generating requested image: " + imagePrompt + "...", isPlaceholder: true } : m
+        ));
+        setChats(prevChats => prevChats.map(c => 
+          c.id === targetChatId ? {
+            ...c,
+            messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: "Generating requested image: " + imagePrompt + "...", isPlaceholder: true } : m)
+          } : c
+        ));
+        
+        try {
+          const response = await fetch('/api/generate-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: imagePrompt }),
+          });
+          const data = await response.json();
+          if (!response.ok || data.error) throw new Error(data.error || 'Failed to generate image');
+          
+          const generatedImageMessage = { 
+            ...aiPlaceholder, 
+            content: '', 
+            isPlaceholder: false, 
+            isAspectGeneration: true, 
+            aspectGenDone: false, 
+            ratio: '1:1', 
+            prompt: imagePrompt, 
+            imageId: 'img_' + Date.now(), 
+            imageUrl: data.imageUrl, 
+            timestamp: new Date().toISOString() 
+          };
+          
+          setMessages(prev => prev.map(m => m.id === aiMessageId ? generatedImageMessage : m));
+          setChats(prevChats => prevChats.map(c => 
+            c.id === targetChatId ? {
+              ...c,
+              messages: c.messages.map(m => m.id === aiMessageId ? generatedImageMessage : m)
+            } : c
+          ));
+          
+          if (isGroup) {
+            try {
+              const chatRef = doc(db, 'chats', activeChatId);
+              const docSnap = await getDoc(chatRef);
+              if (docSnap.exists()) {
+                const currentMsgs = docSnap.data().messages || [];
+                const updatedMsgs = currentMsgs.map(m => 
+                  m.id === aiMessageId ? { 
+                    ...m, 
+                    content: '', 
+                    isPlaceholder: false, 
+                    isAspectGeneration: true, 
+                    aspectGenDone: false, 
+                    ratio: '1:1', 
+                    prompt: imagePrompt, 
+                    imageId: 'img_' + Date.now(), 
+                    imageUrl: data.imageUrl, 
+                    timestamp: new Date().toISOString() 
+                  } : m
+                );
+                await updateDoc(chatRef, { 
+                  messages: updatedMsgs,
+                  [`streamContent.${aiMessageId}`]: null
+                });
+              }
+            } catch (err) {
+              console.error("Failed to sync direct AI image response to group:", err);
+            }
+          }
+          return;
+        } catch (genErr) {
+          console.error("Auto image generation from tag failed:", genErr);
+          const errorMsg = genErr.message ? `*(Failed to generate image: ${genErr.message})*` : "*(Failed to generate image)*";
+          finalResponseContent = aiResponse.replace(/\[GENERATE_IMAGE:\s*([^\]]+)\]/gi, errorMsg);
+        }
+      }
+
       // Always update local state with final response to clear placeholder status
       setMessages(prev => prev.map(m => 
-        m.id === aiMessageId ? { ...m, content: aiResponse, isPlaceholder: false } : m
+        m.id === aiMessageId ? { ...m, content: finalResponseContent, isPlaceholder: false } : m
+      ));
+      setChats(prevChats => prevChats.map(c => 
+        c.id === targetChatId ? {
+          ...c,
+          messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: finalResponseContent, isPlaceholder: false } : m)
+        } : c
       ));
 
       if (isGroup) {
         try {
-          const chatRef = doc(db, 'chats', activeChatId);
+          const chatRef = doc(db, 'chats', targetChatId);
           const docSnap = await getDoc(chatRef);
           if (docSnap.exists()) {
             const currentMsgs = docSnap.data().messages || [];
             const updatedMsgs = currentMsgs.map(m => 
-              m.id === aiMessageId ? { ...m, content: aiResponse, isPlaceholder: false } : m
+              m.id === aiMessageId ? { ...m, content: finalResponseContent, isPlaceholder: false, _typewriter: false } : m
             );
             // Save final message + clear the streaming temp field
             await updateDoc(chatRef, { 
@@ -2763,21 +3902,27 @@ const ChatWindow = () => {
     } catch (error) {
       if (error.name === 'AbortError') {
         console.log('Generation stopped by user');
-        const partialText = currentResponseRef.current || "Response stopped.";
+        const partialText = currentResponse || "Response stopped.";
         
         // Always update local state
         setMessages(prev => prev.map(m => 
           m.id === aiMessageId ? { ...m, content: partialText, isPlaceholder: false, isStopped: true, _typewriter: false } : m
         ));
+        setChats(prevChats => prevChats.map(c => 
+          c.id === targetChatId ? {
+            ...c,
+            messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: partialText, isPlaceholder: false, isStopped: true, _typewriter: false } : m)
+          } : c
+        ));
 
         if (isGroup) {
           try {
-            const chatRef = doc(db, 'chats', activeChatId);
+            const chatRef = doc(db, 'chats', targetChatId);
             const docSnap = await getDoc(chatRef);
             if (docSnap.exists()) {
               const currentMsgs = docSnap.data().messages || [];
               const updatedMsgs = currentMsgs.map(m => 
-                m.id === aiMessageId ? { ...m, content: partialText, isPlaceholder: false, isStopped: true } : m
+                m.id === aiMessageId ? { ...m, content: partialText, isPlaceholder: false, isStopped: true, _typewriter: false } : m
               );
               await updateDoc(chatRef, { messages: updatedMsgs });
             }
@@ -2789,14 +3934,12 @@ const ChatWindow = () => {
         console.error(error);
       }
     } finally {
-      currentResponseRef.current = "";
-      setIsLoading(false);
-      setGeneratingId(null);
-      abortControllerRef.current = null;
+      delete abortControllersRef.current[targetChatId];
       
       // Clear generating status
-      if (chats.find(c => c.id === activeChatId)?.isGroup) {
-        updateDoc(doc(db, 'chats', activeChatId), { isGenerating: false }).catch(console.error);
+      setLoadingChats(prev => ({ ...prev, [targetChatId]: false }));
+      if (chats.find(c => c.id === targetChatId)?.isGroup) {
+        updateDoc(doc(db, 'chats', targetChatId), { isGenerating: false }).catch(console.error);
       }
     }
   };
@@ -2828,6 +3971,21 @@ const ChatWindow = () => {
       
       // 2. Trigger direct send
       handleSend(null, prompt);
+    } else if (currentChat?.pendingImagePrompt) {
+      const prompt = currentChat.pendingImagePrompt;
+      const attachment = currentChat.pendingImageAttachment;
+      // 1. Remove the flag immediately to prevent duplicate triggers
+      setChats(prev => prev.map(chat => 
+        chat.id === activeChatId ? { ...chat, pendingImagePrompt: null, pendingImageAttachment: null } : chat
+      ));
+      
+      // 2. Set attachment if present
+      if (attachment) {
+        setPendingAttachment(attachment);
+      }
+      
+      // 3. Trigger direct image send (forceImageGen = true)
+      handleSend(null, prompt, false, true);
     }
   }, [activeChatId, chats, isLoading]);
 
@@ -3046,6 +4204,376 @@ const ChatWindow = () => {
     setMsgDeleteConfirm({ open: false, id: null });
   };
 
+  const [copied, setCopied] = useState(false);
+
+  const handleDownload = (e, url, filename) => {
+    if (e) e.stopPropagation();
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename || 'generated_image.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const renderShareModal = () => {
+    if (!activeShareImage) return null;
+    const modalBg = resolvedTheme === 'dark' ? '#232325' : '#ffffff';
+    const cardBorder = resolvedTheme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.08)';
+    const textColor = resolvedTheme === 'dark' ? '#ffffff' : '#000000';
+    const subtextColor = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.5)';
+
+    const closeShare = () => {
+      setShareModalState('closing');
+      setTimeout(() => {
+        setActiveShareImage(null);
+        setShareModalState('closed');
+      }, 750);
+    };
+
+    return (
+      <div
+        onClick={closeShare}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.45)',
+          backdropFilter: 'blur(3px)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'fadeIn 0.25s ease-out',
+          padding: '24px'
+        }}
+      >
+        <div 
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: '560px',
+            display: 'flex',
+            flexDirection: 'column',
+            background: modalBg,
+            border: cardBorder,
+            borderRadius: '24px',
+            overflow: 'hidden',
+            boxShadow: resolvedTheme === 'dark' ? '0 25px 50px rgba(0, 0, 0, 0.5)' : 'var(--shadow-lg)',
+            animation: shareModalState === 'closing' 
+              ? 'shareExitLeft 0.75s cubic-bezier(0.32, 0, 0.67, 0) forwards' 
+              : 'shareSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+          }}
+        >
+          {/* Header Title */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 32px 16px 32px', gap: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '22px', fontWeight: 600, color: textColor, fontFamily: "'Outfit', sans-serif", lineHeight: '1.2' }}>
+              {activeShareImage.prompt}
+            </h3>
+            <button
+              type="button"
+              onClick={closeShare}
+              style={{
+                background: 'none',
+                border: resolvedTheme === 'dark' ? '1.5px solid rgba(255, 255, 255, 0.4)' : '1.5px solid var(--divider)',
+                borderRadius: '10px',
+                color: textColor,
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                flexShrink: 0
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = textColor;
+                e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : 'var(--divider)';
+                e.currentTarget.style.background = 'none';
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div style={{ height: '1px', background: 'var(--divider)', margin: '0 32px' }} />
+
+          {/* Framed Image Container */}
+          <div style={{ padding: '24px 32px', display: 'flex', justifyContent: 'center', background: 'transparent' }}>
+            <div style={{ background: '#ffffff', padding: '8px', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6)', width: 'fit-content' }}>
+              <div style={{ background: '#000000', padding: '12px 14px', borderRadius: '10px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <img 
+                  src={activeShareImage.url || null} 
+                  alt={activeShareImage.prompt}
+                  onError={(e) => handleImgError(e, activeShareImage.prompt)}
+                  style={{ maxHeight: '260px', maxWidth: '100%', objectFit: 'contain', borderRadius: '4px' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Share Buttons */}
+          <div style={{ display: 'flex', justifyContent: 'space-around', padding: '16px 32px 32px 32px', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.origin + activeShareImage.url);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#e25c1d', border: 'none', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.2s, background 0.2s', boxShadow: '0 4px 12px rgba(226, 92, 29, 0.3)', margin: '0 auto' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <Link2 size={22} />
+              </button>
+              <span style={{ fontSize: '12.5px', color: subtextColor, fontWeight: 500, textAlign: 'center' }}>{copied ? 'Copied!' : 'Copy link'}</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent('Check out this AI generated image: ' + activeShareImage.prompt)}&url=${encodeURIComponent(window.location.origin + activeShareImage.url)}`, '_blank');
+                }}
+                style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#e25c1d', border: 'none', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.2s, background 0.2s', boxShadow: '0 4px 12px rgba(226, 92, 29, 0.3)', margin: '0 auto' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+              </button>
+              <span style={{ fontSize: '12.5px', color: subtextColor, fontWeight: 500, textAlign: 'center' }}>X</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.origin + activeShareImage.url)}`, '_blank');
+                }}
+                style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#e25c1d', border: 'none', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.2s, background 0.2s', boxShadow: '0 4px 12px rgba(226, 92, 29, 0.3)', margin: '0 auto' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                </svg>
+              </button>
+              <span style={{ fontSize: '12.5px', color: subtextColor, fontWeight: 500, textAlign: 'center' }}>LinkedIn</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  window.open(`https://www.reddit.com/submit?url=${encodeURIComponent(window.location.origin + activeShareImage.url)}&title=${encodeURIComponent(activeShareImage.prompt)}`, '_blank');
+                }}
+                style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#e25c1d', border: 'none', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.2s, background 0.2s', boxShadow: '0 4px 12px rgba(226, 92, 29, 0.3)', margin: '0 auto' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                  <path d="M24 11.5c0-1.65-1.35-3-3-3-.96 0-1.86.48-2.42 1.24-1.64-1-3.85-1.68-6.24-1.78l1.3-4.1 4.26 1c.06 1.12.98 2 2.12 2 1.24 0 2.25-1.01 2.25-2.25S19.24 3 18 3c-1 0-1.84.66-2.13 1.58l-4.72-1.1c-.26-.06-.52.1-.59.36l-1.44 4.54C6.67 7.42 4.4 8.08 2.74 9.1 2.18 8.34 1.27 7.86.3 7.86a3 3 0 0 0-3 3c0 1.22.74 2.28 1.8 2.74a4.42 4.42 0 0 0-.08.6c0 3.65 4.57 6.63 10.2 6.63s10.2-2.98 10.2-6.63c0-.2-.03-.4-.08-.6 1.06-.46 1.8-1.52 1.8-2.74zm-18.75 1a1.25 1.25 0 1 1 1.25 1.25c-.69 0-1.25-.56-1.25-1.25zm10.75 3.3c-1.34 1.34-3.88 1.34-5.22 0a.49.49 0 0 1 0-.7.49.49 0 0 1 .7 0c.93.93 2.87.93 3.8 0a.49.49 0 0 1 .7.7zM16.72 12.5a1.25 1.25 0 1 1 1.25-1.25 1.25 1.25 0 0 1-1.25 1.25z"/>
+                </svg>
+              </button>
+              <span style={{ fontSize: '12.5px', color: subtextColor, fontWeight: 500, textAlign: 'center' }}>Reddit</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1 }}>
+              <button
+                type="button"
+                onClick={(e) => handleDownload(e, activeShareImage.url, `${activeShareImage.id}.png`)}
+                style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#e25c1d', border: 'none', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.2s, background 0.2s', boxShadow: '0 4px 12px rgba(226, 92, 29, 0.3)', margin: '0 auto' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <Download size={22} />
+              </button>
+              <span style={{ fontSize: '12.5px', color: subtextColor, fontWeight: 500, textAlign: 'center' }}>Download</span>
+            </div>
+          </div>
+        </div>
+        <style>{`
+          @keyframes shareSlideUp {
+            0% { transform: translateY(100vh); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+          }
+          @keyframes shareExitLeft {
+            0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+            100% { transform: translate(-30px, 100vh) rotate(-12deg); opacity: 0; }
+          }
+        `}</style>
+      </div>
+    );
+  };
+
+  const renderGallerySelectModal = () => {
+    if (!showGallerySelectModal || typeof document === 'undefined') return null;
+    return createPortal(
+      <div
+        onClick={() => setShowGallerySelectModal(false)}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.4)',
+          zIndex: 1000000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px'
+        }}
+        className="animate-fade-in"
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: '560px',
+            height: '520px',
+            background: resolvedTheme === 'dark' ? '#202022' : 'var(--surface-1)',
+            border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'var(--divider)'}`,
+            borderRadius: '24px',
+            boxShadow: resolvedTheme === 'dark' ? '0 25px 50px rgba(0,0,0,0.5)' : 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            padding: '24px'
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '20px', fontWeight: '700', color: resolvedTheme === 'dark' ? '#ffffff' : 'var(--on-surface)', fontFamily: 'inherit' }}>
+              Add from library
+            </span>
+            <button
+              onClick={() => setShowGallerySelectModal(false)}
+              style={{
+                background: 'none', border: 'none', color: resolvedTheme === 'dark' ? '#ffffff' : 'var(--on-surface)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifycontent: 'center', padding: '6px', borderRadius: '50%',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'var(--hover-overlay)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Search Input Bar */}
+          <div style={{
+            background: resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'var(--surface-2)',
+            borderRadius: '12px',
+            padding: '10px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            marginTop: '10px',
+            marginBottom: '16px',
+            border: resolvedTheme === 'dark' ? 'none' : '1px solid var(--divider)'
+          }}>
+            <input
+              type="text"
+              placeholder="Search library"
+              value={gallerySearchQuery}
+              onChange={e => setGallerySearchQuery(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                color: resolvedTheme === 'dark' ? '#ffffff' : 'var(--on-surface)',
+                fontSize: '15px',
+                width: '100%',
+                fontFamily: 'inherit'
+              }}
+            />
+          </div>
+
+          {/* Scrollable List Content */}
+          <div 
+            style={{ 
+              overflowY: 'auto', 
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              paddingRight: '4px'
+            }}
+            className="custom-scrollbar"
+          >
+            {libraryFiles.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--on-surface-muted)', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+                <FileText size={40} style={{ opacity: 0.5 }} />
+                <span>No files in your library yet.</span>
+              </div>
+            ) : (() => {
+              const filtered = libraryFiles.filter(file => {
+                const filename = (file.name || '').toLowerCase();
+                const query = gallerySearchQuery.toLowerCase();
+                return filename.includes(query);
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--on-surface-muted)' }}>
+                    No matches found
+                  </div>
+                );
+              }
+
+              return filtered.map((file) => (
+                <button
+                  key={file.id}
+                  onClick={() => {
+                    setPendingAttachment({
+                      id: file.id,
+                      name: file.name,
+                      type: file.type,
+                      url: file.thumbnailUrl || file.url
+                    });
+                    setShowGallerySelectModal(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '8px 12px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'background 0.15s ease'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  {renderFileThumbnail(file, 40)}
+                  <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <span style={{ fontSize: '14px', fontWeight: '500', color: resolvedTheme === 'dark' ? '#ffffff' : 'var(--on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {file.name}
+                    </span>
+                    <span style={{ fontSize: '11.5px', color: resolvedTheme === 'dark' ? '#8b8b8f' : 'var(--on-surface-muted)', marginTop: '2px' }}>
+                      Last modified {file.modified || (file.timestamp ? new Date(file.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'recently')}
+                    </span>
+                  </div>
+                </button>
+              ));
+            })()}
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+
   if (!mounted) return null;
 
   if (appView === 'library') {
@@ -3090,7 +4618,25 @@ const ChatWindow = () => {
   if (appView === 'images') {
     return (
       <div className="flex-1 min-w-0 flex flex-col relative bg-primary transition-colors duration-500" style={{ overflow: 'hidden', height: '100dvh' }}>
-        <ImagesView />
+        <ImagesView 
+          onStartImageChat={(promptText, attachment) => {
+            const newId = Date.now().toString();
+            const newChat = {
+              id: newId,
+              title: promptText.length > 30 ? promptText.slice(0, 30) + '...' : promptText,
+              messages: [],
+              timestamp: new Date().toISOString(),
+              pendingImagePrompt: promptText,
+              pendingImageAttachment: attachment
+            };
+            setChats(prev => [newChat, ...prev.filter(c => c.messages.length > 0 || c.pendingResearchPrompt || c.pendingImagePrompt)]);
+            setActiveChatId(newId);
+            setMessages([]);
+            setAppView('chat');
+          }}
+          onOpenGallerySelect={() => chatFileInputRef.current?.click()}
+        />
+        {renderGallerySelectModal()}
       </div>
     );
   }
@@ -3607,36 +5153,104 @@ const ChatWindow = () => {
                 )}
               </div>
             ) : (
-              (isTemporary || messages.length === 0) ? (
-                <button 
-                  onClick={() => {
-                    if (isTemporary) {
-                      setMessages([]);
-                      setIsTemporary(false);
-                    } else {
-                      setIsTemporary(true);
-                    }
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '8px 14px', borderRadius: 12,
-                    background: isTemporary ? 'var(--on-surface)' : 'transparent',
-                    color: isTemporary ? 'var(--bg-primary)' : 'var(--on-surface-muted)',
-                    border: isTemporary ? 'none' : '1px solid var(--divider)',
-                    fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={e => { if(!isTemporary) e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                  onMouseLeave={e => { if(!isTemporary) e.currentTarget.style.background = 'transparent'; }}
-                >
-                  <MessageSquareDashed size={18} />
-                  {!isMobile && <span>Temporary chat</span>}
-                  {isTemporary && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--bg-primary)', marginLeft: 2 }} />}
-                </button>
+              (!showLoggedIn && (isTemporary || messages.length === 0)) ? (
+                <div className="flex items-center gap-2 mr-2">
+                  <button 
+                    onClick={() => setAuthOpen(true)}
+                    className="rounded-full font-medium transition-colors hover:opacity-90"
+                    style={{ background: '#ffffff', color: '#000000', padding: '8px 18px', fontSize: '15px' }}
+                  >
+                    Log in
+                  </button>
+                  <button 
+                    onClick={() => setAuthOpen(true)}
+                    className="rounded-full font-medium transition-colors hover:opacity-90"
+                    style={{ background: '#2a2a2a', color: '#ffffff', border: '1px solid rgba(255,255,255,0.1)', padding: '8px 18px', fontSize: '15px' }}
+                  >
+                    Sign up for free
+                  </button>
+                </div>
+              ) : (isTemporary || messages.length === 0) ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {/* Free offer badge linking to Upgrade plan */}
+                  <button
+                    onClick={() => router.push('/upgrade')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 12px',
+                      borderRadius: '999px',
+                      background: 'transparent',
+                      color: 'var(--on-surface)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = 0.85; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = 1; }}
+                  >
+                    <Gift size={16} style={{ color: 'var(--on-surface-muted)' }} />
+                    <span style={{
+                      color: '#60a5fa',
+                      textShadow: '0 0 10px rgba(96,165,250,0.3)',
+                    }}>Free offer</span>
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      if (isTemporary) {
+                        setMessages([]);
+                        setIsTemporary(false);
+                      } else {
+                        setIsTemporary(true);
+                      }
+                    }}
+                    title="Temporary Chat"
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: '36px', height: '36px', borderRadius: '50%',
+                      background: isTemporary ? 'var(--on-surface)' : 'transparent',
+                      color: isTemporary ? 'var(--bg-primary)' : 'var(--on-surface-muted)',
+                      border: isTemporary ? 'none' : '1px solid var(--divider)',
+                      cursor: 'pointer', transition: 'all 0.2s',
+                      position: 'relative'
+                    }}
+                    onMouseEnter={e => { if(!isTemporary) e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                    onMouseLeave={e => { if(!isTemporary) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <MessageSquareDashed size={18} />
+                    {isTemporary && (
+                      <div style={{ 
+                        position: 'absolute', bottom: '2px', right: '2px',
+                        width: 6, height: 6, borderRadius: '50%', 
+                        background: 'var(--bg-primary)' 
+                      }} />
+                    )}
+                  </button>
+                </div>
               ) : (
                 <div className="flex items-center gap-1">
                   <button 
                     onClick={() => setIsShareModalOpen(true)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-hover-overlay transition-colors text-[14px] font-medium text-on-surface"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '7px 14px',
+                      borderRadius: '999px',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color: 'var(--on-surface)',
+                      transition: 'background 0.15s',
+                      fontFamily: 'inherit',
+                      whiteSpace: 'nowrap'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
                     <Share size={16} />
                     <span>Share</span>
@@ -3773,6 +5387,96 @@ const ChatWindow = () => {
                           <Trash2 size={16} style={{ color: '#ef4444', flexShrink: 0 }} strokeWidth={1.5} />
                           <span style={{ whiteSpace: 'nowrap' }}>Delete</span>
                         </button>
+
+                        {/* List generated images below if any exist in the chat */}
+                        {(() => {
+                          const imageMessages = messages.filter(m => m.isAspectGeneration || (m.content && m.content.startsWith('![image](')));
+                          if (imageMessages.length === 0) return null;
+
+                          return (
+                            <>
+                              <div style={{ height: 1, background: 'var(--divider)', margin: '6px 4px 4px 4px' }} />
+                              <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, padding: '2px' }} className="custom-scrollbar">
+                                {imageMessages.map(msg => {
+                                  let imageUrl = msg.imageUrl;
+                                  if (!imageUrl && msg.content) {
+                                    const match = msg.content.match(/\!\[image\]\((.*?)\)/);
+                                    if (match && match[1]) imageUrl = match[1];
+                                  }
+                                  if (!imageUrl) return null;
+                                  
+                                  const rawPrompt = msg.prompt || 'Generated Image';
+                                  const promptText = rawPrompt.length > 20 ? rawPrompt.slice(0, 20) + '...' : rawPrompt;
+                                  
+                                  return (
+                                    <button
+                                      key={msg.id}
+                                      onClick={() => {
+                                        const el = document.getElementById(`msg-${msg.id}`);
+                                        if (el) {
+                                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        }
+                                        setIsHeaderMoreOpen(false);
+                                      }}
+                                      style={{
+                                        width: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 12,
+                                        padding: '6px 10px',
+                                        borderRadius: 12,
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'var(--on-surface)',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        fontFamily: 'inherit',
+                                        transition: 'background 0.15s',
+                                        minWidth: 0,
+                                        maxWidth: '220px',
+                                      }}
+                                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                    >
+                                      <img 
+                                        src={imageUrl} 
+                                        alt="" 
+                                        onError={(e) => handleImgError(e, promptText)}
+                                        style={{
+                                          width: '36px',
+                                          height: '36px',
+                                          borderRadius: '8px',
+                                          objectFit: 'cover',
+                                          border: '1px solid var(--divider)',
+                                          flexShrink: 0
+                                        }} 
+                                      />
+                                      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                        <span style={{ 
+                                          fontSize: '13px', 
+                                          fontWeight: 500, 
+                                          color: 'var(--on-surface)', 
+                                          whiteSpace: 'nowrap',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis'
+                                        }}>
+                                          {promptText}
+                                        </span>
+                                        <span style={{ 
+                                          fontSize: '11px', 
+                                          color: 'var(--on-surface-muted)',
+                                          marginTop: '1px'
+                                        }}>
+                                          Image created
+                                        </span>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          );
+                        })()}
                       </motion.div>
                     )}
                     </AnimatePresence>
@@ -3792,10 +5496,155 @@ const ChatWindow = () => {
           style={{ overflowY: 'auto', overflowX: 'hidden' }}
         >
           {/* Landing Page - Empty Chat (Only for non-group chats) */}
-          {messages.length === 0 && !chats.find(c => c.id === activeChatId)?.isGroup && (
+          {messages.length === 0 && !chats.find(c => c.id === activeChatId)?.isGroup && (isFirebaseChatsLoaded || !activeChatId || chats.some(c => c.id === activeChatId)) && (
             <div className={`flex-1 mx-auto w-full flex flex-col ${isMobile ? (isTemporary ? 'justify-center items-center py-6' : 'justify-between py-6') : 'items-center justify-center py-20'} px-2 md:px-4`} style={{ maxWidth: chatWidth === 'Wide' ? 'min(1000px, 100%)' : chatWidth === 'Full' ? '100%' : 'min(768px, 100%)' }}>
               <div className={`w-full flex flex-col ${isMobile ? (isTemporary ? 'items-center text-center' : 'items-start text-left flex-1') : 'items-center justify-center text-center'} animate-fade-in px-2 md:px-4`}>
-                {isTemporary ? (
+                {showImageGen ? (
+                  /* ===== INLINE IMAGE GENERATOR UI ===== */
+                  <div className="w-full flex flex-col items-center animate-fade-in" style={{ maxWidth: '920px', margin: '0 auto' }}>
+                    {/* Title */}
+                    <h1 className="text-[32px] md:text-[56px] font-bold tracking-tight leading-tight" style={{
+                      color: 'var(--on-surface)',
+                      marginBottom: '32px',
+                      textAlign: 'center',
+                      fontFamily: "'Outfit', sans-serif",
+                      letterSpacing: '-0.02em'
+                    }}>
+                      {imageGenHeadingText}
+                    </h1>
+
+                    {/* Image result display */}
+                    {imageGenResult && (
+                      <div className="animate-fade-in" style={{ width: '100%', marginBottom: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', maxWidth: '480px', width: '100%' }}>
+                          <img 
+                            src={imageGenResult.url} 
+                            alt={imageGenResult.prompt} 
+                            onError={(e) => handleImgError(e, imageGenResult.prompt)}
+                            style={{ width: '100%', display: 'block', borderRadius: '20px' }} 
+                            referrerPolicy="no-referrer" 
+                          />
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.7))', padding: '24px 16px 14px', borderRadius: '0 0 20px 20px' }}>
+                            <p style={{ color: '#ffffff', fontSize: '13px', fontWeight: 500, margin: 0 }}>{imageGenResult.prompt}</p>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <button
+                            onClick={() => { const link = document.createElement('a'); link.href = imageGenResult.url; link.download = 'ai-image.jpg'; link.target = '_blank'; link.rel = 'noopener'; document.body.appendChild(link); link.click(); document.body.removeChild(link); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '999px', background: accentColor, color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}
+                          >
+                            <Download size={14} /> Download
+                          </button>
+                          <button
+                            onClick={() => { setImageGenResult(null); setImageGenPrompt(''); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '999px', background: 'var(--hover-overlay)', color: 'var(--on-surface)', border: '1px solid var(--divider)', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}
+                          >
+                            <Sparkles size={14} /> Create another
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Prompt Input Box */}
+                    <ImageGenInput
+                      imageGenPrompt={imageGenPrompt}
+                      setImageGenPrompt={setImageGenPrompt}
+                      isImageGenLoading={isImageGenLoading}
+                      handleInlineImageGen={handleImageGenSubmit}
+                      accentColor={accentColor}
+                      onClose={() => { setShowImageGen(false); setImageGenResult(null); setImageGenPrompt(''); }}
+                      pendingAttachment={pendingAttachment}
+                      setPendingAttachment={setPendingAttachment}
+                      chatFileInputRef={chatFileInputRef}
+                      setIsVoiceMessageMode={setIsVoiceMessageMode}
+                      voiceModeRef={voiceModeRef}
+                      toggleListening={toggleListening}
+                      setShowGallerySelectModal={setShowGallerySelectModal}
+                    />
+
+                    {/* Explore Ideas Section */}
+                    <div style={{ width: '100%' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                        <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--on-surface)', fontFamily: "'Outfit', sans-serif" }}>Explore ideas</span>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={() => imageGenCarouselRef.current?.scrollBy({ left: -280, behavior: 'smooth' })}
+                            style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid var(--divider)', background: 'var(--surface-1)', color: 'var(--on-surface-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <ChevronLeft size={16} />
+                          </button>
+                          <button
+                            onClick={() => imageGenCarouselRef.current?.scrollBy({ left: 280, behavior: 'smooth' })}
+                            style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid var(--divider)', background: 'var(--surface-1)', color: 'var(--on-surface-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <ChevronRight size={16} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Carousel */}
+                      <div
+                        ref={imageGenCarouselRef}
+                        style={{
+                          display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px',
+                          scrollbarWidth: 'none', msOverflowStyle: 'none'
+                        }}
+                      >
+                        {/* Upload a photo card */}
+                        <div
+                          onClick={() => chatFileInputRef.current?.click()}
+                          style={{
+                            flexShrink: 0, width: '160px', height: '190px', borderRadius: '20px',
+                            background: 'var(--surface-1)', border: '1px solid var(--divider)',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                            gap: '8px', cursor: 'pointer', transition: 'all 0.2s',
+                            color: accentColor
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = accentColor; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--divider)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                        >
+                          <div style={{ width: '44px', height: '44px', borderRadius: '50%', border: `2px dashed ${accentColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Plus size={20} style={{ color: accentColor }} />
+                          </div>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: accentColor }}>Add a photo</span>
+                        </div>
+
+                        {/* Style cards */}
+                        {[
+                          { label: 'Disco mode', image: '/explore/disco.jpg', prompt: 'Create a vibrant disco dance floor with neon colorful lights, retro 80s synthwave vibe' },
+                          { label: 'Improve Desk Setup', image: '/explore/desk.jpg', prompt: 'Create a sleek minimal workspace desk setup with a mechanical keyboard, warm ambient light, clean aesthetic' },
+                          { label: 'Wanderlust', image: '/explore/wanderlust.jpg', prompt: 'Create a breathtaking scenic view of misty mountains during sunrise, travel adventure photography' },
+                          { label: 'Scribble', image: '/explore/scribble.jpg', prompt: 'Create an expressive colorful scribble art portrait with chaotic abstract lines' },
+                          { label: 'Anime comic', image: '/anime_comic.png', prompt: 'Create an anime manga style comic book page panel with a boy and a black cat' },
+                          { label: 'App design', image: '/app_design.png', prompt: 'Create a sleek dark UI mobile dashboard application layout design mockup' },
+                          { label: 'Food promo', image: '/my_pizza.png', prompt: 'Create a delicious gourmet Italian pizza with melting mozzarella cheese close-up' },
+                          { label: 'Makeup guide', image: '/makeup_guide.png', prompt: 'Create a high-fashion cosmetic makeup guide showing eyeshadow, blush details, soft warm lighting' },
+                          { label: 'Logo design', image: '/my_zypher_logo.png', prompt: 'Create a modern futuristic brand logo with a glowing purple and cyan letter Z' },
+                          { label: 'Chibi stickers', image: '/chibi_stickers.png', prompt: 'Create a sheet of cute chibi style sticker designs' },
+                          { label: 'AI Assistant', image: '/my_ai_assistant.png', prompt: 'Create a futuristic dark blue cybernetic AI robot assistant logo layout' },
+                          { label: 'Landscape art', image: '/wanderlust.png', prompt: 'Create a wanderlust explorer mountain landscape digital painting' },
+                        ].map((card, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => setImageGenPrompt(card.prompt)}
+                            style={{
+                              flexShrink: 0, width: '160px', height: '190px', borderRadius: '20px',
+                              position: 'relative', overflow: 'hidden', cursor: 'pointer',
+                              transition: 'all 0.2s', border: '2px solid transparent'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                          >
+                            <img src={card.image} alt={card.label} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '18px' }} />
+                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.75))', padding: '28px 10px 10px', borderRadius: '0 0 18px 18px' }}>
+                              <span style={{ color: '#ffffff', fontSize: '12.5px', fontWeight: 600 }}>{card.label}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : isTemporary ? (
                   <div className="flex flex-col items-center text-center space-y-3 w-full" style={{ marginBottom: isMobile ? '32px' : '60px' }}>
                     <h1 className="text-[32px] md:text-[52px] font-bold tracking-tight leading-tight" style={{ color: 'var(--on-surface)' }}>Temporary Chat</h1>
                     <p className="text-base max-w-2xl mx-auto text-center" style={{ color: 'var(--on-surface-muted)' }}>This chat won't appear in your chat history, and won't be used to train our models.</p>
@@ -3936,12 +5785,23 @@ const ChatWindow = () => {
                   <div className={`flex flex-col items-start gap-2 mt-0 w-full max-w-3xl mx-auto px-2 mb-4`}>
                     {activeCategory !== 'write' && (
                       <button 
-                        onClick={() => setInput("Create an image of ")} 
+                        onClick={() => { setShowImageGen(true); setImageGenResult(null); setImageGenPrompt(''); }} 
                         className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
                         style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
                       >
                         <Image size={22} style={{ color: accentColor }} />
                         <span>Create an image</span>
+                      </button>
+                    )}
+
+                    {activeCategory !== 'write' && (
+                      <button 
+                        onClick={() => setInput("Search for ")}
+                        className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
+                        style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
+                      >
+                        <Globe size={22} style={{ color: accentColor }} />
+                        <span>Look something up</span>
                       </button>
                     )}
 
@@ -3972,16 +5832,7 @@ const ChatWindow = () => {
                       )}
                     </div>
 
-                    {activeCategory !== 'write' && (
-                      <button 
-                        onClick={() => setInput("Search for ")}
-                        className="w-full py-3 flex items-center gap-4 text-[15px] font-medium active:scale-95 transition-all text-left"
-                        style={{ color: 'var(--on-surface)', backgroundColor: 'transparent' }}
-                      >
-                        <Globe size={22} style={{ color: accentColor }} />
-                        <span>Look something up</span>
-                      </button>
-                    )}
+
 
                   </div>
                 )}
@@ -4067,13 +5918,13 @@ const ChatWindow = () => {
                       </form>
                     </div>
                   </div>
-                ) : (
+                ) : !showImageGen ? (
                   <div className={`w-full ${isMobile ? 'mt-auto' : 'max-w-[840px] relative group'} px-0`}>
 
 
                     {isMobile ? (
                       <div className="w-full flex items-center gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
-                        <div className="flex-shrink-0" ref={attachmentRefLanding}>
+                        <div className="flex-shrink-0 relative" ref={attachmentRefLanding} style={{ position: 'relative' }}>
                           <button 
                             type="button"
                             className="w-10 h-10 flex items-center justify-center rounded-full transition-all border border-divider shadow-md"
@@ -4086,7 +5937,16 @@ const ChatWindow = () => {
                           >
                             <Plus size={16} strokeWidth={2.5} />
                           </button>
-                          <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
+                          <AttachmentMenu 
+                            isOpen={showAttachmentMenuLanding} 
+                            onClose={() => setShowAttachmentMenuLanding(false)} 
+                            position="bottom" 
+                            onNavigateImages={() => { setShowAttachmentMenuLanding(false); setShowImageGen(true); setImageGenResult(null); setImageGenPrompt(''); }} 
+                            onSelectRecentFile={handleSelectRecentFile}
+                            onOpenGallerySelect={() => chatFileInputRef.current?.click()}
+                            onNavigateResearch={() => { setShowAttachmentMenuLanding(false); setAppView('research'); }}
+                            libraryFiles={libraryFiles}
+                          />
                         </div>
 
                         <div className="flex-1 flex flex-col items-stretch border border-divider shadow-md transition-all duration-300"
@@ -4324,7 +6184,16 @@ const ChatWindow = () => {
                             <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
                               Attach
                             </div>
-                            <AttachmentMenu isOpen={showAttachmentMenuLanding} onClose={() => setShowAttachmentMenuLanding(false)} position="top" />
+                            <AttachmentMenu 
+                              isOpen={showAttachmentMenuLanding} 
+                              onClose={() => setShowAttachmentMenuLanding(false)} 
+                              position="bottom" 
+                              onNavigateImages={() => { setShowAttachmentMenuLanding(false); setShowImageGen(true); setImageGenResult(null); setImageGenPrompt(''); }} 
+                              onSelectRecentFile={handleSelectRecentFile}
+                              onOpenGallerySelect={() => chatFileInputRef.current?.click()}
+                              onNavigateResearch={() => { setShowAttachmentMenuLanding(false); setAppView('research'); }}
+                              libraryFiles={libraryFiles}
+                            />
                           </div>
                           
                           <form onSubmit={handleSend} className="w-full flex flex-1 items-center gap-3">
@@ -4392,12 +6261,13 @@ const ChatWindow = () => {
                               </div>
                               
                               <div className="flex items-center gap-3 ml-auto flex-shrink-0">
-                                <div className="relative ml-4">
+                                <div className="relative ml-4" ref={modelSwitcherLandingRef}>
                                   <button 
                                     type="button"
                                     onClick={() => setShowModelSwitcherLanding(!showModelSwitcherLanding)}
-                                    className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
+                                    className="flex items-center gap-2 rounded-full transition-all border"
                                     style={{
+                                      padding: '6px 14px',
                                       backgroundColor: isTemporary ? 'transparent' : 'var(--hover-overlay)',
                                       borderColor: isTemporary ? (theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)') : 'var(--divider)',
                                       color: isTemporary ? (theme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface-muted)'
@@ -4414,14 +6284,14 @@ const ChatWindow = () => {
                                   <AnimatePresence>
                                     {showModelSwitcherLanding && (
                                       <motion.div
-                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        exit={{ opacity: 0, y: 8, scale: 0.95 }}
                                         style={{
                                           position: 'absolute', top: '100%', left: 0, marginTop: '8px',
-                                          width: '180px', background: 'var(--surface-1)', borderRadius: '16px',
+                                          width: '200px', background: 'var(--surface-1)', borderRadius: '16px',
                                           border: '1px solid var(--divider)', padding: '6px', zIndex: 100,
-                                          boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : 'none'
+                                          boxShadow: resolvedTheme === 'dark' ? '0 20px 40px rgba(0,0,0,0.2)' : '0 8px 24px rgba(0,0,0,0.1)'
                                         }}
                                       >
                                         {['Gemini', 'GPT-4', 'DeepSeek', 'Llama'].map(m => (
@@ -4506,24 +6376,36 @@ const ChatWindow = () => {
                       </div>
                     )}
                   </div>
-                )}
+                ) : null}
 
-                {!isMobile && !isTemporary && (
+
+                {!isMobile && !isTemporary && !showImageGen && (
                   <div className={`flex flex-wrap items-center justify-center gap-2 w-full max-w-3xl mx-auto px-4`} style={{ marginTop: '40px' }}>
                     {activeCategory !== 'write' && (
                       <button 
-                        onClick={() => setInput("Create an image of ")} 
-                        className={`px-6 py-3 rounded-full border text-[14px] font-semibold active:scale-95 transition-all ${input.startsWith("Create an image of ") ? 'bg-surface-3 border-divider' : 'bg-surface-1 border-divider'}`}
-                        style={{ 
-                          borderColor: input.startsWith("Create an image of ") ? accentColor : '',
-                          backgroundColor: input.startsWith("Create an image of ") ? `${accentColor}15` : 'transparent'
-                        }}
-                        onMouseEnter={(e) => { if(!input.startsWith("Create an image of ")) e.currentTarget.style.backgroundColor = `${accentColor}10`; }}
-                        onMouseLeave={(e) => { if(!input.startsWith("Create an image of ")) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        onClick={() => { setShowImageGen(true); setImageGenResult(null); setImageGenPrompt(''); }} 
+                        className="px-6 py-3 rounded-full border text-[14px] font-semibold active:scale-95 transition-all bg-transparent border-divider"
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${accentColor}10`; e.currentTarget.style.borderColor = accentColor; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.borderColor = ''; }}
                       >
                         <div className="flex items-center gap-2">
                           <Image size={18} style={{ color: accentColor }} />
                           <span>Create an image</span>
+                        </div>
+                      </button>
+                    )}
+
+                    {activeCategory !== 'write' && (
+                      <button 
+                        onClick={() => setInput("Search for ")}
+                        className="px-6 py-3 rounded-full border bg-surface-1 border-divider text-[14px] font-semibold active:scale-95 transition-all"
+                        style={{ backgroundColor: 'transparent' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${accentColor}10`; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Globe size={18} style={{ color: accentColor }} />
+                          <span>Look something up</span>
                         </div>
                       </button>
                     )}
@@ -4564,20 +6446,7 @@ const ChatWindow = () => {
                       )}
                     </div>
 
-                    {activeCategory !== 'write' && (
-                      <button 
-                        onClick={() => setInput("Search for ")}
-                        className="px-6 py-3 rounded-full border bg-surface-1 border-divider text-[14px] font-semibold active:scale-95 transition-all"
-                        style={{ backgroundColor: 'transparent' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${accentColor}10`; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Globe size={18} style={{ color: accentColor }} />
-                          <span>Look something up</span>
-                        </div>
-                      </button>
-                    )}
+
 
                   </div>
                 )}
@@ -4633,7 +6502,7 @@ const ChatWindow = () => {
                   {sortedMessages.map((msg, index) => {
                     return (
                       <React.Fragment key={msg.id}>
-                        <div className={`w-full flex flex-col gap-4 mb-16 group/msg ${msg.role === 'ai' ? 'mt-8' : ''}`}>
+                        <div id={`msg-${msg.id}`} className={`w-full flex flex-col gap-4 mb-16 group/msg ${msg.role === 'ai' ? 'mt-8' : ''}`}>
                           {renderMessageView(msg, index)}
                         </div>
                       </React.Fragment>
@@ -4747,6 +6616,21 @@ const ChatWindow = () => {
 
         <div ref={messagesEndRef} className="h-4" />
       </div>
+
+      {/* Floating Scroll-prompts Navigation Bar */}
+      {(() => {
+        const imageMessages = messages.filter(m => m.isAspectGeneration || (m.content && m.content.startsWith('![image](')));
+        if (imageMessages.length > 0) {
+          return (
+            <ImageGenerationSidebarNavigator 
+              imageMessages={imageMessages}
+              scrollContainerRef={scrollContainerRef}
+              activeChatId={activeChatId}
+            />
+          );
+        }
+        return null;
+      })()}
     </main>
 
 
@@ -4924,7 +6808,7 @@ const ChatWindow = () => {
             ) : (
               isMobile ? (
                 <div className="w-full flex items-center gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
-                  <div className="flex-shrink-0" ref={attachmentRefFooter}>
+                  <div className="flex-shrink-0 relative" ref={attachmentRefFooter} style={{ position: 'relative' }}>
                     <button 
                       type="button"
                       className="w-10 h-10 flex items-center justify-center rounded-full transition-all border border-divider shadow-md"
@@ -4937,7 +6821,17 @@ const ChatWindow = () => {
                     >
                       <Plus size={16} strokeWidth={2.5} />
                     </button>
-                    <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" onSelectFile={handleChatFileSelect} />
+                    <AttachmentMenu 
+                      isOpen={showAttachmentMenu} 
+                      onClose={() => setShowAttachmentMenu(false)} 
+                      position="top" 
+                      onSelectFile={handleChatFileSelect} 
+                      onNavigateImages={() => { setShowAttachmentMenu(false); setAppView('images'); }} 
+                      onSelectRecentFile={handleSelectRecentFile}
+                      onOpenGallerySelect={() => chatFileInputRef.current?.click()}
+                      onNavigateResearch={() => { setShowAttachmentMenu(false); setAppView('research'); }}
+                      libraryFiles={libraryFiles}
+                    />
                   </div>
 
                   <div className="flex-1 flex flex-col items-stretch border border-divider shadow-md transition-all duration-300"
@@ -5184,7 +7078,17 @@ const ChatWindow = () => {
                       <div className="tooltip-label absolute top-full left-1/2 -translate-x-1/2 mt-3 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-all duration-200 -translate-y-1 group-hover/tooltip:translate-y-0 z-50">
                         Attach
                       </div>
-                      <AttachmentMenu isOpen={showAttachmentMenu} onClose={() => setShowAttachmentMenu(false)} position="top" onSelectFile={handleChatFileSelect} />
+                      <AttachmentMenu 
+                        isOpen={showAttachmentMenu} 
+                        onClose={() => setShowAttachmentMenu(false)} 
+                        position="top" 
+                        onSelectFile={handleChatFileSelect} 
+                        onNavigateImages={() => { setShowAttachmentMenu(false); setShowImageGen(true); setImageGenResult(null); setImageGenPrompt(''); }} 
+                        onSelectRecentFile={handleSelectRecentFile}
+                        onOpenGallerySelect={() => chatFileInputRef.current?.click()}
+                        onNavigateResearch={() => { setShowAttachmentMenu(false); setAppView('research'); }}
+                        libraryFiles={libraryFiles}
+                      />
                     </div>
 
                     <form onSubmit={handleSend} className="w-full flex flex-1 items-center gap-3" style={{ flex: 1 }}>
@@ -5256,12 +7160,13 @@ const ChatWindow = () => {
                         </div>
 
                         <div className="flex items-center gap-3 ml-auto flex-shrink-0">
-                          <div className="relative ml-4">
+                          <div className="relative ml-4" ref={modelSwitcherRef}>
                             <button 
                               type="button" 
                               onClick={() => setShowModelSwitcher(!showModelSwitcher)}
-                              className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border"
+                              className="flex items-center gap-2 rounded-full transition-all border"
                               style={{
+                                padding: '6px 14px',
                                 borderColor: 'var(--divider)',
                                 background: 'transparent',
                                 color: 'var(--on-surface-muted)',
@@ -5271,7 +7176,10 @@ const ChatWindow = () => {
                               onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover-overlay)'; e.currentTarget.style.color = 'var(--on-surface)'; }}
                               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--on-surface-muted)'; }}
                             >
-                              <Brain size={13} style={{ color: accentColor }} />
+                              {aiModel === 'GPT-4' && <Zap size={14} className="text-amber-500" />}
+                              {aiModel === 'DeepSeek' && <Brain size={14} className="text-blue-500" />}
+                              {aiModel === 'Llama' && <Cpu size={14} className="text-emerald-500" />}
+                              {(aiModel === 'gemini' || aiModel === 'Gemini' || aiModel === 'aura') && <Sparkles size={14} style={{ color: '#6366f1' }} />}
                               <span className="capitalize">{aiModel}</span>
                               <ChevronDown size={12} />
                             </button>
@@ -5279,30 +7187,49 @@ const ChatWindow = () => {
                             <AnimatePresence>
                               {showModelSwitcher && (
                                 <motion.div
-                                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                  initial={{ opacity: 0, scale: 0.95, y: -8 }}
                                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                  className="absolute bottom-full left-0 mb-2 p-1.5 rounded-2xl flex flex-col gap-1 shadow-lg border z-50 min-w-[140px]"
+                                  exit={{ opacity: 0, scale: 0.95, y: -8 }}
                                   style={{
+                                    position: 'absolute',
+                                    bottom: '100%',
+                                    left: 0,
+                                    marginBottom: '8px',
                                     background: 'var(--surface-1)',
-                                    borderColor: 'var(--divider)'
+                                    borderColor: 'var(--divider)',
+                                    border: '1px solid var(--divider)',
+                                    borderRadius: '18px',
+                                    padding: '6px',
+                                    minWidth: '190px',
+                                    zIndex: 200,
+                                    boxShadow: '0 -8px 32px rgba(0,0,0,0.18)'
                                   }}
                                 >
-                                  {['gemini', 'aura'].map(model => (
+                                  {[
+                                    { id: 'Gemini', label: 'Gemini', icon: <Sparkles size={15} style={{ color: '#6366f1' }} /> },
+                                    { id: 'GPT-4', label: 'GPT-4', icon: <Zap size={15} className="text-amber-500" /> },
+                                    { id: 'DeepSeek', label: 'DeepSeek', icon: <Brain size={15} className="text-blue-500" /> },
+                                    { id: 'Llama', label: 'Llama', icon: <Cpu size={15} className="text-emerald-500" /> },
+                                  ].map(({ id, label, icon }) => (
                                     <button
-                                      key={model}
+                                      key={id}
                                       type="button"
-                                      onClick={() => { setAiModel(model); setShowModelSwitcher(false); }}
-                                      className="w-full text-left px-3 py-2 rounded-xl text-[13px] font-semibold transition-all capitalize flex items-center justify-between"
+                                      onClick={() => { setAiModel(id); setShowModelSwitcher(false); }}
                                       style={{
-                                        color: aiModel === model ? 'var(--on-surface)' : 'var(--on-surface-muted)',
-                                        background: aiModel === model ? 'var(--hover-overlay-2)' : 'transparent'
+                                        width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                                        padding: '9px 12px', borderRadius: '12px', border: 'none',
+                                        cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                                        fontSize: '13.5px', fontWeight: 500,
+                                        color: aiModel === id ? 'var(--on-surface)' : 'var(--on-surface-muted)',
+                                        background: aiModel === id ? 'var(--hover-overlay-2)' : 'transparent',
+                                        transition: 'background 0.15s'
                                       }}
-                                      onMouseEnter={e => { if(aiModel !== model) e.currentTarget.style.background = 'var(--hover-overlay)'; }}
-                                      onMouseLeave={e => { if(aiModel !== model) e.currentTarget.style.background = 'transparent'; }}
+                                      onMouseEnter={e => { if(aiModel !== id) e.currentTarget.style.background = 'var(--hover-overlay)'; }}
+                                      onMouseLeave={e => { if(aiModel !== id) e.currentTarget.style.background = aiModel === id ? 'var(--hover-overlay-2)' : 'transparent'; }}
                                     >
-                                      <span>{model}</span>
-                                      {aiModel === model && <Check size={14} style={{ color: accentColor }} />}
+                                      <span style={{ width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</span>
+                                      <span style={{ flex: 1 }}>{label}</span>
+                                      {aiModel === id && <Check size={13} style={{ color: accentColor, flexShrink: 0 }} />}
                                     </button>
                                   ))}
                                 </motion.div>
@@ -5402,6 +7329,7 @@ const ChatWindow = () => {
           </div>
         </footer>
       )}
+      {renderGallerySelectModal()}
       {deleteConfirm.open && typeof document !== 'undefined' && createPortal(
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 99999999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}
@@ -5445,7 +7373,7 @@ const ChatWindow = () => {
         </div>,
         document.body
       )}
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      {renderShareModal()}
       <ShareModal 
         isOpen={isShareModalOpen} 
         onClose={() => setIsShareModalOpen(false)} 

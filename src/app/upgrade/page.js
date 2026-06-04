@@ -373,17 +373,24 @@ export default function UpgradePage() {
 
   useEffect(() => {
     if (!hasLoadedFromUrl.current) return;
-    const params = new URLSearchParams(window.location.search);
-    if (selectedPlan) {
-      params.set('plan', selectedPlan.title);
-    } else {
-      params.delete('plan');
-    }
-    params.set('period', billingPeriod);
+    const currentParams = new URLSearchParams(window.location.search);
+    let isDifferent = false;
+    
+    const newPlan = selectedPlan ? selectedPlan.title : null;
+    if (currentParams.get('plan') !== newPlan) isDifferent = true;
+    if (currentParams.get('period') !== billingPeriod) isDifferent = true;
 
-    const newUrl = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
-  }, [selectedPlan, billingPeriod]);
+    if (isDifferent) {
+      if (selectedPlan) {
+        currentParams.set('plan', selectedPlan.title);
+      } else {
+        currentParams.delete('plan');
+      }
+      currentParams.set('period', billingPeriod);
+      const newUrl = `${window.location.pathname}?${currentParams.toString()}`;
+      router.replace(newUrl, { scroll: false });
+    }
+  }, [selectedPlan, billingPeriod, router]);
 
   // States for checkout
   const [clientSecret, setClientSecret] = useState('');
