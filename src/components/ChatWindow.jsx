@@ -2076,6 +2076,7 @@ const ChatWindow = () => {
   const exploreScrollRef = useRef(null);
   const [isHeaderMoreOpen, setIsHeaderMoreOpen] = useState(false);
   const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
+  const [isKyraModalOpen, setIsKyraModalOpen] = useState(false);
   const [isGroupChatMenuOpen, setIsGroupChatMenuOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
@@ -4671,6 +4672,15 @@ const ChatWindow = () => {
       <ReportModal 
         isOpen={isReportModalOpen} 
         onClose={() => setIsReportModalOpen(false)} 
+        onSubmit={() => {
+          setIsReportModalOpen(false);
+          showGlobalToast("Report sent successfully");
+        }}
+      />
+      <CustomizedKyraModal 
+        isOpen={isKyraModalOpen}
+        onClose={() => setIsKyraModalOpen(false)}
+        activeChat={chats.find(c => c.id === activeChatId)}
       />
       <MsgDeleteModal 
         isOpen={msgDeleteConfirm.open}
@@ -5101,7 +5111,10 @@ const ChatWindow = () => {
                           setIsGroupChatMenuOpen(false); 
                         }}>Rename group</span>
                       </button>
-                      <button className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
+                      <button 
+                        className="flex items-center gap-4 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left"
+                        onClick={() => { setIsKyraModalOpen(true); setIsGroupChatMenuOpen(false); }}
+                      >
                         <Settings size={18} className="text-on-surface-muted" />
                         <span className="text-[14px] font-medium text-on-surface">Customized Kyra</span>
                       </button>
@@ -8772,7 +8785,124 @@ const GroupLinkModal = ({ isOpen, onClose, chatId, showGlobalToast }) => {
 };
 
 
-const ReportModal = ({ isOpen, onClose }) => {
+const CustomizedKyraModal = ({ isOpen, onClose, activeChat }) => {
+  const { resolvedTheme, profile } = useAppContext();
+  const isAdmin = activeChat?.creator?.uid === profile?.uid;
+  
+  if (!isOpen) return null;
+
+  return createPortal(
+    <AnimatePresence>
+      <div 
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9999999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.45)',
+          backdropFilter: 'blur(3px)',
+          padding: '20px'
+        }}
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 30 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 30 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+          onClick={e => e.stopPropagation()}
+          style={{
+            background: resolvedTheme === 'dark' ? '#1c1c1e' : '#ffffff',
+            borderRadius: '24px',
+            width: '100%',
+            maxWidth: '420px',
+            padding: '20px',
+            boxShadow: '0 30px 60px -12px rgba(0, 0, 0, 0.45)',
+            border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+            position: 'relative'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+            <h2 style={{ 
+              fontSize: '18px', fontWeight: 600, color: resolvedTheme === 'dark' ? '#fff' : '#000', 
+              letterSpacing: '-0.01em', margin: 0
+            }}>
+              Customized Kyra
+            </h2>
+            <button 
+              onClick={onClose}
+              style={{
+                width: '30px', height: '30px', borderRadius: '8px',
+                border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`,
+                background: 'transparent', color: resolvedTheme === 'dark' ? '#fff' : '#000',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div style={{ height: '1px', background: 'var(--divider)', margin: '0 -20px 18px -20px' }} />
+
+          {isAdmin ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '400px', overflowY: 'auto', paddingRight: '4px' }}>
+              <p style={{ fontSize: '14px', color: 'var(--on-surface-muted)', margin: '0 0 8px 0' }}>Group Members Details</p>
+              {activeChat?.participants?.length > 0 ? activeChat.participants.map(p => (
+                <div key={p.uid} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ 
+                    width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden',
+                    background: 'var(--hover-overlay-2)', border: '1px solid var(--divider)',
+                    flexShrink: 0
+                  }}>
+                    {p.avatar ? (
+                      <img src={p.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <User size={18} style={{ color: 'var(--on-surface-subtle)' }} />
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: resolvedTheme === 'dark' ? '#fff' : '#000', fontSize: '14.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {p.displayName || 'User'} {p.uid === profile?.uid && '(You)'}
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: 'var(--on-surface-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {p.email || 'No email provided'}
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <div style={{ fontSize: '14px', color: 'var(--on-surface-muted)', textAlign: 'center', padding: '20px 0' }}>
+                  No members yet.
+                </div>
+              )}
+            </div>
+          ) : (
+             <div style={{ padding: '20px 0', textAlign: 'center' }}>
+               <div style={{ 
+                 width: '48px', height: '48px', borderRadius: '50%', 
+                 background: 'rgba(255, 69, 58, 0.1)', color: '#ff453a',
+                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                 margin: '0 auto 16px auto'
+               }}>
+                 <AlertTriangle size={24} />
+               </div>
+               <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--on-surface)', marginBottom: '8px' }}>Admin Access Required</h3>
+               <p style={{ fontSize: '14px', color: 'var(--on-surface-muted)', lineHeight: 1.5, margin: 0 }}>
+                 Customized Kyra options are restricted to group admins. You are a member.
+               </p>
+             </div>
+          )}
+
+        </motion.div>
+      </div>
+    </AnimatePresence>,
+    document.body
+  );
+};
+
+const ReportModal = ({ isOpen, onClose, onSubmit }) => {
   const { resolvedTheme, accentColor } = useAppContext();
   const [selectedOption, setSelectedOption] = useState(null);
 
@@ -8854,6 +8984,13 @@ const ReportModal = ({ isOpen, onClose }) => {
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button
             disabled={!selectedOption}
+            onClick={() => {
+              if (onSubmit) {
+                onSubmit(selectedOption);
+              } else {
+                onClose();
+              }
+            }}
             style={{
               padding: '10px 24px', borderRadius: '999px',
               background: selectedOption ? (accentColor || 'var(--on-surface)') : 'var(--hover-overlay)',
