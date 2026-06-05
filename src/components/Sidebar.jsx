@@ -167,7 +167,9 @@ const Sidebar = () => {
   };
 
   const displayChats = (chats || []).filter(c => c && c.messages && Array.isArray(c.messages) && c.messages.length > 0);
-  const sortedChats = [...displayChats.filter(c => c.pinned), ...displayChats.filter(c => !c.pinned)];
+  // Deduplicate by ID — keep the last occurrence (most recent state)
+  const uniqueChats = Array.from(new Map(displayChats.map(c => [c.id, c])).values());
+  const sortedChats = [...uniqueChats.filter(c => c.pinned), ...uniqueChats.filter(c => !c.pinned)];
 
   if (mounted && isMobile && !showLoggedIn) {
     return (

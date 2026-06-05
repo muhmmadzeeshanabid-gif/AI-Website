@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || "";
 
-const DEFAULT_SYSTEM_PROMPT = "You are Kyra, a professional and helpful intelligence assistant. When shown an image, describe and analyze its contents in detail. ONLY if the user EXPLICITLY and DIRECTLY asks you to draw, paint, sketch, create, or generate a new image, you should formulate a detailed English prompt describing the image they want and append exactly '[GENERATE_IMAGE: <detailed prompt>]' at the end of your response. NEVER append this tag for greetings, casual chat, or general questions. Do not say you cannot create or generate images.";
+const DEFAULT_SYSTEM_PROMPT = "You are Kyra, a professional and helpful intelligence assistant. If the user asks you to generate, create, draw, paint, or make a new image from a text description (e.g., 'car ki image bana do', 'generate an image of a cat', 'draw a sunset', 'mujhe ek logo chahiye'), or if shown an image and the user asks you to modify, edit, style, cartoonify, recreate, change, or generate a version/variation of it (e.g., 'is image ko cartoon bana do', 'ye image bana kar dena', 'make this like a cartoon', 'change background to a beach', 'add a dog to this image', 'is image ko aisa kardo'), you should translate the request or analyze the input image and construct a detailed English prompt describing the image (incorporating any original subject/elements and requested changes). Describe your proposed design/image details in text first, and at the end of your text description, ask the user in Roman Urdu (or English/Hindi matching the conversation language) if they want you to generate the image now (e.g., 'Agr aap kaho to mein ab image bana kar dy doon?' or 'Should I generate this image for you now?'), and then append exactly '[GENERATE_IMAGE: <detailed prompt>]' at the very end of your response. NEVER append this tag for greetings, casual chat, or general questions. Do not say you cannot create or generate images.";
 
 /**
  * Extract image data from a message that may contain markdown image syntax.
@@ -149,6 +149,17 @@ export const getGeminiResponse = async (prompt, history = [], personalization = 
   // Extract image data before selecting model chain
   const imageData = await extractImageFromPrompt(prompt);
 
+  // If there's an image, ensure the system prompt includes image analysis and editing/generation instructions
+  let activeSystemPrompt = personalization?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+  if (imageData.hasImage && !activeSystemPrompt.includes('GENERATE_IMAGE')) {
+    activeSystemPrompt += " When shown an image, if the user asks you to modify, edit, style, cartoonify, recreate, change, or generate a version/variation of the uploaded image (e.g., 'is image ko cartoon bana do', 'ye image bana kar dena', 'make this like a cartoon', 'change background to a beach', 'add a dog to this image', 'is image ko aisa kardo'), you should analyze the input image, translate the user's request into a detailed English prompt describing the new image (incorporating the original subject/elements and the requested changes). At the end of your text description, ask the user in Roman Urdu (or English/Hindi matching the conversation language) if they want you to generate the image now (e.g., 'Agr aap kaho to mein ab image bana kar dy doon?' or 'Should I generate this image for you now?'), and then append exactly '[GENERATE_IMAGE: <detailed prompt>]' at the very end of your response. NEVER append this tag for greetings, casual chat, or general questions. Do not say you cannot create or generate images.";
+  }
+
+  const modifiedPersonalization = {
+    ...personalization,
+    systemPrompt: activeSystemPrompt
+  };
+
   // Define the hierarchy of models — vision models prioritized when image is present
   let modelChain;
   if (imageData.hasImage) {
@@ -179,13 +190,13 @@ export const getGeminiResponse = async (prompt, history = [], personalization = 
       let result = null;
 
       if (model.type === "openrouter" && OPENROUTER_API_KEY) {
-        result = await tryOpenRouter(model.id, prompt, history, signal, onUpdate, imageData, personalization);
+        result = await tryOpenRouter(model.id, prompt, history, signal, onUpdate, imageData, modifiedPersonalization);
       } else if (model.type === "gemini" && GEMINI_API_KEY) {
-        result = await tryGeminiSDK(prompt, history, signal, onUpdate, imageData, model.id, personalization);
+        result = await tryGeminiSDK(prompt, history, signal, onUpdate, imageData, model.id, modifiedPersonalization);
       } else if (model.type === "ollama") {
-        result = await tryOllama(model.id, prompt, history, signal, onUpdate, personalization);
+        result = await tryOllama(model.id, prompt, history, signal, onUpdate, modifiedPersonalization);
       } else if (model.type === "pollinations") {
-        result = await tryPollinations(imageData.cleanText || prompt, history, signal, onUpdate, personalization);
+        result = await tryPollinations(imageData.cleanText || prompt, history, signal, onUpdate, modifiedPersonalization);
       }
 
       if (result) return result;

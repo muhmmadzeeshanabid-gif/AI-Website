@@ -44,7 +44,29 @@ export async function POST(request) {
       // ─── Strategy 1: HF Router → wavespeed provider → FLUX.1-dev ──────────
       // This is the JavaScript equivalent of:
       //   InferenceClient(provider="wavespeed").text_to_image(model="FLUX.1-dev")
-      const wavespeedAttempts = [
+      const routerAttempts = [
+        {
+          url: 'https://router.huggingface.co/together/v1/images/generations',
+          body: JSON.stringify({
+            model: 'black-forest-labs/FLUX.1-schnell',
+            prompt: cleanPrompt,
+            n: 1,
+            size: '1024x1024',
+          }),
+          name: 'HF Router (together / FLUX.1-schnell)',
+          expectJson: true,
+        },
+        {
+          url: 'https://router.huggingface.co/together/v1/images/generations',
+          body: JSON.stringify({
+            model: 'black-forest-labs/FLUX.1-dev',
+            prompt: cleanPrompt,
+            n: 1,
+            size: '1024x1024',
+          }),
+          name: 'HF Router (together / FLUX.1-dev)',
+          expectJson: true,
+        },
         {
           url: 'https://router.huggingface.co/wavespeed/v1/images/generations',
           body: JSON.stringify({
@@ -69,7 +91,7 @@ export async function POST(request) {
         },
       ];
 
-      for (const attempt of wavespeedAttempts) {
+      for (const attempt of routerAttempts) {
         if (imageBuffer) break;
         try {
           console.log(`Trying ${attempt.name}...`);
@@ -106,15 +128,9 @@ export async function POST(request) {
                 chosenProvider = attempt.name;
                 console.log(`${attempt.name} succeeded (b64_json)!`);
               } else if (item?.url) {
-                // Fetch the image URL
-                const imgRes = await fetchWithTimeout(item.url, {}, 20000);
-                if (imgRes.ok) {
-                  const ab = await imgRes.arrayBuffer();
-                  imageBuffer = Buffer.from(ab);
-                  contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-                  chosenProvider = attempt.name + ' (URL)';
-                  console.log(`${attempt.name} succeeded (URL fetch)!`);
-                }
+                // Return CDN URL directly to prevent timeouts and speed up load time
+                console.log(`${attempt.name} succeeded (returning URL directly):`, item.url);
+                return NextResponse.json({ imageUrl: item.url, provider: attempt.name });
               } else {
                 console.warn(`${attempt.name} returned unexpected JSON:`, JSON.stringify(json).slice(0, 200));
               }

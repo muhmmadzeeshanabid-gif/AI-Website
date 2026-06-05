@@ -83,6 +83,29 @@ const defaultFiles = [
   }
 ];
 
+const stripGenerateImageTag = (text) => {
+  if (!text) return text;
+  
+  // If the text contains [GENERATE_IMAGE: or a variation, we strip from that point onwards
+  const index = text.toLowerCase().indexOf('[generate_image');
+  if (index !== -1) {
+    return text.substring(0, index).trim();
+  }
+  
+  // Also check for partial tag typing at the very end of stream, e.g. "[GEN", "[GENER", "[GENERATE_IMAGE"
+  const partials = [
+    '[generate_image:', '[generate_image', '[generate_imag', '[generate_ima', '[generate_im',
+    '[generate_i', '[generate_', '[generat', '[genera', '[gener', '[gene', '[gen', '[ge', '[g', '['
+  ];
+  for (const p of partials) {
+    if (text.toLowerCase().endsWith(p)) {
+      return text.substring(0, text.length - p.length).trim();
+    }
+  }
+  
+  return text;
+};
+
 const renderFileThumbnail = (file, size = 36) => {
   if (file.thumbnailUrl) {
     return (
@@ -1062,8 +1085,23 @@ const cropImageToRatio = (imgUrl, ratioStr, callback) => {
   };
 };
 
+/**
+ * Generate a short, meaningful title from an image generation prompt.
+ * Takes the first few content words, strips common filler, and caps at ~30 chars.
+ */
+const makeShortImageName = (prompt) => {
+  if (!prompt) return 'Generated Image';
+  // Strip common boilerplate suffixes (detailed english prompts after comma/dash)
+  const truncated = prompt.replace(/,.*$/, '').replace(/[-–—].*$/, '').trim();
+  // Remove common AI filler words
+  const words = truncated.split(/\s+/).filter(w => !/^(a|an|the|of|with|in|on|at|and|or|for|to|very|highly|ultra|detailed|professional|4k|8k|hd|photorealistic|realistic|style|render|digital|art|image|photo|picture|generate|create|make|draw|bana|do|ki|ka|ko|mujhe|chahiye|ek)$/i.test(w));
+  const name = words.slice(0, 4).join(' ');
+  if (!name) return 'Generated Image';
+  return name.length > 30 ? name.slice(0, 28) + '…' : name;
+};
+
 const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInitially, setMessages, timestamp, onExpand }) => {
-  const { activeChatId, setEditingImage, setActiveEditImage, setAppView, setActiveShareImage, setShareModalState, user, addMyImage } = useAppContext();
+  const { chats, activeChatId, setEditingImage, setActiveEditImage, setAppView, setActiveShareImage, setShareModalState, user, addMyImage, setChats } = useAppContext();
   const [phase, setPhase] = useState(() => {
     if (isDoneInitially) return 'done';
     return 'sketching';
@@ -1086,7 +1124,7 @@ const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInit
         if (onExpandRef.current) {
           setTimeout(onExpandRef.current, 50);
         }
-      }, 2500);
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [showCard, isDoneInitially]);
@@ -1102,7 +1140,7 @@ const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInit
         } else {
           setLoadingText(texts[idx]);
         }
-      }, 2000);
+      }, 800);
       return () => clearInterval(interval);
     }
   }, [phase, showCard]);
@@ -1111,7 +1149,7 @@ const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInit
     if (showCard && !isDoneInitially) {
       const timer = setTimeout(() => {
         setMinSketchTimePassed(true);
-      }, 12000);
+      }, 400);
       return () => clearTimeout(timer);
     }
   }, [showCard, isDoneInitially]);
@@ -1134,21 +1172,43 @@ const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInit
 
       const doneTimer = setTimeout(() => {
         setPhase('done');
-        cropImageToRatio(imageUrl, ratio, (croppedDataUrl) => {
-            const newImgObj = {
-              id: `img-gen-aspect-${Date.now()}`,
-              url: croppedDataUrl,
-              prompt: prompt || `Cropped to aspect ratio ${ratio}`,
-              chatId: activeChatId,
-              isGenerated: true
-            };
-            addMyImage(newImgObj);
 
-          if (setMessages && messageId) {
-            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, aspectGenDone: true } : m));
+        // Store the original URL directly — no canvas re-download needed.
+        // CSS objectFit:cover handles visual cropping in the UI.
+        const newImgObj = {
+          id: `img-gen-aspect-${Date.now()}`,
+          url: imageUrl,
+          prompt: prompt || `Generated image`,
+          chatId: activeChatId,
+          isGenerated: true
+        };
+        addMyImage(newImgObj);
+
+        if (setMessages && messageId) {
+          setMessages(prev => prev.map(m => m.id === messageId ? { ...m, aspectGenDone: true } : m));
+        }
+        if (setChats && activeChatId && messageId) {
+          setChats(prev => prev.map(c => c.id === activeChatId ? {
+            ...c,
+            messages: (c.messages || []).map(m => m.id === messageId ? { ...m, aspectGenDone: true } : m)
+          } : c));
+        }
+        if (activeChatId && messageId) {
+          const currentChat = chats?.find(c => c.id === activeChatId);
+          if (currentChat?.isGroup) {
+            const chatRef = doc(db, 'chats', activeChatId);
+            getDoc(chatRef).then(docSnap => {
+              if (docSnap.exists()) {
+                const currentMsgs = docSnap.data().messages || [];
+                const updatedMsgs = currentMsgs.map(m => 
+                  m.id === messageId ? { ...m, aspectGenDone: true } : m
+                );
+                updateDoc(chatRef, { messages: updatedMsgs }).catch(console.error);
+              }
+            }).catch(console.error);
           }
-        });
-      }, 13000); // 13000ms transition time
+        }
+      }, 350);
 
       return () => {
         clearTimeout(doneTimer);
@@ -1238,7 +1298,7 @@ const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInit
               justifyContent: 'space-between',
               zIndex: 4,
               transform: phase === 'revealing' ? 'translateY(100%)' : 'translateY(0%)',
-              transition: 'transform 13s cubic-bezier(0.4, 0, 0.2, 1)'
+              transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#e5e7eb' }}>
@@ -1740,7 +1800,7 @@ const ImageGenerationSidebarNavigator = ({ imageMessages, scrollContainerRef, ac
                 }}
                 title={msg.prompt || 'Generated Image'}
               >
-                {msg.prompt || 'Generated Image'}
+                {makeShortImageName(msg.prompt)}
               </button>
             );
           })}
@@ -1821,6 +1881,30 @@ const ChatWindow = () => {
   const [input, setInput] = useState('');
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [globalToast, setGlobalToast] = useState('');
+  const [isResearchPillHovered, setIsResearchPillHovered] = useState(false);
+
+  const handleDisableResearchMode = async () => {
+    if (!activeChatId) return;
+    setChats(prev => prev.map(c => 
+      c.id === activeChatId ? { ...c, isResearch: false, pendingResearchPrompt: null } : c
+    ));
+    const currentChat = chats.find(c => c.id === activeChatId);
+    if (currentChat) {
+      if (currentChat.isGroup) {
+        try {
+          await updateDoc(doc(db, 'chats', activeChatId), { isResearch: false });
+        } catch (e) {
+          console.error("Failed to update group research mode:", e);
+        }
+      } else if (user?.uid) {
+        try {
+          await updateDoc(doc(db, 'users', user.uid, 'personal_chats', activeChatId), { isResearch: false });
+        } catch (e) {
+          console.error("Failed to update personal research mode:", e);
+        }
+      }
+    }
+  };
   const showToast = (msg) => {
     setGlobalToast(msg);
     setTimeout(() => setGlobalToast(''), 2500);
@@ -1928,6 +2012,75 @@ const ChatWindow = () => {
   const [showAttachmentMenuLanding, setShowAttachmentMenuLanding] = useState(false);
   const [showModelSwitcher, setShowModelSwitcher] = useState(false);
   const [showModelSwitcherLanding, setShowModelSwitcherLanding] = useState(false);
+  const [isAppsDropdownOpen, setIsAppsDropdownOpen] = useState(false);
+  const [isSitesDropdownOpen, setIsSitesDropdownOpen] = useState(false);
+  const [isSpeedDropdownOpen, setIsSpeedDropdownOpen] = useState(false);
+  const [selectedApp, setSelectedApp] = useState(() => {
+    if (typeof window === 'undefined') return 'All Apps';
+    return localStorage.getItem('aura-research-selected-app') || 'All Apps';
+  });
+  const [selectedSiteOption, setSelectedSiteOption] = useState(() => {
+    if (typeof window === 'undefined') return 'Search the web';
+    return localStorage.getItem('aura-research-selected-site-option') || 'Search the web';
+  });
+  const [specificSites, setSpecificSites] = useState(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem('aura-specific-sites');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [prioritizeSites, setPrioritizeSites] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = localStorage.getItem('aura-research-prioritize-sites');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [selectedSpeed, setSelectedSpeed] = useState(() => {
+    if (typeof window === 'undefined') return 'Instant';
+    return localStorage.getItem('aura-research-speed') || 'Instant';
+  });
+  const [isSpecificSitesOpen, setIsSpecificSitesOpen] = useState(false);
+
+  const appsDropdownRefFooter = useRef(null);
+  const sitesDropdownRefFooter = useRef(null);
+  const speedDropdownRefFooter = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (appsDropdownRefFooter.current && !appsDropdownRefFooter.current.contains(event.target)) {
+        setIsAppsDropdownOpen(false);
+      }
+      if (sitesDropdownRefFooter.current && !sitesDropdownRefFooter.current.contains(event.target)) {
+        setIsSitesDropdownOpen(false);
+      }
+      if (speedDropdownRefFooter.current && !speedDropdownRefFooter.current.contains(event.target)) {
+        setIsSpeedDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aura-research-selected-app', selectedApp);
+    }
+  }, [selectedApp]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aura-research-selected-site-option', selectedSiteOption);
+    }
+  }, [selectedSiteOption]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aura-research-speed', selectedSpeed);
+    }
+  }, [selectedSpeed]);
+
   const [hoveredPlus, setHoveredPlus] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState(null); // { name, type, url, dataUrl }
   const [showGallerySelectModal, setShowGallerySelectModal] = useState(false);
@@ -2177,6 +2330,7 @@ const ChatWindow = () => {
     setShowImageGen(false);
     setImageGenResult(null);
     setImageGenPrompt('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId]);
 
   // Handle start new chat custom event to close inline image generator on home page
@@ -2782,21 +2936,30 @@ const ChatWindow = () => {
             );
           })()}
           {msg.role !== 'user' && (
-            msg.isAspectGeneration ? (
-              <AspectGenCard 
-                messageId={msg.id}
-                imageUrl={msg.imageUrl} 
-                ratio={msg.ratio} 
-                prompt={msg.prompt} 
-                imageId={msg.imageId}
-                isDoneInitially={!!msg.aspectGenDone}
-                setMessages={setMessages}
-                timestamp={msg.timestamp}
-                onExpand={() => scrollToBottom(true)}
-              />
-            ) : msg._typewriter && msg.content && !msg.content.startsWith('![image](')
-              ? <TypewriterMessage content={msg.content} isUser={false} isGenerating={msg.isPlaceholder} onDone={() => setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, _typewriter: false } : m))} />
-              : <MessageContent content={msg.content} isUser={false} />
+            <>
+              {msg.content && (
+                msg._typewriter && !msg.content.startsWith('![image](') ? (
+                  <TypewriterMessage content={msg.content} isUser={false} isGenerating={msg.isPlaceholder} onDone={() => setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, _typewriter: false } : m))} />
+                ) : (
+                  <MessageContent content={msg.content} isUser={false} />
+                )
+              )}
+              {msg.isAspectGeneration && (
+                <div className="mt-3">
+                  <AspectGenCard 
+                    messageId={msg.id}
+                    imageUrl={msg.imageUrl} 
+                    ratio={msg.ratio} 
+                    prompt={msg.prompt} 
+                    imageId={msg.imageId}
+                    isDoneInitially={!!msg.aspectGenDone}
+                    setMessages={setMessages}
+                    timestamp={msg.timestamp}
+                    onExpand={() => scrollToBottom(true)}
+                  />
+                </div>
+              )}
+            </>
           )}
         </>
       }
@@ -2827,7 +2990,7 @@ const ChatWindow = () => {
     </div>
 
       {!msg.isVoice && (
-        <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? ((generatingIds[activeChatId] === msg.id || msg.isPlaceholder || (msg.isAspectGeneration && !msg.aspectGenDone)) ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
+        <div className={`w-full flex ${isMe ? 'flex-row-reverse' : 'flex-row'} px-1 mt-1 ${msg.role === 'ai' ? ((generatingIds[activeChatId] === msg.id || msg.isPlaceholder || (msg.isAspectGeneration && !msg.imageUrl)) ? 'opacity-0 pointer-events-none' : 'opacity-100') : 'opacity-0 group-hover/msg:opacity-100'} transition-opacity relative`}>
          <div className={`flex flex-wrap gap-1 ${!isMe && isOtherUser ? 'ml-[44px]' : ''}`}>
           {isSharedReadOnly ? (
             <ActionButton 
@@ -3384,6 +3547,132 @@ const ChatWindow = () => {
     }
   };
 
+  const handleGenerateImageForMessage = async (messageId, promptText) => {
+    setMessages(prev => prev.map(m => m.id === messageId ? {
+      ...m,
+      isAspectGeneration: true,
+      aspectGenDone: false,
+      ratio: '1:1',
+      prompt: promptText,
+      imageUrl: null,
+      imageId: 'img_' + Date.now(),
+      pendingImagePrompt: null
+    } : m));
+
+    setChats(prevChats => prevChats.map(c => 
+      c.id === activeChatId ? {
+        ...c,
+        messages: c.messages.map(m => m.id === messageId ? {
+          ...m,
+          isAspectGeneration: true,
+          aspectGenDone: false,
+          ratio: '1:1',
+          prompt: promptText,
+          imageUrl: null,
+          imageId: 'img_' + Date.now(),
+          pendingImagePrompt: null
+        } : m)
+      } : c
+    ));
+
+    try {
+      let imageUrl = null;
+      let genProvider = '';
+      try {
+        const response = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: promptText }),
+        });
+        const data = await response.json();
+        if (response.ok && !data.error && data.imageUrl) {
+          imageUrl = data.imageUrl;
+          genProvider = data.provider || 'API';
+        } else {
+          console.warn("Backend image gen API failed, falling back to client-side generation:", data?.error);
+        }
+      } catch (apiErr) {
+        console.warn("Backend image gen API error, falling back to client-side generation:", apiErr);
+      }
+
+      if (!imageUrl) {
+        const hfToken = process.env.NEXT_PUBLIC_HF_ACCESS_TOKEN || '';
+        const clientResult = await generateImageClientSide(promptText, hfToken);
+        if (clientResult && clientResult.url) {
+          imageUrl = clientResult.url;
+          genProvider = clientResult.provider || 'Client-side fallback';
+        } else {
+          throw new Error('All image generation strategies failed');
+        }
+      }
+
+      setMessages(prev => prev.map(m => m.id === messageId ? {
+        ...m,
+        imageUrl: imageUrl,
+        aspectGenDone: false
+      } : m));
+
+      setChats(prevChats => prevChats.map(c => 
+        c.id === activeChatId ? {
+          ...c,
+          messages: c.messages.map(m => m.id === messageId ? {
+            ...m,
+            imageUrl: imageUrl,
+            aspectGenDone: false
+          } : m)
+        } : c
+      ));
+
+      const currentChat = chats.find(c => c.id === activeChatId);
+      if (currentChat?.isGroup) {
+        try {
+          const chatRef = doc(db, 'chats', activeChatId);
+          const docSnap = await getDoc(chatRef);
+          if (docSnap.exists()) {
+            const currentMsgs = docSnap.data().messages || [];
+            const updatedMsgs = currentMsgs.map(m => 
+              m.id === messageId ? { 
+                ...m, 
+                isAspectGeneration: true,
+                aspectGenDone: false,
+                ratio: '1:1',
+                prompt: promptText,
+                imageUrl: imageUrl,
+                imageId: 'img_' + Date.now(),
+                pendingImagePrompt: null
+              } : m
+            );
+            await updateDoc(chatRef, { 
+              messages: updatedMsgs
+            });
+          }
+        } catch (err) {
+          console.error("Failed to sync generated image to group:", err);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to generate image for message:", err);
+      const errorMsg = err.message ? `*(Failed to generate image: ${err.message})*` : "*(Failed to generate image)*";
+      
+      setMessages(prev => prev.map(m => m.id === messageId ? {
+        ...m,
+        isAspectGeneration: false,
+        content: m.content + `\n\n${errorMsg}`
+      } : m));
+
+      setChats(prevChats => prevChats.map(c => 
+        c.id === activeChatId ? {
+          ...c,
+          messages: c.messages.map(m => m.id === messageId ? {
+            ...m,
+            isAspectGeneration: false,
+            content: m.content + `\n\n${errorMsg}`
+          } : m)
+        } : c
+      ));
+    }
+  };
+
   const handleImageGenSubmit = (promptToSubmit) => {
     const promptText = (promptToSubmit && typeof promptToSubmit === 'string') 
       ? promptToSubmit 
@@ -3474,9 +3763,111 @@ const ChatWindow = () => {
     return false;
   };
 
+  const isConfirmationMessage = (text) => {
+    if (!text) return false;
+    // Strip punctuation and normalize spacing
+    const clean = text.toLowerCase()
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    
+    // Negation check
+    const negations = ['no', 'dont', 'don\'t', 'nahi', 'mat', 'stop', 'cancel', 'not', 'na banao', 'na karo', 'na bana', 'na krna', 'na karna'];
+    if (negations.some(neg => {
+      return clean === neg || 
+             clean.startsWith(neg + ' ') || 
+             clean.endsWith(' ' + neg) || 
+             clean.includes(' ' + neg + ' ');
+    })) {
+      return false;
+    }
+
+    const confirmationPhrases = [
+      'bana do', 'banao', 'bana de', 'bana o', 'banaen', 'bana dain',
+      'bna do', 'bnao', 'bna de', 'bna o', 'bnaen', 'bna dain',
+      'baan o', 'baan do', 'banado', 'bnado',
+      'make it', 'generate', 'create it', 'yes', 'haan', 'han', 'sure', 
+      'please do', 'bana do image', 'bna do image', 'banao image', 'bnao image',
+      'baan o image', 'baan do image',
+      'image bana do', 'generate image',
+      'kardo', 'kar do', 'ha', 'haa', 'ok', 'okay', 'bana',
+      'ok ha', 'ok hay', 'done', 'yes please', 'do it'
+    ];
+    return confirmationPhrases.some(phrase => {
+      return clean === phrase || 
+             clean.startsWith(phrase + ' ') || 
+             clean.endsWith(' ' + phrase) || 
+             clean.includes(' ' + phrase + ' ');
+    });
+  };
+
   const handleSend = async (e, overrideInput, isVoice = false, forceImageGen = false) => {
     if (e) e.preventDefault();
     const rawTextToSend = overrideInput || input;
+    const existingChat = chats.find(c => c.id === activeChatId);
+    const isResearchChat = existingChat?.isResearch || existingChat?.pendingResearchPrompt;
+
+    // Check if it's a confirmation for a pending image generation
+    const isConfirm = isConfirmationMessage(rawTextToSend);
+    if (isConfirm) {
+      const lastAiMsgWithPrompt = [...messages].reverse().find(m => m.role === 'ai' && m.pendingImagePrompt);
+      if (lastAiMsgWithPrompt) {
+        if (replyingToMsg) setReplyingToMsg(null);
+        
+        const userMessage = { 
+          role: 'user', 
+          content: rawTextToSend, 
+          id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
+          sender: profile || { displayName: 'Guest', avatar: null },
+          timestamp: new Date().toISOString()
+        };
+        
+        const newAiMessageId = Date.now() + 2;
+        const newAiMessage = { 
+          role: 'ai', 
+          content: '', 
+          id: newAiMessageId, 
+          isPlaceholder: true,
+          respondingTo: userMessage.id,
+          timestamp: new Date().toISOString(),
+          _typewriter: false
+        };
+        
+        // Append user confirmation and the new AI placeholder, and clear pendingImagePrompt on the old AI message
+        setMessages(prev => prev.map(m => m.id === lastAiMsgWithPrompt.id ? { ...m, pendingImagePrompt: null } : m).concat(userMessage, newAiMessage));
+        
+        setChats(prev => prev.map(c => 
+          c.id === activeChatId ? { 
+            ...c, 
+            messages: (c.messages || [])
+              .map(m => m.id === lastAiMsgWithPrompt.id ? { ...m, pendingImagePrompt: null } : m)
+              .concat(userMessage, newAiMessage) 
+          } : c
+        ));
+        
+        const currentChat = chats.find(c => c.id === activeChatId);
+        if (currentChat?.isGroup) {
+          try {
+            const chatRef = doc(db, 'chats', activeChatId);
+            const docSnap = await getDoc(chatRef);
+            if (docSnap.exists()) {
+              const currentMsgs = docSnap.data().messages || [];
+              const updatedMsgs = currentMsgs
+                .map(m => m.id === lastAiMsgWithPrompt.id ? { ...m, pendingImagePrompt: null } : m)
+                .concat(userMessage, newAiMessage);
+              await updateDoc(chatRef, { messages: updatedMsgs });
+            }
+          } catch (err) {
+            console.error("Failed to sync group confirmation:", err);
+          }
+        }
+        
+        if (!overrideInput) setInput('');
+        
+        handleGenerateImageForMessage(newAiMessageId, lastAiMsgWithPrompt.pendingImagePrompt);
+        return;
+      }
+    }
     
     // If there's a pending attachment, embed it into the message
     let textToSend = rawTextToSend;
@@ -3579,10 +3970,28 @@ const ChatWindow = () => {
         ? cleanTitleText.slice(0, 30) + '...' 
         : cleanTitleText.length > 0 ? cleanTitleText : (attachmentForMessage ? 'Image design request' : 'New Chat');
       
-      const newChat = { id: targetChatId, title: initialTitle, messages: [userMessage, aiPlaceholder], timestamp: new Date().toISOString() };
+      const newChat = { 
+        id: targetChatId, 
+        title: initialTitle, 
+        messages: [userMessage, aiPlaceholder], 
+        timestamp: new Date().toISOString(),
+        isResearch: isResearchChat
+      };
       setChats(prev => [newChat, ...prev.filter(c => c.messages.length > 0 || c.pendingResearchPrompt || c.pendingImagePrompt)]);
       setActiveChatId(targetChatId);
       localStorage.setItem('aura-active-chat-id', targetChatId);
+      if (user?.uid) {
+        const personalChatRef = doc(db, 'users', user.uid, 'personal_chats', targetChatId);
+        setDoc(personalChatRef, {
+          id: targetChatId,
+          title: initialTitle,
+          messages: [userMessage, aiPlaceholder],
+          timestamp: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          isArchived: false,
+          isResearch: !!isResearchChat
+        }).catch(err => console.error("Error saving new chat to Firestore:", err));
+      }
     } else {
       setChats(prev => prev.map(c => 
         c.id === targetChatId ? { ...c, messages: [...(c.messages || []), userMessage, aiPlaceholder] } : c
@@ -3646,7 +4055,23 @@ const ChatWindow = () => {
       let finalPrompt = textToSend;
       
       // Check if it's an image GENERATION request (either forceImageGen is true OR it's detected as an image prompt)
-      const isImgReq = forceImageGen || (!attachmentForMessage && isImagePrompt(rawTextToSend));
+      const hasImageInHistory = messages.some(m => 
+        m.attachment?.type?.startsWith('image/') || 
+        m.imageUrl || 
+        m.isAspectGeneration || 
+        m.pendingImagePrompt
+      );
+      
+      const romanUrduPatterns = [
+        'ki image', 'ki photo', 'ki pic', 'ki tasveer', 'ki tasweer', 'ki tasvir',
+        'ka image', 'ka photo', 'ka pic', 'ka tasveer', 'ka tasweer',
+        'ko image', 'ko photo', 'ko pic',
+        'image bana', 'photo bana', 'tasveer bana', 'tasweer bana', 'tasvir bana',
+        'bana do', 'banao', 'bana de', 'kardo', 'kar do'
+      ];
+      const isRomanUrdu = romanUrduPatterns.some(pattern => rawTextToSend.toLowerCase().includes(pattern));
+
+      const isImgReq = forceImageGen || (!attachmentForMessage && isImagePrompt(rawTextToSend) && !hasImageInHistory && !isRomanUrdu);
       if (isImgReq) {
         setGeneratingIds(prev => ({ ...prev, [targetChatId]: aiMessageId }));
         
@@ -3758,13 +4183,14 @@ const ChatWindow = () => {
 
       const onUpdate = (text) => {
         currentResponse = text;
-        setMessages(prev => prev.map(m => m.id === aiMessageId ? { ...m, content: text } : m));
+        const cleanText = stripGenerateImageTag(text);
+        setMessages(prev => prev.map(m => m.id === aiMessageId ? { ...m, content: cleanText } : m));
         
         // Update global state directly so background generations aren't lost when switching chats
         setChats(prevChats => prevChats.map(c => 
           c.id === targetChatId ? {
             ...c,
-            messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: text } : m)
+            messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: cleanText } : m)
           } : c
         ));
 
@@ -3792,94 +4218,22 @@ const ChatWindow = () => {
       
       let finalResponseContent = aiResponse;
       const genImageMatch = aiResponse.match(/\[GENERATE_IMAGE:\s*([^\]]+)\]/i);
+      let imagePrompt = null;
       
       if (genImageMatch) {
-        const imagePrompt = genImageMatch[1].trim();
-        setMessages(prev => prev.map(m => 
-          m.id === aiMessageId ? { ...m, content: "Generating requested image: " + imagePrompt + "...", isPlaceholder: true } : m
-        ));
-        setChats(prevChats => prevChats.map(c => 
-          c.id === targetChatId ? {
-            ...c,
-            messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: "Generating requested image: " + imagePrompt + "...", isPlaceholder: true } : m)
-          } : c
-        ));
-        
-        try {
-          const response = await fetch('/api/generate-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: imagePrompt }),
-          });
-          const data = await response.json();
-          if (!response.ok || data.error) throw new Error(data.error || 'Failed to generate image');
-          
-          const generatedImageMessage = { 
-            ...aiPlaceholder, 
-            content: '', 
-            isPlaceholder: false, 
-            isAspectGeneration: true, 
-            aspectGenDone: false, 
-            ratio: '1:1', 
-            prompt: imagePrompt, 
-            imageId: 'img_' + Date.now(), 
-            imageUrl: data.imageUrl, 
-            timestamp: new Date().toISOString() 
-          };
-          
-          setMessages(prev => prev.map(m => m.id === aiMessageId ? generatedImageMessage : m));
-          setChats(prevChats => prevChats.map(c => 
-            c.id === targetChatId ? {
-              ...c,
-              messages: c.messages.map(m => m.id === aiMessageId ? generatedImageMessage : m)
-            } : c
-          ));
-          
-          if (isGroup) {
-            try {
-              const chatRef = doc(db, 'chats', activeChatId);
-              const docSnap = await getDoc(chatRef);
-              if (docSnap.exists()) {
-                const currentMsgs = docSnap.data().messages || [];
-                const updatedMsgs = currentMsgs.map(m => 
-                  m.id === aiMessageId ? { 
-                    ...m, 
-                    content: '', 
-                    isPlaceholder: false, 
-                    isAspectGeneration: true, 
-                    aspectGenDone: false, 
-                    ratio: '1:1', 
-                    prompt: imagePrompt, 
-                    imageId: 'img_' + Date.now(), 
-                    imageUrl: data.imageUrl, 
-                    timestamp: new Date().toISOString() 
-                  } : m
-                );
-                await updateDoc(chatRef, { 
-                  messages: updatedMsgs,
-                  [`streamContent.${aiMessageId}`]: null
-                });
-              }
-            } catch (err) {
-              console.error("Failed to sync direct AI image response to group:", err);
-            }
-          }
-          return;
-        } catch (genErr) {
-          console.error("Auto image generation from tag failed:", genErr);
-          const errorMsg = genErr.message ? `*(Failed to generate image: ${genErr.message})*` : "*(Failed to generate image)*";
-          finalResponseContent = aiResponse.replace(/\[GENERATE_IMAGE:\s*([^\]]+)\]/gi, errorMsg);
-        }
+        imagePrompt = genImageMatch[1].trim();
+        // Remove the GENERATE_IMAGE tag from the displayed text
+        finalResponseContent = aiResponse.replace(/\[GENERATE_IMAGE:\s*([^\]]+)\]/gi, '').trim();
       }
 
-      // Always update local state with final response to clear placeholder status
+      // Always update local state with final response to clear placeholder status and store the pending prompt
       setMessages(prev => prev.map(m => 
-        m.id === aiMessageId ? { ...m, content: finalResponseContent, isPlaceholder: false } : m
+        m.id === aiMessageId ? { ...m, content: finalResponseContent, isPlaceholder: false, pendingImagePrompt: imagePrompt } : m
       ));
       setChats(prevChats => prevChats.map(c => 
         c.id === targetChatId ? {
           ...c,
-          messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: finalResponseContent, isPlaceholder: false } : m)
+          messages: c.messages.map(m => m.id === aiMessageId ? { ...m, content: finalResponseContent, isPlaceholder: false, pendingImagePrompt: imagePrompt } : m)
         } : c
       ));
 
@@ -3890,7 +4244,7 @@ const ChatWindow = () => {
           if (docSnap.exists()) {
             const currentMsgs = docSnap.data().messages || [];
             const updatedMsgs = currentMsgs.map(m => 
-              m.id === aiMessageId ? { ...m, content: finalResponseContent, isPlaceholder: false, _typewriter: false } : m
+              m.id === aiMessageId ? { ...m, content: finalResponseContent, isPlaceholder: false, _typewriter: false, pendingImagePrompt: imagePrompt } : m
             );
             // Save final message + clear the streaming temp field
             await updateDoc(chatRef, { 
@@ -4046,7 +4400,7 @@ const ChatWindow = () => {
 
     setEditingId(null);
     setEditValue('');
-    setIsLoading(true);
+    setLoadingChats(prev => ({ ...prev, [activeChatId]: true }));
     isAtBottomRef.current = true; // Focus on the regenerated response
     scrollToBottom(true);
     abortControllerRef.current = new AbortController();
@@ -4079,7 +4433,7 @@ const ChatWindow = () => {
           const updated = [...prev];
           const targetIdx = userMsgIdx + 1;
           if (updated[targetIdx] && updated[targetIdx].role === 'ai') {
-            updated[targetIdx] = { ...updated[targetIdx], content: text };
+            updated[targetIdx] = { ...updated[targetIdx], content: stripGenerateImageTag(text) };
           }
           return updated;
         });
@@ -4137,7 +4491,7 @@ const ChatWindow = () => {
         console.error("Failed to generate AI response for edit:", error);
       }
     } finally {
-      setIsLoading(false);
+      setLoadingChats(prev => ({ ...prev, [activeChatId]: false }));
       setGeneratingId(null);
       setTimeout(() => { preventScrollRef.current = false; }, 500);
     }
@@ -4271,7 +4625,7 @@ const ChatWindow = () => {
           {/* Header Title */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 32px 16px 32px', gap: '16px' }}>
             <h3 style={{ margin: 0, fontSize: '22px', fontWeight: 600, color: textColor, fontFamily: "'Outfit', sans-serif", lineHeight: '1.2' }}>
-              {activeShareImage.prompt}
+              {makeShortImageName(activeShareImage.prompt)}
             </h3>
             <button
               type="button"
@@ -4579,6 +4933,9 @@ const ChatWindow = () => {
 
   if (!mounted) return null;
 
+  const currentChat = chats.find(c => c.id === activeChatId);
+  const isResearchChat = currentChat?.isResearch || currentChat?.pendingResearchPrompt;
+
   if (appView === 'library') {
     return (
       <div className="flex-1 min-w-0 flex flex-col relative bg-primary transition-colors duration-500" style={{ overflow: 'hidden', height: '100dvh' }}>
@@ -4606,7 +4963,8 @@ const ChatWindow = () => {
               title: promptText.length > 30 ? promptText.slice(0, 30) + '...' : promptText,
               messages: [],
               timestamp: new Date().toISOString(),
-              pendingResearchPrompt: promptText
+              pendingResearchPrompt: promptText,
+              isResearch: true
             };
             setChats(prev => [newChat, ...prev.filter(c => c.messages.length > 0 || c.pendingResearchPrompt)]);
             setActiveChatId(newId);
@@ -5425,8 +5783,7 @@ const ChatWindow = () => {
                                   }
                                   if (!imageUrl) return null;
                                   
-                                  const rawPrompt = msg.prompt || 'Generated Image';
-                                  const promptText = rawPrompt.length > 20 ? rawPrompt.slice(0, 20) + '...' : rawPrompt;
+                                  const promptText = makeShortImageName(msg.prompt);
                                   
                                   return (
                                     <button
@@ -6826,7 +7183,523 @@ const ChatWindow = () => {
                 </button>
               </div>
             ) : (
-              isMobile ? (
+              isResearchChat ? (
+                <div className="w-full relative flex flex-col items-stretch transition-all duration-300"
+                  style={{ 
+                    width: '100%', 
+                    background: isTemporary ? (theme === 'dark' ? '#ffffff' : '#1c1c1e') : 'var(--surface-1)', 
+                    borderRadius: replyingToMsg ? '0 0 28px 28px' : '28px', 
+                    padding: '16px 20px', 
+                    border: '1px solid var(--divider)',
+                    borderTop: replyingToMsg ? 'none' : '1px solid var(--divider)',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  <form onSubmit={handleSend} className="w-full flex flex-col gap-4">
+                    {/* Row 1: Text Area */}
+                    <div className="w-full flex-1">
+                      <input 
+                        ref={footerInputRef}
+                        type="text" 
+                        value={input} 
+                        onChange={(e) => { const val = e.target.value; setInput(val); if(val.endsWith('/')) setShowAttachmentMenu(true); if(val.trim()) { handleUserTyping(); } else { stopUserTyping(); } }} 
+                        onPaste={handleChatPaste}
+                        placeholder={isSendDisabled ? "Please wait..." : (isLoading ? "Thinking..." : "Get a detailed report")} 
+                        className="w-full bg-transparent border-none outline-none text-[16px] temp-placeholder"
+                        style={{ 
+                          background: 'transparent', border: 'none', outline: 'none', 
+                          color: isTemporary ? (resolvedTheme === 'dark' ? '#000000' : '#ffffff') : 'var(--on-surface)', fontSize: 16,
+                          padding: '4px 0',
+                          margin: 0,
+                          height: '40px',
+                          lineHeight: '40px'
+                        }} 
+                      />
+                    </div>
+
+                    {/* Row 2: Control Toolbar */}
+                    <div style={{ display: 'flex', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '10px' }}>
+                      {/* Left Side Buttons */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        {/* Attachment Button */}
+                        <div className="relative" ref={attachmentRefFooter}>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setShowAttachmentMenu(!showAttachmentMenu); }}
+                            style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '50%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay-2)',
+                              color: 'var(--on-surface)',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              border: 'none'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                            onMouseLeave={e => e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay-2)'}
+                          >
+                            <Plus size={16} />
+                          </button>
+                          <AttachmentMenu 
+                            isOpen={showAttachmentMenu} 
+                            onClose={() => setShowAttachmentMenu(false)} 
+                            position="top" 
+                            onSelectFile={handleChatFileSelect} 
+                            onNavigateImages={() => { setShowAttachmentMenu(false); setAppView('images'); }} 
+                            onSelectRecentFile={handleSelectRecentFile}
+                            onOpenGallerySelect={() => chatFileInputRef.current?.click()}
+                            onNavigateResearch={() => { setShowAttachmentMenu(false); setAppView('research'); }}
+                            libraryFiles={libraryFiles}
+                          />
+                        </div>
+
+                        {/* Deep Research Pill */}
+                        <button
+                          type="button"
+                          onMouseEnter={() => setIsResearchPillHovered(true)}
+                          onMouseLeave={() => setIsResearchPillHovered(false)}
+                          onClick={handleDisableResearchMode}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '6px 12px',
+                            borderRadius: '999px',
+                            background: 'rgba(59, 130, 246, 0.12)',
+                            color: '#60a5fa',
+                            border: '1px solid rgba(59, 130, 246, 0.3)',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            transition: 'all 0.2s ease',
+                            outline: 'none'
+                          }}
+                        >
+                          {isResearchPillHovered ? (
+                            <X size={14} color="#60a5fa" strokeWidth={2} />
+                          ) : (
+                            <Telescope size={14} color="#60a5fa" strokeWidth={2} />
+                          )}
+                          <span>Deep research</span>
+                        </button>
+
+                        {/* Apps Dropdown */}
+                        <div ref={appsDropdownRefFooter} style={{ position: 'relative' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAppsDropdownOpen(!isAppsDropdownOpen);
+                              setIsSitesDropdownOpen(false);
+                              setIsSpeedDropdownOpen(false);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '6px 12px',
+                              borderRadius: '999px',
+                              background: isAppsDropdownOpen ? (resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay-2)') : 'transparent',
+                              color: isAppsDropdownOpen ? 'var(--on-surface)' : 'var(--on-surface-muted)',
+                              border: 'none',
+                              fontSize: '13px',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay-2)';
+                              e.currentTarget.style.color = 'var(--on-surface)';
+                            }}
+                            onMouseLeave={e => {
+                              if (!isAppsDropdownOpen) {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.color = 'var(--on-surface-muted)';
+                              }
+                            }}
+                          >
+                            <LayoutGrid size={14} />
+                            <span>Apps</span>
+                            <ChevronDown size={14} />
+                          </button>
+
+                          {isAppsDropdownOpen && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                bottom: 'calc(100% + 6px)',
+                                left: 0,
+                                zIndex: 150,
+                                width: '160px',
+                                background: resolvedTheme === 'dark' ? '#232325' : 'var(--surface-1)',
+                                border: resolvedTheme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid var(--divider)',
+                                borderRadius: '12px',
+                                padding: '6px',
+                                boxShadow: resolvedTheme === 'dark' ? '0 -10px 25px rgba(0, 0, 0, 0.5)' : 'var(--shadow-md)'
+                              }}
+                            >
+                              {['All Apps', 'Canva', 'Figma', 'Photoshop', 'Airtable'].map((app) => (
+                                <button
+                                  key={app}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedApp(app);
+                                    setIsAppsDropdownOpen(false);
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '8px 10px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    color: selectedApp === app ? (resolvedTheme === 'dark' ? '#60a5fa' : 'var(--accent-color)') : 'var(--on-surface)',
+                                    background: selectedApp === app ? (resolvedTheme === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'var(--hover-overlay-2)') : 'transparent',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    border: 'none'
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                                  onMouseLeave={e => e.currentTarget.style.background = selectedApp === app ? (resolvedTheme === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'var(--hover-overlay-2)') : 'transparent'}
+                                >
+                                  <span>{app}</span>
+                                  {selectedApp === app && <Check size={14} />}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Sites Dropdown */}
+                        <div ref={sitesDropdownRefFooter} style={{ position: 'relative' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsSitesDropdownOpen(!isSitesDropdownOpen);
+                              setIsAppsDropdownOpen(false);
+                              setIsSpeedDropdownOpen(false);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '6px 12px',
+                              borderRadius: '999px',
+                              background: isSitesDropdownOpen ? (resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay-2)') : 'transparent',
+                              color: isSitesDropdownOpen ? 'var(--on-surface)' : 'var(--on-surface-muted)',
+                              border: 'none',
+                              fontSize: '13px',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay-2)';
+                              e.currentTarget.style.color = 'var(--on-surface)';
+                            }}
+                            onMouseLeave={e => {
+                              if (!isSitesDropdownOpen) {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.color = 'var(--on-surface-muted)';
+                              }
+                            }}
+                          >
+                            <Globe size={14} />
+                            <span>Sites</span>
+                            <ChevronDown size={14} />
+                          </button>
+
+                          {isSitesDropdownOpen && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                bottom: 'calc(100% + 6px)',
+                                left: 0,
+                                zIndex: 150,
+                                width: '230px',
+                                background: resolvedTheme === 'dark' ? '#232325' : 'var(--surface-1)',
+                                border: resolvedTheme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid var(--divider)',
+                                borderRadius: '14px',
+                                padding: '6px',
+                                boxShadow: resolvedTheme === 'dark' ? '0 -12px 30px rgba(0, 0, 0, 0.5)' : 'var(--shadow-md)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '2px'
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSiteOption('Search the web');
+                                  setIsSitesDropdownOpen(false);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  textAlign: 'left',
+                                  padding: '10px 12px',
+                                  borderRadius: '10px',
+                                  fontSize: '13.5px',
+                                  color: 'var(--on-surface)',
+                                  background: 'transparent',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '12px',
+                                  border: 'none'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                              >
+                                <Globe size={15} style={{ color: 'var(--on-surface-muted)' }} />
+                                <span style={{ flex: 1 }}>Search the web</span>
+                                {selectedSiteOption === 'Search the web' && <Check size={15} style={{ color: 'var(--on-surface)' }} />}
+                              </button>
+                              <div style={{ height: '1px', background: 'var(--divider)', margin: '4px 6px' }} />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSiteOption('Specific sites');
+                                  setIsSitesDropdownOpen(false);
+                                  setIsSpecificSitesOpen(true);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  textAlign: 'left',
+                                  padding: '10px 12px',
+                                  borderRadius: '10px',
+                                  fontSize: '13.5px',
+                                  color: 'var(--on-surface)',
+                                  background: 'transparent',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '12px',
+                                  border: 'none'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                              >
+                                <Globe size={15} style={{ color: 'var(--on-surface-muted)' }} />
+                                <span style={{ flex: 1 }}>Specific sites ({specificSites.length})</span>
+                                {selectedSiteOption === 'Specific sites' && <Check size={15} style={{ color: 'var(--on-surface)' }} />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsSitesDropdownOpen(false);
+                                  setIsSpecificSitesOpen(true);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  textAlign: 'left',
+                                  padding: '10px 12px',
+                                  borderRadius: '10px',
+                                  fontSize: '13.5px',
+                                  color: 'var(--on-surface)',
+                                  background: 'transparent',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '12px',
+                                  border: 'none'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                              >
+                                <CornerDownRight size={15} style={{ color: 'var(--on-surface-muted)' }} />
+                                <span style={{ flex: 1 }}>Manage sites</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Speed/Instant Dropdown */}
+                        <div ref={speedDropdownRefFooter} style={{ position: 'relative' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsSpeedDropdownOpen(!isSpeedDropdownOpen);
+                              setIsAppsDropdownOpen(false);
+                              setIsSitesDropdownOpen(false);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '6px 12px',
+                              borderRadius: '999px',
+                              background: isSpeedDropdownOpen ? (resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay-2)') : 'transparent',
+                              color: isSpeedDropdownOpen ? 'var(--on-surface)' : 'var(--on-surface-muted)',
+                              border: 'none',
+                              fontSize: '13px',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'var(--hover-overlay-2)';
+                              e.currentTarget.style.color = 'var(--on-surface)';
+                            }}
+                            onMouseLeave={e => {
+                              if (!isSpeedDropdownOpen) {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.color = 'var(--on-surface-muted)';
+                              }
+                            }}
+                          >
+                            <span>{selectedSpeed}</span>
+                            <ChevronDown size={14} />
+                          </button>
+
+                          {isSpeedDropdownOpen && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                bottom: 'calc(100% + 6px)',
+                                left: 0,
+                                zIndex: 150,
+                                width: '140px',
+                                background: resolvedTheme === 'dark' ? '#232325' : 'var(--surface-1)',
+                                border: resolvedTheme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid var(--divider)',
+                                borderRadius: '12px',
+                                padding: '6px',
+                                boxShadow: resolvedTheme === 'dark' ? '0 -10px 25px rgba(0, 0, 0, 0.5)' : 'var(--shadow-md)'
+                              }}
+                            >
+                              {['Instant', 'Detailed', 'Expert'].map((speed) => (
+                                <button
+                                  key={speed}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedSpeed(speed);
+                                    setIsSpeedDropdownOpen(false);
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '8px 10px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    color: selectedSpeed === speed ? (resolvedTheme === 'dark' ? '#60a5fa' : 'var(--accent-color)') : 'var(--on-surface)',
+                                    background: selectedSpeed === speed ? (resolvedTheme === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'var(--hover-overlay-2)') : 'transparent',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    border: 'none'
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                                  onMouseLeave={e => e.currentTarget.style.background = selectedSpeed === speed ? (resolvedTheme === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'var(--hover-overlay-2)') : 'transparent'}
+                                >
+                                  <span>{speed}</span>
+                                  {selectedSpeed === speed && <Check size={14} />}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right Side Buttons (Microphone and Send/Stop) */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: 'auto' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInput('');
+                            setIsVoiceMessageMode(true);
+                            toggleListening();
+                          }}
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--on-surface-muted)',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            border: 'none'
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.background = 'var(--hover-overlay)';
+                            e.currentTarget.style.color = 'var(--on-surface)';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.color = 'var(--on-surface-muted)';
+                          }}
+                        >
+                          <Mic size={18} />
+                        </button>
+
+                        {isLoading ? (
+                          <button 
+                            onClick={handleStop} 
+                            type="button" 
+                            style={{
+                              background: '#ea580c',
+                              color: '#ffffff',
+                              border: 'none',
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '50%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: '0 4px 12px rgba(234, 88, 12, 0.4)',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+                            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                          >
+                            <Square size={12} fill="currentColor" />
+                          </button>
+                        ) : (
+                          <button
+                            type={(input.trim() || pendingAttachment) ? "submit" : "button"}
+                            disabled={isSendDisabled}
+                            style={{ 
+                              background: !input.trim() ? 'var(--hover-overlay-2)' : (accentColor || '#3b82f6'),
+                              color: !input.trim() ? 'var(--on-surface-subtle)' : '#ffffff',
+                              cursor: !input.trim() ? 'not-allowed' : 'pointer',
+                              opacity: !input.trim() ? 0.6 : 1,
+                              border: 'none',
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '50%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: input.trim() ? `0 4px 12px ${accentColor || '#3b82f6'}40` : 'none',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={e => {
+                              if (input.trim()) {
+                                e.currentTarget.style.transform = 'scale(1.05)';
+                              }
+                            }}
+                            onMouseLeave={e => {
+                              if (input.trim()) {
+                                e.currentTarget.style.transform = 'scale(1)';
+                              }
+                            }}
+                          >
+                            <ArrowUp size={14} strokeWidth={2.5} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              ) : isMobile ? (
                 <div className="w-full flex items-center gap-2 transition-all duration-300" style={{ padding: '0 4px' }}>
                   <div className="flex-shrink-0 relative" ref={attachmentRefFooter} style={{ position: 'relative' }}>
                     <button 

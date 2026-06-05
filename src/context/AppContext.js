@@ -830,10 +830,7 @@ export const AppProvider = ({ children }) => {
           } catch (_) {}
         }
       }
-      let savedChats;
-      if (user?.uid) {
-        savedChats = safeSetLocalStorageItem('aura-chats', chats);
-      }
+      const savedChats = safeSetLocalStorageItem('aura-chats', chats);
       if (savedChats && JSON.stringify(savedChats) !== JSON.stringify(chats)) {
         setChats(savedChats);
       }

@@ -5,8 +5,9 @@ import { Telescope, Plus, ChevronDown, Mic, ArrowUpRight, ArrowUp, Send, Check, 
 import { useAppContext } from '@/context/AppContext';
 
 export default function ResearchView({ onStartResearch }) {
-  const { accentColor, resolvedTheme } = useAppContext();
+  const { accentColor, resolvedTheme, setAppView } = useAppContext();
   const [inputValue, setInputValue] = useState('');
+  const [isResearchPillHovered, setIsResearchPillHovered] = useState(false);
 
   const isDark = resolvedTheme === 'dark';
   const bgColor = isDark ? '#0a0a0c' : 'var(--bg-primary)';
@@ -25,8 +26,14 @@ export default function ResearchView({ onStartResearch }) {
   const inputBg = isDark ? '#121214' : 'var(--surface-2)';
   const [isAppsDropdownOpen, setIsAppsDropdownOpen] = useState(false);
   const [isSitesDropdownOpen, setIsSitesDropdownOpen] = useState(false);
-  const [selectedApp, setSelectedApp] = useState('All Apps');
-  const [selectedSiteOption, setSelectedSiteOption] = useState('Search the web');
+  const [selectedApp, setSelectedApp] = useState(() => {
+    if (typeof window === 'undefined') return 'All Apps';
+    return localStorage.getItem('aura-research-selected-app') || 'All Apps';
+  });
+  const [selectedSiteOption, setSelectedSiteOption] = useState(() => {
+    if (typeof window === 'undefined') return 'Search the web';
+    return localStorage.getItem('aura-research-selected-site-option') || 'Search the web';
+  });
   const [isSpecificSitesOpen, setIsSpecificSitesOpen] = useState(false);
   const [isDotsMenuOpen, setIsDotsMenuOpen] = useState(false);
   const [specificSites, setSpecificSites] = useState(() => {
@@ -39,8 +46,48 @@ export default function ResearchView({ onStartResearch }) {
     }
   });
   const [siteInput, setSiteInput] = useState('');
-  const [prioritizeSites, setPrioritizeSites] = useState(true);
+  const [prioritizeSites, setPrioritizeSites] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = localStorage.getItem('aura-research-prioritize-sites');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [faviconErrors, setFaviconErrors] = useState({});
+  const [selectedSpeed, setSelectedSpeed] = useState(() => {
+    if (typeof window === 'undefined') return 'Instant';
+    return localStorage.getItem('aura-research-speed') || 'Instant';
+  });
+  const [isSpeedDropdownOpen, setIsSpeedDropdownOpen] = useState(false);
+  const speedDropdownRef = React.useRef(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('aura-research-input');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aura-research-selected-app', selectedApp);
+    }
+  }, [selectedApp]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aura-research-selected-site-option', selectedSiteOption);
+    }
+  }, [selectedSiteOption]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aura-research-prioritize-sites', prioritizeSites);
+    }
+  }, [prioritizeSites]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aura-research-speed', selectedSpeed);
+    }
+  }, [selectedSpeed]);
 
   const appsDropdownRef = React.useRef(null);
   const sitesDropdownRef = React.useRef(null);
@@ -92,6 +139,9 @@ export default function ResearchView({ onStartResearch }) {
       if (sitesDropdownRef.current && !sitesDropdownRef.current.contains(event.target)) {
         setIsSitesDropdownOpen(false);
       }
+      if (speedDropdownRef.current && !speedDropdownRef.current.contains(event.target)) {
+        setIsSpeedDropdownOpen(false);
+      }
       if (dotsMenuRef.current && !dotsMenuRef.current.contains(event.target)) {
         setIsDotsMenuOpen(false);
       }
@@ -139,6 +189,7 @@ export default function ResearchView({ onStartResearch }) {
     if (e) e.preventDefault();
     if (!inputValue.trim()) return;
     onStartResearch(inputValue);
+    setInputValue('');
   };
 
   const handleSuggestionClick = (prompt) => {
@@ -251,6 +302,7 @@ export default function ResearchView({ onStartResearch }) {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="Get a detailed report"
+          autoComplete="off"
           style={{
             background: 'transparent',
             border: 'none',
@@ -303,25 +355,35 @@ export default function ResearchView({ onStartResearch }) {
             </button>
 
             {/* Deep Research Pill */}
-            <div
+            <button
+              type="button"
+              onMouseEnter={() => setIsResearchPillHovered(true)}
+              onMouseLeave={() => setIsResearchPillHovered(false)}
+              onClick={() => setAppView('chat')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
                 padding: '6px 12px',
                 borderRadius: '999px',
-                background: 'rgba(59, 130, 246, 0.12)',
-                color: '#60a5fa',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
+                background: isResearchPillHovered ? 'rgba(239, 68, 68, 0.12)' : 'rgba(59, 130, 246, 0.12)',
+                color: isResearchPillHovered ? '#ef4444' : '#60a5fa',
+                border: isResearchPillHovered ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(59, 130, 246, 0.3)',
                 fontSize: '13px',
                 fontWeight: 500,
-                cursor: 'default',
-                userSelect: 'none'
+                cursor: 'pointer',
+                userSelect: 'none',
+                transition: 'all 0.2s ease',
+                outline: 'none'
               }}
             >
-              <Telescope size={14} color="#60a5fa" strokeWidth={2} />
+              {isResearchPillHovered ? (
+                <X size={14} color="#ef4444" strokeWidth={2} />
+              ) : (
+                <Telescope size={14} color="#60a5fa" strokeWidth={2} />
+              )}
               <span>Deep research</span>
-            </div>
+            </button>
 
             {/* Apps Dropdown */}
             <div ref={appsDropdownRef} style={{ position: 'relative' }}>
@@ -557,6 +619,92 @@ export default function ResearchView({ onStartResearch }) {
                     <CornerDownRight size={15} style={{ color: 'var(--on-surface-muted)' }} />
                     <span style={{ flex: 1 }}>Manage sites</span>
                   </button>
+                </div>
+              )}
+            </div>
+
+            {/* Speed/Instant Dropdown */}
+            <div ref={speedDropdownRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSpeedDropdownOpen(!isSpeedDropdownOpen);
+                  setIsAppsDropdownOpen(false);
+                  setIsSitesDropdownOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '999px',
+                  background: isSpeedDropdownOpen ? pillBg : 'transparent',
+                  color: isSpeedDropdownOpen ? 'var(--on-surface)' : 'var(--on-surface-muted)',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = pillBg;
+                  e.currentTarget.style.color = 'var(--on-surface)';
+                }}
+                onMouseLeave={e => {
+                  if (!isSpeedDropdownOpen) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'var(--on-surface-muted)';
+                  }
+                }}
+              >
+                <span>{selectedSpeed}</span>
+                <ChevronDown size={14} />
+              </button>
+
+              {isSpeedDropdownOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    left: 0,
+                    zIndex: 50,
+                    width: '140px',
+                    background: dropdownBg,
+                    border: cardBorder,
+                    borderRadius: '12px',
+                    padding: '6px',
+                    boxShadow: isDark ? '0 10px 25px rgba(0, 0, 0, 0.5)' : 'var(--shadow-md)'
+                  }}
+                >
+                  {['Instant', 'Detailed', 'Expert'].map((speed) => (
+                    <button
+                      key={speed}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSpeed(speed);
+                        setIsSpeedDropdownOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        color: selectedSpeed === speed ? (isDark ? '#60a5fa' : 'var(--accent-color)') : 'var(--on-surface)',
+                        background: selectedSpeed === speed ? (isDark ? 'rgba(59, 130, 246, 0.1)' : 'var(--hover-overlay-2)') : 'transparent',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        border: 'none'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-overlay)'}
+                      onMouseLeave={e => e.currentTarget.style.background = selectedSpeed === speed ? (isDark ? 'rgba(59, 130, 246, 0.1)' : 'var(--hover-overlay-2)') : 'transparent'}
+                    >
+                      <span>{speed}</span>
+                      {selectedSpeed === speed && <Check size={14} />}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>

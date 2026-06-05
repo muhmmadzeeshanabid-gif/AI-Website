@@ -157,11 +157,10 @@ export async function generateImageClientSide(prompt, hfToken = '') {
     }
   }
 
-  // ── 2. Pollinations — proxy fallback to bypass adblockers/CORS on live
+  // ── 2. Pollinations — direct fetch
   const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(displayPrompt)}?width=1024&height=1024&nologo=true&enhance=false&seed=${seed}&model=flux`;
-  const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(pollinationsUrl)}`;
-  console.log(`[ImageGen] Falling back to Pollinations via Proxy:`, proxyUrl);
-  return { url: proxyUrl, provider: 'Pollinations AI' };
+  console.log(`[ImageGen] Falling back to Pollinations directly:`, pollinationsUrl);
+  return { url: pollinationsUrl, provider: 'Pollinations AI' };
 }
 
 
@@ -190,20 +189,20 @@ export function handleImgError(e, prompt) {
   const seed = Math.floor(Math.random() * 9999999);
 
   if (!e.target.dataset.fallbackStep) {
-    // Step 1: Fresh Pollinations flux URL with new seed via Proxy
+    // Step 1: Fresh Pollinations flux URL with new seed
     e.target.dataset.fallbackStep = '1';
     const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=1024&height=1024&nologo=true&enhance=false&seed=${seed}&model=flux`;
-    e.target.src = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`;
+    e.target.src = rawUrl;
   } else if (e.target.dataset.fallbackStep === '1') {
-    // Step 2: Pollinations turbo model with different seed via Proxy
+    // Step 2: Pollinations turbo model with different seed
     e.target.dataset.fallbackStep = '2';
     const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=768&height=768&nologo=true&enhance=false&seed=${seed}&model=turbo`;
-    e.target.src = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`;
+    e.target.src = rawUrl;
   } else if (e.target.dataset.fallbackStep === '2') {
-    // Step 3: Simple Pollinations URL without heavy params via Proxy
+    // Step 3: Simple Pollinations URL without heavy params
     e.target.dataset.fallbackStep = '3';
     const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?seed=${seed}`;
-    e.target.src = `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`;
+    e.target.src = rawUrl;
   } else {
     // Final: Styled placeholder
     e.target.onerror = null;
