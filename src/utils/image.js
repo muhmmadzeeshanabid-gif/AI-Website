@@ -162,9 +162,14 @@ export async function generateImageClientSide(prompt, hfToken = '') {
             // Raw image bytes (standard HF inference)
             const blob = await res.blob();
             if (blob.size > 1000) {
-              const url = URL.createObjectURL(blob);
-              console.log(`[ImageGen] ${attempt.name} succeeded (raw image, ${blob.size} bytes)!`);
-              return { url, provider: `Hugging Face (${attempt.name})` };
+              const base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+              console.log(`[ImageGen] ${attempt.name} succeeded (raw image converted to base64)!`);
+              return { url: base64, provider: `Hugging Face (${attempt.name})` };
             }
           } else if (ct.includes('json')) {
             // OpenAI-compatible response: { data: [{ url, b64_json }] }
@@ -223,19 +228,36 @@ export function extractKeywords(prompt) {
 
 export function handleImgError(e, prompt) {
   const cleanPrompt = translatePrompt(prompt || 'AI art');
-  const seed = Math.floor(Math.random() * 9999999);
+  
+  // Try to parse the existing seed from the URL to preserve the design/style
+  let seed;
+  try {
+    const urlObj = new URL(e.target.src);
+    const existingSeed = urlObj.searchParams.get('seed');
+    if (existingSeed) {
+      seed = parseInt(existingSeed, 10);
+    }
+  } catch (err) {
+    // Fallback if URL is invalid
+  }
+  
+  if (!seed || isNaN(seed)) {
+    seed = Math.floor(Math.random() * 9999999);
+  }
+
   const polKey = (typeof window !== 'undefined' && window.process?.env?.NEXT_PUBLIC_POLLINATIONS_API_KEY) || 'sk_D3ihoHuYaXwWarpRYWSJLEpyfzYPHzC4';
   const polQuery = polKey ? `&key=${polKey}` : '';
 
   if (!e.target.dataset.fallbackStep) {
-    // Step 1: Fresh Pollinations flux URL with new seed directly
+    // Step 1: Fresh Pollinations flux URL with the same/parsed seed directly
     e.target.dataset.fallbackStep = '1';
     const rawUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanPrompt)}?nologo=true&seed=${seed}&model=flux${polQuery}`;
     e.target.src = rawUrl;
   } else if (e.target.dataset.fallbackStep === '1') {
-    // Step 2: Pollinations turbo model with different seed directly
+    // Step 2: Pollinations turbo model with a different seed (if fallback step 1 completely fails)
     e.target.dataset.fallbackStep = '2';
-    const rawUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanPrompt)}?nologo=true&seed=${seed}&model=turbo${polQuery}`;
+    const newSeed = Math.floor(Math.random() * 9999999);
+    const rawUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanPrompt)}?nologo=true&seed=${newSeed}&model=turbo${polQuery}`;
     e.target.src = rawUrl;
   } else {
     // Final Bulletproof Fallback: Use LoremFlickr to fetch a high-quality matching stock image

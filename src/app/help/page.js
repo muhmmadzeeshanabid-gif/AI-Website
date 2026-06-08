@@ -1,8 +1,9 @@
 'use client';
 import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAppContext } from '@/context/AppContext';
+import { getGeminiResponse } from '@/utils/gemini';
 import { 
   ArrowLeft, 
   Search, 
@@ -11,7 +12,10 @@ import {
   Settings, 
   Shield, 
   Users, 
-  Mail
+  Mail,
+  Sparkles,
+  X,
+  Send
 } from 'lucide-react';
 
 export default function HelpPage() {
@@ -21,9 +25,25 @@ export default function HelpPage() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchInputRef = useRef(null);
 
+  // Widget States
+  const [isWidgetOpen, setIsWidgetOpen] = useState(false);
+  const [inputText, setInputText] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [widgetMessages, setWidgetMessages] = useState([
+    { role: 'ai', content: "Hi! I'm Kyra Support Assistant. How can I help you with our platform today?" }
+  ]);
+  const chatScrollRef = useRef(null);
+
   useEffect(() => {
     document.title = 'Help & Support | Kyra';
   }, []);
+
+  // Auto scroll widget messages
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [widgetMessages, isWidgetOpen]);
 
   const helpCategories = [
     {
@@ -103,6 +123,60 @@ export default function HelpPage() {
     }
   };
 
+  const handleSendMessage = async (text) => {
+    if (!text.trim() || isGenerating) return;
+    const userMessage = { role: 'user', content: text };
+    setWidgetMessages(prev => [...prev, userMessage]);
+    setInputText('');
+    setIsGenerating(true);
+
+    const aiPlaceholder = { role: 'ai', content: '', isPlaceholder: true };
+    setWidgetMessages(prev => [...prev, aiPlaceholder]);
+
+    try {
+      const history = widgetMessages.map(m => ({
+        role: m.role,
+        content: m.content
+      }));
+
+      const personalization = {
+        systemPrompt: "You are Kyra Support Assistant, a friendly and professional customer support bot. Help the user with any issues they are facing on the platform. Provide clear, empathetic, and direct instructions about account settings, dark mode, voice messages, group chats, subscription plans, and other Kyra features. Keep replies short, helpful, and support-oriented."
+      };
+
+      const response = await getGeminiResponse(
+        text,
+        history,
+        personalization,
+        null,
+        (updatedText) => {
+          setWidgetMessages(prev => prev.map((m, idx) => {
+            if (idx === prev.length - 1 && m.isPlaceholder) {
+              return { ...m, content: updatedText };
+            }
+            return m;
+          }));
+        }
+      );
+
+      setWidgetMessages(prev => prev.map((m, idx) => {
+        if (idx === prev.length - 1 && m.isPlaceholder) {
+          return { role: 'ai', content: response };
+        }
+        return m;
+      }));
+    } catch (err) {
+      console.error(err);
+      setWidgetMessages(prev => prev.map((m, idx) => {
+        if (idx === prev.length - 1 && m.isPlaceholder) {
+          return { role: 'ai', content: "Sorry, I'm having trouble connecting to support. Please try again." };
+        }
+        return m;
+      }));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   // Filter categories and FAQ items based on search query
   const filteredCategories = helpCategories.map((cat, catIdx) => {
     const matchingItems = cat.items.filter(item => 
@@ -134,9 +208,7 @@ export default function HelpPage() {
         justifyContent: 'space-between',
         position: 'sticky',
         top: 0,
-        background: 'var(--glass-bg)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
+        background: 'var(--bg-primary)',
         zIndex: 100
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -482,10 +554,11 @@ export default function HelpPage() {
             <motion.button 
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => setIsWidgetOpen(true)}
               style={{
                 padding: '14px 28px', 
                 borderRadius: 999, 
-                background: 'linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%)',
+                background: 'linear-gradient(135deg, #818cf8 0%, #4f46e5 100%)',
                 color: '#ffffff', 
                 fontWeight: 700, 
                 fontSize: 14,
@@ -502,22 +575,25 @@ export default function HelpPage() {
             </motion.button>
             
             <motion.button 
-              whileHover={{ scale: 1.02, background: 'var(--surface-2)' }}
+              whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                window.location.href = 'mailto:support@kyra.ai?subject=Kyra%20Support%20Request';
+              }}
               style={{
                 padding: '14px 28px', 
                 borderRadius: 999, 
-                background: 'var(--surface-1)',
-                border: '1px solid var(--border-color)', 
-                color: 'var(--on-surface)', 
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                border: 'none', 
+                color: '#ffffff', 
                 fontWeight: 700, 
                 fontSize: 14, 
                 cursor: 'pointer', 
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: 8,
-                boxShadow: 'var(--shadow-sm)',
-                transition: 'background 0.2s ease, border-color 0.2s ease'
+                boxShadow: '0 4px 15px rgba(16, 185, 129, 0.25)',
+                transition: 'transform 0.2s ease'
               }}
             >
               <Mail size={16} />
@@ -526,6 +602,224 @@ export default function HelpPage() {
           </div>
         </motion.div>
       </main>
+
+      {/* Floating Support Chat Widget */}
+      <AnimatePresence>
+        {isWidgetOpen ? (
+          <motion.div
+            key="support-widget"
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            style={{
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              width: 360,
+              height: 520,
+              borderRadius: 20,
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border-color)',
+              boxShadow: '0 12px 36px rgba(0, 0, 0, 0.16)',
+              display: 'flex',
+              flexDirection: 'column',
+              zIndex: 100000,
+              overflow: 'hidden',
+              fontFamily: 'inherit'
+            }}
+          >
+            {/* Widget Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, #818cf8 0%, #4f46e5 100%)',
+              color: '#ffffff',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: '0 4px 15px rgba(99, 102, 241, 0.2)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ 
+                  width: 28, 
+                  height: 28, 
+                  borderRadius: 6, 
+                  background: 'rgba(255,255,255,0.2)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  overflow: 'hidden'
+                }}>
+                  <img 
+                    src="/logo.png" 
+                    alt="Kyra" 
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover'
+                    }} 
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'Outfit, sans-serif' }}>Kyra Support</div>
+                  <div style={{ fontSize: 11, opacity: 0.85, fontWeight: 500 }}>Online • AI Assistant</div>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => {
+                  setIsWidgetOpen(false);
+                  setWidgetMessages([
+                    { role: 'ai', content: "Hi! I'm Kyra Support Assistant. How can I help you with our platform today?" }
+                  ]);
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffffff',
+                  opacity: 0.8,
+                  cursor: 'pointer',
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '0.8'}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Message History Area */}
+            <div 
+              ref={chatScrollRef}
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: 20,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+                background: 'var(--bg-primary)'
+              }}
+              className="custom-scrollbar"
+            >
+              {widgetMessages.map((msg, idx) => (
+                <div 
+                  key={idx}
+                  style={{
+                    alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                    background: msg.role === 'user' ? 'linear-gradient(135deg, #818cf8 0%, #4f46e5 100%)' : 'var(--surface-1)',
+                    color: msg.role === 'user' ? '#ffffff' : 'var(--on-surface)',
+                    padding: '10px 14px',
+                    borderRadius: msg.role === 'user' ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
+                    maxWidth: '80%',
+                    fontSize: 13.5,
+                    lineHeight: 1.5,
+                    border: msg.role === 'user' ? 'none' : '1px solid var(--border-color)',
+                    boxShadow: 'var(--shadow-sm)',
+                    wordBreak: 'break-word'
+                  }}
+                >
+                  {msg.content || (msg.isPlaceholder && (
+                    <div style={{ display: 'flex', gap: 4, padding: '4px 0', alignItems: 'center' }}>
+                      <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--on-surface-subtle)', animationDelay: '0.1s' }} />
+                      <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--on-surface-subtle)', animationDelay: '0.3s' }} />
+                      <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--on-surface-subtle)', animationDelay: '0.5s' }} />
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            {/* Input Box */}
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage(inputText);
+              }}
+              style={{
+                padding: '12px 16px',
+                borderTop: '1px solid var(--border-color)',
+                background: 'var(--surface-1)',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              <input
+                value={inputText}
+                onChange={e => setInputText(e.target.value)}
+                placeholder="Ask support a question..."
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  borderRadius: 999,
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--on-surface)',
+                  fontSize: 13.5,
+                  outline: 'none',
+                  fontFamily: 'inherit'
+                }}
+              />
+              <button
+                type="submit"
+                disabled={isGenerating || !inputText.trim()}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #818cf8 0%, #4f46e5 100%)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: (isGenerating || !inputText.trim()) ? 'default' : 'pointer',
+                  border: 'none',
+                  marginLeft: 8,
+                  opacity: (isGenerating || !inputText.trim()) ? 0.5 : 1,
+                  transition: 'opacity 0.2s'
+                }}
+              >
+                <Send size={16} />
+              </button>
+            </form>
+          </motion.div>
+        ) : (
+          <motion.button
+            key="support-fab"
+            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            onClick={() => setIsWidgetOpen(true)}
+            style={{
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              width: 56,
+              height: 56,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #818cf8 0%, #4f46e5 100%)',
+              color: '#ffffff',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 16px rgba(99, 102, 241, 0.35), var(--shadow-lg)',
+              zIndex: 99999,
+              outline: 'none'
+            }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+          >
+            <MessageCircle size={24} />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <footer style={{ textAlign: 'center', padding: '40px 24px 0', opacity: 0.5, fontSize: 12, borderTop: '1px solid var(--border-color)', maxWidth: 1100, margin: '0 auto' }}>
         © 2026 Kyra Advanced Intelligence. All rights reserved.
