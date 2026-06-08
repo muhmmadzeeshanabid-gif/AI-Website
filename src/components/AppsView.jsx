@@ -1243,7 +1243,7 @@ export default function AppsView() {
               onClick={() => setActiveCategory(cat)}
               style={{
                 backgroundColor: isActive ? 'var(--surface-3, rgba(255,255,255,0.15))' : 'transparent',
-                color: isActive ? '#ffffff' : 'var(--on-surface-muted, #a3a3a3)',
+                color: isActive ? 'var(--on-surface)' : 'var(--on-surface-muted, #a3a3a3)',
                 border: 'none',
                 borderRadius: '16px',
                 padding: '6px 16px',
@@ -1253,7 +1253,7 @@ export default function AppsView() {
                 transition: 'all 0.2s'
               }}
               onMouseEnter={e => {
-                if(!isActive) e.currentTarget.style.color = '#ffffff';
+                if(!isActive) e.currentTarget.style.color = 'var(--on-surface)';
               }}
               onMouseLeave={e => {
                 if(!isActive) e.currentTarget.style.color = 'var(--on-surface-muted, #a3a3a3)';
@@ -1296,7 +1296,7 @@ export default function AppsView() {
               const chevron = e.currentTarget.querySelector('.app-chevron');
               if (chevron) {
                 chevron.style.transform = 'translateX(3px)';
-                chevron.style.color = '#ffffff';
+                chevron.style.color = 'var(--on-surface)';
               }
             }}
             onMouseLeave={e => {
@@ -1326,7 +1326,7 @@ export default function AppsView() {
                   fontSize: '16px',
                   fontWeight: 600,
                   margin: 0,
-                  color: '#ffffff'
+                  color: 'var(--on-surface)'
                 }}>{app.name}</h3>
                 <p style={{
                   fontSize: '13.5px',
