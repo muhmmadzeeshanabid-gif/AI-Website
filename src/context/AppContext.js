@@ -9,6 +9,10 @@ import { safeSetLocalStorageItem } from '@/utils/storage';
 
 
 const cropImageToRatio = (imgUrl, ratioStr, callback) => {
+  if (!imgUrl || typeof imgUrl !== 'string') {
+    callback(imgUrl);
+    return;
+  }
   if (typeof window === 'undefined') {
     callback(imgUrl);
     return;
@@ -345,8 +349,10 @@ export const AppProvider = ({ children }) => {
             return timeB - timeA;
           });
 
-          const result = safeSetLocalStorageItem('aura-chats', combined);
-          return result || combined;
+          // Final dedup: ensure no two entries share the same id
+          const deduped = Array.from(new Map(combined.map(c => [c.id, c])).values());
+          const result = safeSetLocalStorageItem('aura-chats', deduped);
+          return result || deduped;
         });
       });
     }
@@ -525,7 +531,9 @@ export const AppProvider = ({ children }) => {
                   if (msg.prompt) {
                     const seed = Math.floor(Math.random() * 99999);
                     const encodedPrompt = encodeURIComponent(msg.prompt.trim());
-                    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}`;
+                    const polKey = process.env.NEXT_PUBLIC_POLLINATIONS_API_KEY || 'sk_D3ihoHuYaXwWarpRYWSJLEpyfzYPHzC4';
+                    const polQuery = polKey ? `?key=${polKey}` : '';
+                    const fallbackUrl = `https://gen.pollinations.ai/image/${encodedPrompt}${polQuery}`;
                     return { ...msg, imageUrl: fallbackUrl };
                   }
                   return { ...msg, imageUrl: '' };
@@ -557,7 +565,9 @@ export const AppProvider = ({ children }) => {
                   if (msg.prompt) {
                     const seed = Math.floor(Math.random() * 99999);
                     const encodedPrompt = encodeURIComponent(msg.prompt.trim());
-                    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}`;
+                    const polKey = process.env.NEXT_PUBLIC_POLLINATIONS_API_KEY || 'sk_D3ihoHuYaXwWarpRYWSJLEpyfzYPHzC4';
+                    const polQuery = polKey ? `?key=${polKey}` : '';
+                    const fallbackUrl = `https://gen.pollinations.ai/image/${encodedPrompt}${polQuery}`;
                     return { ...msg, imageUrl: fallbackUrl };
                   }
                   return { ...msg, imageUrl: '' };
@@ -781,8 +791,10 @@ export const AppProvider = ({ children }) => {
             return timeB - timeA;
           });
 
-          const result = safeSetLocalStorageItem('aura-chats', combined);
-          return result || combined;
+          // Final dedup: ensure no two entries share the same id
+          const deduped = Array.from(new Map(combined.map(c => [c.id, c])).values());
+          const result = safeSetLocalStorageItem('aura-chats', deduped);
+          return result || deduped;
         });
 
         // Update archived chats in state
@@ -1660,3 +1672,5 @@ export const AppProvider = ({ children }) => {
 };
 
 export const useAppContext = () => useContext(AppContext);
+// Trigger rebuild.
+

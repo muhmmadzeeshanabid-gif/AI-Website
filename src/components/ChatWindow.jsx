@@ -1140,7 +1140,7 @@ const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInit
         } else {
           setLoadingText(texts[idx]);
         }
-      }, 800);
+      }, 1600);
       return () => clearInterval(interval);
     }
   }, [phase, showCard]);
@@ -1149,7 +1149,7 @@ const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInit
     if (showCard && !isDoneInitially) {
       const timer = setTimeout(() => {
         setMinSketchTimePassed(true);
-      }, 400);
+      }, 10000);
       return () => clearTimeout(timer);
     }
   }, [showCard, isDoneInitially]);
@@ -1208,7 +1208,7 @@ const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInit
             }).catch(console.error);
           }
         }
-      }, 350);
+      }, 7000);
 
       return () => {
         clearTimeout(doneTimer);
@@ -1298,7 +1298,7 @@ const AspectGenCard = ({ messageId, imageUrl, ratio, prompt, imageId, isDoneInit
               justifyContent: 'space-between',
               zIndex: 4,
               transform: phase === 'revealing' ? 'translateY(100%)' : 'translateY(0%)',
-              transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
+              transition: 'transform 7s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#e5e7eb' }}>

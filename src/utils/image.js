@@ -58,7 +58,42 @@ export async function generateImageClientSide(prompt, hfToken = '') {
 
   console.log(`[ImageGen] Generating: "${displayPrompt}" (seed: ${seed})`);
 
-  // ── 1. HuggingFace Router API (runs from browser → residential IP works!)
+  // ── 1. Segmind — direct browser fetch (if key is configured)
+  const segmindKey = process.env.NEXT_PUBLIC_SEGMIND_API_KEY || '';
+  if (segmindKey && segmindKey.length > 5) {
+    try {
+      console.log(`[ImageGen] Trying Segmind from browser...`);
+      const res = await fetch('https://api.segmind.com/v1/fast-flux-schnell', {
+        method: 'POST',
+        headers: {
+          'x-api-key': segmindKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: displayPrompt,
+          aspect_ratio: '1:1',
+          steps: 4,
+          seed: seed,
+          base64: true
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.image) {
+          const url = `data:image/jpeg;base64,${json.image}`;
+          console.log('[ImageGen] Segmind succeeded!');
+          return { url, provider: 'Segmind (FLUX.1-schnell)' };
+        }
+      } else {
+        const errText = await res.text().catch(() => '');
+        console.warn(`[ImageGen] Segmind failed ${res.status}:`, errText.slice(0, 100));
+      }
+    } catch (e) {
+      console.warn('[ImageGen] Segmind error:', e.message);
+    }
+  }
+
+  // ── 2. HuggingFace Router API (runs from browser → residential IP works!)
   if (hfToken && hfToken.length > 10) {
     // 'together' provider confirmed working with FLUX.1-schnell
     const hfAttempts = [
@@ -157,8 +192,10 @@ export async function generateImageClientSide(prompt, hfToken = '') {
     }
   }
 
-  // ── 2. Pollinations — direct fetch
-  const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(displayPrompt)}?width=1024&height=1024&nologo=true&enhance=false&seed=${seed}&model=flux`;
+  const polKey = process.env.NEXT_PUBLIC_POLLINATIONS_API_KEY || '';
+  const polQuery = polKey ? `&key=${polKey}` : '';
+  // ── 3. Pollinations — direct browser fallback to bypass rate-limited proxy
+  const pollinationsUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(displayPrompt)}?nologo=true&seed=${seed}&model=flux${polQuery}`;
   console.log(`[ImageGen] Falling back to Pollinations directly:`, pollinationsUrl);
   return { url: pollinationsUrl, provider: 'Pollinations AI' };
 }
@@ -181,31 +218,31 @@ export function extractKeywords(prompt) {
   const translated = (filtered.length > 0 ? filtered : words.slice(0, 3))
     .map(w => URDU_DICT[w] || w)
     .filter(w => w && w.length > 2);
-  return translated.length > 0 ? translated.slice(0, 5).join(',') : 'image';
+  return translated.length > 0 ? translated.slice(0, 2).join(',') : 'image';
 }
 
 export function handleImgError(e, prompt) {
   const cleanPrompt = translatePrompt(prompt || 'AI art');
   const seed = Math.floor(Math.random() * 9999999);
+  const polKey = (typeof window !== 'undefined' && window.process?.env?.NEXT_PUBLIC_POLLINATIONS_API_KEY) || 'sk_D3ihoHuYaXwWarpRYWSJLEpyfzYPHzC4';
+  const polQuery = polKey ? `&key=${polKey}` : '';
 
   if (!e.target.dataset.fallbackStep) {
-    // Step 1: Fresh Pollinations flux URL with new seed
+    // Step 1: Fresh Pollinations flux URL with new seed directly
     e.target.dataset.fallbackStep = '1';
-    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=1024&height=1024&nologo=true&enhance=false&seed=${seed}&model=flux`;
+    const rawUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanPrompt)}?nologo=true&seed=${seed}&model=flux${polQuery}`;
     e.target.src = rawUrl;
   } else if (e.target.dataset.fallbackStep === '1') {
-    // Step 2: Pollinations turbo model with different seed
+    // Step 2: Pollinations turbo model with different seed directly
     e.target.dataset.fallbackStep = '2';
-    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=768&height=768&nologo=true&enhance=false&seed=${seed}&model=turbo`;
-    e.target.src = rawUrl;
-  } else if (e.target.dataset.fallbackStep === '2') {
-    // Step 3: Simple Pollinations URL without heavy params
-    e.target.dataset.fallbackStep = '3';
-    const rawUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?seed=${seed}`;
+    const rawUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanPrompt)}?nologo=true&seed=${seed}&model=turbo${polQuery}`;
     e.target.src = rawUrl;
   } else {
-    // Final: Styled placeholder
+    // Final Bulletproof Fallback: Use LoremFlickr to fetch a high-quality matching stock image
     e.target.onerror = null;
-    e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="100%" height="100%" fill="%230f0f10"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" fill="%23555" font-family="sans-serif" font-size="13">Image loading failed</text><text x="50%" y="58%" dominant-baseline="middle" text-anchor="middle" fill="%23444" font-family="sans-serif" font-size="11">Check your internet connection</text></svg>';
+    const keywords = extractKeywords(prompt);
+    const fallbackUrl = `https://loremflickr.com/800/800/${encodeURIComponent(keywords)}?random=${seed}`;
+    console.log(`[ImageGen] All AI fallbacks failed. Loading matching stock photo from LoremFlickr: ${fallbackUrl}`);
+    e.target.src = fallbackUrl;
   }
 }

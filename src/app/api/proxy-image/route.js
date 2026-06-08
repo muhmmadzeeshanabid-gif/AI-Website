@@ -26,6 +26,9 @@ export async function GET(request) {
 
     try {
       const res = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
         cache: 'no-store',
         signal: AbortSignal.timeout(25000),
       });

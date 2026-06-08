@@ -40,8 +40,78 @@ export async function POST(request) {
     let contentType = 'image/jpeg';
     let chosenProvider = '';
 
-    if (hfToken && hfToken.length > 10) {
-      // ─── Strategy 1: HF Router → wavespeed provider → FLUX.1-dev ──────────
+    // ─── Strategy 0: Pollinations AI (Server-side) ──────────
+    const polKey = process.env.POLLINATIONS_API_KEY || '';
+    if (!imageBuffer && polKey) {
+      try {
+        console.log('Trying Pollinations server-side with API key...');
+        const url = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanPrompt)}?nologo=true&seed=${seed}&model=flux`;
+        const res = await fetchWithTimeout(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${polKey}`,
+          }
+        }, 30000);
+
+        if (res.ok) {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.startsWith('image/')) {
+            const ab = await res.arrayBuffer();
+            imageBuffer = Buffer.from(ab);
+            contentType = ct;
+            chosenProvider = 'Pollinations AI (Server-side)';
+            console.log('Pollinations server-side succeeded!');
+          } else {
+            const txt = await res.text().catch(() => '');
+            console.warn('Pollinations server-side non-image response:', txt.slice(0, 150));
+          }
+        } else {
+          const errText = await res.text().catch(() => '');
+          console.warn('Pollinations server-side failed:', res.status, errText.slice(0, 150));
+        }
+      } catch (e) {
+        console.warn('Pollinations server-side error:', e.message);
+      }
+    }
+
+    // ─── Strategy 1: Segmind (Server-side) ──────────
+    const segmindKey = process.env.SEGMIND_API_KEY || process.env.NEXT_PUBLIC_SEGMIND_API_KEY || '';
+    if (!imageBuffer && segmindKey && segmindKey.length > 5) {
+      try {
+        console.log('Trying Segmind server-side (FLUX.1-schnell)...');
+        const res = await fetch('https://api.segmind.com/v1/fast-flux-schnell', {
+          method: 'POST',
+          headers: {
+            'x-api-key': segmindKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt: cleanPrompt,
+            aspect_ratio: '1:1',
+            steps: 4,
+            seed: seed,
+            base64: true
+          }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.image) {
+            imageBuffer = Buffer.from(json.image, 'base64');
+            contentType = 'image/jpeg';
+            chosenProvider = 'Segmind (FLUX.1-schnell)';
+            console.log('Segmind server-side succeeded!');
+          }
+        } else {
+          const errText = await res.text().catch(() => '');
+          console.warn('Segmind server-side failed:', res.status, errText.slice(0, 150));
+        }
+      } catch (e) {
+        console.warn('Segmind server-side error:', e.message);
+      }
+    }
+
+    if (!imageBuffer && hfToken && hfToken.length > 10) {
+      // ─── Strategy 2: HF Router → wavespeed provider → FLUX.1-dev ──────────
       // This is the JavaScript equivalent of:
       //   InferenceClient(provider="wavespeed").text_to_image(model="FLUX.1-dev")
       const routerAttempts = [
@@ -144,7 +214,7 @@ export async function POST(request) {
         }
       }
 
-      // ─── Strategy 2: Standard HF Inference API (serverless, no provider) ──
+      // ─── Strategy 3: Standard HF Inference API (serverless, no provider) ──
       if (!imageBuffer) {
         const hfModels = [
           'black-forest-labs/FLUX.1-schnell',
@@ -188,7 +258,7 @@ export async function POST(request) {
           }
         }
       }
-    } else {
+    } else if (!imageBuffer) {
       console.log('No HF token configured — skipping server-side HF generation.');
     }
 
@@ -200,10 +270,11 @@ export async function POST(request) {
       return NextResponse.json({ imageUrl: dataUri, provider: chosenProvider });
     }
 
+    const polQuery = polKey ? `&key=${polKey}` : '';
     // ─── Fallback: tell client to generate using its OWN residential IP ────
     console.warn('Server-side generation unavailable. Sending client-side URLs.');
     return NextResponse.json({
-      imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=1024&height=1024&nologo=true&enhance=false&seed=${seed}&model=flux`,
+      imageUrl: `https://gen.pollinations.ai/image/${encodeURIComponent(cleanPrompt)}?nologo=true&seed=${seed}&model=flux${polQuery}`,
       provider: 'Pollinations (client-side fallback)',
       isClientFetch: true,
     });
